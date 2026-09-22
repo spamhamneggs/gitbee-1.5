@@ -16,7 +16,7 @@ type DDMenuProps = {
   filter: string;
   options: { id: number; name: string }[];
   setSelectedValue: (value: string) => void;
-  icon: React.ReactElement;
+  icon: React.ReactElement<{ className?: string }>;
   className?: string;
 };
 

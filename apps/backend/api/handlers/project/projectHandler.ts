@@ -3,9 +3,8 @@ import type { Request, Response, NextFunction } from "express";
 import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
 import validateSchema from "api/utils/validator/validateSchema";
 import GenericService from "api/services/generic/genericService";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "api/prisma/client";
 
-const prisma = new PrismaClient();
 
 export default class ProjectHandler {
     static async insertProject(req : Request, res : Response, next : NextFunction) {

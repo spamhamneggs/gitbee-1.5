@@ -4,12 +4,11 @@ import { majors } from "./seeds/major";
 import { projects } from "./seeds/project";
 import { statuses } from "./seeds/status";
 import { technologies } from "./seeds/technology";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "api/prisma/client";
 import { users } from "./seeds/user";
 import { deadlines } from "./seeds/deadline";
 import { roles } from "./seeds/role";
 import { students } from "./seeds/student";
-const prisma = new PrismaClient();
 
 async function main() {
     await prisma.status.deleteMany({});
