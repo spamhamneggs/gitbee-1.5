@@ -2,10 +2,9 @@ import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import validateSchema from "api/utils/validator/validateSchema";
 import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "api/prisma/client";
 import GenericService from "api/services/generic/genericService";
 
-const prisma = new PrismaClient();
 
 export default class StudentGroupHandler {
     static async insertTemporaryGroup(req : Request, res : Response, next : NextFunction) {

@@ -1,9 +1,8 @@
 import type { Request, Response } from "express";
 import { sendSuccessResponse, sendErrorResponse } from "api/utils/response/response";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "api/prisma/client";
 import SemesterService from "api/services/semester/semesterService";
 
-const prisma = new PrismaClient();
 
 export default class DeadlineHandler {
     static async checkDeadline(req: Request, res: Response) {

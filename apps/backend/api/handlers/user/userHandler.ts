@@ -3,9 +3,8 @@ import type { Request, Response } from "express";
 import validateSchema from "api/utils/validator/validateSchema";
 import GenericService from "api/services/generic/genericService";
 import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "api/prisma/client";
 
-const prisma = new PrismaClient();
 
 export default class UserHandler {
     static async getName(req: Request<{ nim: string }>, res: Response) {

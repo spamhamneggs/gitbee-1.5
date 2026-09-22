@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "api/prisma/client";
 
-const prisma = new PrismaClient();
 
 export const formatProjects = async (projects: any[]) => {
     return Promise.all(projects.map(async (project) => {

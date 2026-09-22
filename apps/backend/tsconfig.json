@@ -1,14 +1,17 @@
 {
   "compilerOptions": {
-      "module": "commonjs",
+      "module": "node16",
       "target": "es6",
       "rootDir": "./api",
       "outDir": "./dist",
-      "moduleResolution": "node",
+      "moduleResolution": "node16",
       "esModuleInterop": true,
       "forceConsistentCasingInFileNames": true,
       "skipLibCheck": true,
-      "baseUrl": "."
+      "strict": false,
+      "paths": {
+        "api/*": ["./api/*"]
+      }
   },
   "ts-node": {
     "require": ["tsconfig-paths/register"]

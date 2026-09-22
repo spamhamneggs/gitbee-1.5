@@ -1,8 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "api/prisma/client";
 
-const prisma = new PrismaClient();
 
 export default class StatusHandler {
     static async getAllStatus(req : Request, res : Response, next : NextFunction) {
