@@ -1,5 +1,5 @@
 import express from "express";
-import SemesterHandler from "../../../api/handlers/semester/semesterHandler";
+import SemesterHandler from "api/handlers/semester/semesterHandler";
 
 const semesterRoutes = express.Router();
 

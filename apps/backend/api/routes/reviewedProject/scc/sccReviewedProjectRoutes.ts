@@ -1,5 +1,5 @@
 import express from "express";
-import SccReviewedProjectHandler from "../../../../api/handlers/reviewedProject/scc/sccReviewedPorjectHandler";
+import SccReviewedProjectHandler from "api/handlers/reviewedProject/scc/sccReviewedPorjectHandler";
 
 const sccReviewedProjectRoutes = express.Router();
 

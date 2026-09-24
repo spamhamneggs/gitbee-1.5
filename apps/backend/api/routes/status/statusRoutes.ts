@@ -1,5 +1,5 @@
 import express from "express";
-import StatusHandler from "../../../api/handlers/status/statusHandler";
+import StatusHandler from "api/handlers/status/statusHandler";
 
 const statusRoutes = express.Router();
 

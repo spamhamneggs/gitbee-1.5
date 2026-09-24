@@ -1,5 +1,5 @@
 import express from "express";
-import HopOutstandingProjectHandler from "../../../../api/handlers/outstandingProject/hop/hopOutstandingProjectHandler";
+import HopOutstandingProjectHandler from "api/handlers/outstandingProject/hop/hopOutstandingProjectHandler";
 
 const hopOutstandingProjectRoutes = express.Router();
 

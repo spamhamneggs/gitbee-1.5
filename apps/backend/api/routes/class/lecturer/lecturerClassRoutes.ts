@@ -1,5 +1,5 @@
 import express from "express";
-import LecturerClassHandler from "../../../../api/handlers/class/lecturer/lecturerClassHandler";
+import LecturerClassHandler from "api/handlers/class/lecturer/lecturerClassHandler";
 
 const lecturerClassRoutes = express.Router();
 

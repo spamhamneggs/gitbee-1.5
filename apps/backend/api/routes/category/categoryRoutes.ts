@@ -1,5 +1,5 @@
 import express from "express";
-import CategoryHandler from "../../../api/handlers/category/categoryHandler";
+import CategoryHandler from "api/handlers/category/categoryHandler";
 import adminCategoryRoutes from "./admin/adminCategoryRoutes";
 
 const categoryRoutes = express.Router();

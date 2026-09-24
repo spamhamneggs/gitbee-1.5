@@ -1,5 +1,5 @@
 import express from "express";
-import StudentGroupHandler from "../../../../api/handlers/group/student/studentGroupHandler";
+import StudentGroupHandler from "api/handlers/group/student/studentGroupHandler";
 
 const studentGroupRoutes = express.Router();
 

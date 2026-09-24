@@ -1,4 +1,4 @@
-import DeadlineHandler from "../../../api/handlers/deadline/deadlineHandler";
+import DeadlineHandler from "api/handlers/deadline/deadlineHandler";
 import express from "express";
 
 const deadlineRoutes = express.Router();

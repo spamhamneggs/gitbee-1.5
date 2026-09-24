@@ -1,5 +1,5 @@
 import express from "express";
-import ProjectHandler from "../../../api/handlers/project/projectHandler";
+import ProjectHandler from "api/handlers/project/projectHandler";
 import lecturerProjectRoutes from "./lecturer/lecturerProjectRoutes";
 import adminProjectRoutes from "./admin/adminProjectRoutes";
 import studentProjectRoutes from "./student/studentProjectRoutes";

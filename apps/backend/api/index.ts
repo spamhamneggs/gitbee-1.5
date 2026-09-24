@@ -1,8 +1,6 @@
-require("module-alias/register");
 import express from "express";
 import dotenv from "dotenv";
 import routes from "./routes/Routes";
-const bodyParser = require("body-parser");
 import cors from "cors";
 import qs from "qs";
 dotenv.config();

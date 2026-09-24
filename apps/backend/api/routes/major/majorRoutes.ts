@@ -1,5 +1,5 @@
 import express from "express";
-import MajorHandler from "../../../api/handlers/major/majorHandler";
+import MajorHandler from "api/handlers/major/majorHandler";
 
 const majorRoutes = express.Router();
 

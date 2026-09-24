@@ -1,5 +1,5 @@
 import express from "express";
-import AdminProjectHandler from "../../../../api/handlers/project/admin/adminProjectHandler";
+import AdminProjectHandler from "api/handlers/project/admin/adminProjectHandler";
 
 const adminProjectRoutes = express.Router();
 

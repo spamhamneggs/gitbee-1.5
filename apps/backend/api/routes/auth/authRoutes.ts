@@ -1,5 +1,5 @@
 import express from "express";
-import AuthHandler from "../../../api/handlers/auth/authHandler";
+import AuthHandler from "api/handlers/auth/authHandler";
 
 const authRoutes = express.Router();
 
