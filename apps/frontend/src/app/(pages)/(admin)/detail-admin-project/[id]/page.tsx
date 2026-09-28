@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll } from "framer-motion";
 import { CiSearch } from "react-icons/ci";
 import DDMenu from "../../../../components/DDMenu";
@@ -20,13 +20,14 @@ import DDMenuSemester from "@/app/components/DDMenuSemester";
 import { BsCalendar4Range, BsGlobe2 } from "react-icons/bs";
 import ProjectDetailHop from "@/app/components/dashboard-hop/ProjectDetailHop";
 import Link from "next/link";
+import Image from "next/image";
 import { SiGithub } from "react-icons/si";
 import { IoIosArrowRoundBack, IoIosVideocam } from "react-icons/io";
 import Loading from "@/app/components/Loading";
 
-const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
+const Page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [showDevelopers, setShowDevelopers] = useState(false);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>(
@@ -47,18 +48,23 @@ const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
     visible: { opacity: 1, transition: { duration: 1 } },
   };
 
-  const fetchData = async () => {
-    const resultCategory = await getAllCategory();
-    if (resultCategory?.success) setCategories(resultCategory.data);
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: reference data can only be populated asynchronously after mount */
+  useEffect(() => {
+    const fetchData = async () => {
+      const resultCategory = await getAllCategory();
+      if (resultCategory?.success) setCategories(resultCategory.data);
 
-    const resultMajor = await getAllMajor();
-    if (resultMajor?.success) setMajors(resultMajor.data);
+      const resultMajor = await getAllMajor();
+      if (resultMajor?.success) setMajors(resultMajor.data);
 
-    const resultTech = await getAllTech();
-    if (resultTech?.success) setTechs(resultTech.data);
-  };
+      const resultTech = await getAllTech();
+      if (resultTech?.success) setTechs(resultTech.data);
+    };
+    fetchData();
+  }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
 
-  const fetchProjectData = async () => {
+  const fetchProjectData = useCallback(async () => {
     setLoading(true);
     const resultProject = await getProjectDetail(id);
     if (resultProject?.success) setProject(resultProject.data[0]);
@@ -66,19 +72,19 @@ const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
     setToggleStatus(resultProject?.data[0]?.is_disable);
     console.log(resultProject?.data[0]?.is_disable);
     setLoading(false);
-  };
+  }, [id]);
 
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -107,16 +113,9 @@ const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
 
   useEffect(() => {
     fetchProjectData();
-  }, [
-    search,
-    selectedCategoryFilter,
-    selectedMajorFilter,
-    selectedTechnologyFilter,
-  ]);
+  }, [fetchProjectData]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+
 
   const handleScrollToTop = () => {
     window.scrollTo({
@@ -160,6 +159,7 @@ const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
 
           {project?.projectGroups?.map((projectGroup: any) => (
             <Link
+              key={projectGroup?.student_id}
               href={{
                 pathname: `/profile/${projectGroup?.student_id}`,
                 query: {
@@ -168,8 +168,11 @@ const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
               }}
               className=" hidden lg:flex justify-start items-center gap-5 border-b pb-5 mr-4 cursor-pointer"
             >
-              <img
+              <Image
                 src="/images/1.jpg"
+                width={80}
+                height={80}
+                alt="Student avatar"
                 className="rounded-full h-20 w-20 p-1 border object-cover"
               />
               <div className="w-48">
@@ -199,7 +202,7 @@ const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
                 <h3 className="text-xs sm:text-sm text-gray-500">
                   By{" "}
                   {project?.projectGroups?.map((member: any, index: number) => (
-                    <span className="text-gray-500">
+                    <span key={member?.student_id} className="text-gray-500">
                       {member?.student_name}
                       {index + 1 < project?.projectGroups?.length && ", "}
                     </span>
@@ -245,15 +248,27 @@ const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
                   )}
               </div>
               <div className="px-2 md:w-1/3">
-                <img
+                <Image
                   src={project?.projectDetail?.thumbnail}
-                  className="w-full rounded-md border"
+                  width={800}
+                  height={500}
+                  alt="Project thumbnail"
+                  unoptimized
+                  className="w-full rounded-md border object-cover"
                 />
               </div>
             </div>
             <div className="w-full h-96 my-3 flex overflow-auto gap-3">
               {project?.galleries?.map((file: any) => (
-                <img src={file?.image} className="h-full rounded-md border" />
+                <Image
+                  key={file?.image}
+                  src={file?.image}
+                  width={576}
+                  height={384}
+                  alt="Gallery image"
+                  unoptimized
+                  className="h-full rounded-md border object-cover"
+                />
               ))}
             </div>
             <iframe
@@ -300,4 +315,4 @@ const page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
   );
 };
 
-export default page;
+export default Page;

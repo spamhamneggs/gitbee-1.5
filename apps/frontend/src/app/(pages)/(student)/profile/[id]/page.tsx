@@ -4,34 +4,40 @@ import { motion, useScroll } from "framer-motion";
 import DDMenuSemester from "@/app/components/DDMenuSemester";
 import { BsCalendar4Range, BsGlobe2 } from "react-icons/bs";
 import Link from "next/link";
+import Image from "next/image";
 import { SiGithub } from "react-icons/si"; 
 import { getCurrStudentProject } from "../actions";
 import { IoIosVideocam } from "react-icons/io";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
-const page = () => {
+const Page = () => {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
   const name = searchParams.get("name"); 
   const [studentProjects, setStudentProjects] = useState<any>();
 
-  const fetchData = async () => {
-    const resultProjectStudent = await getCurrStudentProject(id.toString());
-    setStudentProjects(resultProjectStudent?.data);
-    console.log(resultProjectStudent?.data);
-  };
-
   useEffect(() => {
+    const fetchData = async () => {
+      const resultProjectStudent = await getCurrStudentProject(id.toString());
+      setStudentProjects(resultProjectStudent?.data);
+      console.log(resultProjectStudent?.data);
+    };
     fetchData();
-  }, []);
+  }, [id]);
+
+
 
   return (
     <motion.div className="relative min-h-screen flex flex-col justify-start items-center px-5 sm:px-10 ">
       <div className="h-fit w-full pt-24 flex flex-col justify-start items-center">
         <div className="w-full lg:w-[45rem] flex justify-start items-center gap-3">
-          <img
+          <Image
             src="https://www.shutterstock.com/image-vector/smiling-crazy-face-bright-funny-260nw-2019181259.jpg"
+            width={128}
+            height={128}
+            alt="Profile photo"
+            unoptimized
             className="border w-32 h-32 object-cover p-2"
           />
           <div className="flex flex-col">
@@ -50,7 +56,7 @@ const page = () => {
           <span className="text-primary-orange">~</span> Portofolio
         </h1>
         {studentProjects?.map((project: any, index: number) => (
-          <div
+          <div key={project?.projectDetail?.thumbnail}
             className={`flex flex-col justify-start ${
               index % 2 == 0 ? "items-end" : "items-start"
             } w-full my-5 gap-2`}
@@ -61,15 +67,24 @@ const page = () => {
             <h3 className="text-justify">
               {project?.projectDetail?.description}
             </h3>
-            <img
+            <Image
               src={project?.projectDetail?.thumbnail}
+              width={1280}
+              height={720}
+              alt="Project thumbnail"
+              unoptimized
               className="border w-full max-h-[30rem] object-cover p-5 my-3"
             />
             <div className="h-px w-full bg-gray-300"></div>
             <div className="w-full grid grid-cols-1 md:grid-cols-2 justify-start items-center gap-5">
               {project?.galleries.map((gallery: any) => (
-                <img
+                <Image
+                  key={gallery?.image}
                   src={gallery?.image}
+                  width={1280}
+                  height={320}
+                  alt="Gallery image"
+                  unoptimized
                   className="border w-full h-80 object-cover p-5 my-3"
                 />
               ))}
@@ -108,4 +123,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

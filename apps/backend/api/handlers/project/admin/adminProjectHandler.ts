@@ -1,13 +1,13 @@
 import { z } from "zod";
-import type { Request, Response, NextFunction } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
-import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
-import { formatProjects } from "api/utils/formatter/formatterProject";
+import type { Request, Response } from "express";
+import validateSchema from "../../../utils/validator/validateSchema.js";
+import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../../utils/response/response.js";
+import { prisma } from "../../../prisma/client.js";
+import { formatProjects } from "../../../utils/formatter/formatterProject.js";
 
 
 export default class AdminProjectHandler { 
-    static async getAdminDashboard(req: Request, res: Response, next: NextFunction) {
+    static async getAdminDashboard(req: Request, res: Response) {
         try {
             const schema = z.object({
                 search: z.string().optional(),
@@ -114,11 +114,11 @@ export default class AdminProjectHandler {
     
             sendSuccessResponse(res, response);
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
         }
     }
     
-    static async updateDisableToggle(req : Request, res : Response, next : NextFunction) {
+    static async updateDisableToggle(req : Request, res : Response) {
         try {
             const schema = z.object({
                 project_id: z.string()
@@ -152,7 +152,7 @@ export default class AdminProjectHandler {
 
             return sendSuccessResponse(res, "Update completed successfully!");
         } catch (error) {
-            return sendErrorResponse(res, error.message);
+            return sendErrorResponse(res, getErrorMessage(error));
         }
     }
 }

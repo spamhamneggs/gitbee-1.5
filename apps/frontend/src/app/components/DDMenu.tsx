@@ -44,10 +44,9 @@ const DDMenu: React.FC<DDMenuProps> = ({
           }`}
         >
           <div className="pr-2 border-r h-full flex justify-center items-center">
-            {React.cloneElement(icon, {
-              className:
-                "w-4 h-4 group-hover:stroke-primary-orange group-hover:fill-primary-orange group-hover:border-primary-orange",
-            })}
+            <span className="[&>svg]:w-4 [&>svg]:h-4 group-hover:[&>svg]:stroke-primary-orange group-hover:[&>svg]:fill-primary-orange group-hover:[&>svg]:border-primary-orange">
+              {icon}
+            </span>
           </div>
           <div className="truncate text-primary-binus group-hover:text-primary-orange font-poppins font-normal text-xs sm:text-base">
             {options.find((option) => option.id === Number(position))?.name ||
@@ -63,8 +62,8 @@ const DDMenu: React.FC<DDMenuProps> = ({
           <DropdownMenuRadioItem key={0} value="">
             {filter}
           </DropdownMenuRadioItem>
-          {options.map((option, index) => (
-            <DropdownMenuRadioItem key={index} value={option.id.toString()}>
+          {options.map((option) => (
+            <DropdownMenuRadioItem key={option.id} value={option.id.toString()}>
               {option.name}
             </DropdownMenuRadioItem>
           ))}

@@ -1,14 +1,14 @@
-import GenericService from "api/services/generic/genericService";
-import { categories } from "./seeds/category";
-import { majors } from "./seeds/major";
-import { projects } from "./seeds/project";
-import { statuses } from "./seeds/status";
-import { technologies } from "./seeds/technology";
-import { prisma } from "api/prisma/client";
-import { users } from "./seeds/user";
-import { deadlines } from "./seeds/deadline";
-import { roles } from "./seeds/role";
-import { students } from "./seeds/student";
+import GenericService from "../services/generic/genericService.js";
+import { categories } from "./seeds/category.js";
+import { majors } from "./seeds/major.js";
+import { projects } from "./seeds/project.js";
+import { statuses } from "./seeds/status.js";
+import { technologies } from "./seeds/technology.js";
+import { prisma } from "./client.js";
+import { users } from "./seeds/user.js";
+import { deadlines } from "./seeds/deadline.js";
+import { roles } from "./seeds/role.js";
+import { students } from "./seeds/student.js";
 
 async function main() {
     await prisma.status.deleteMany({});
@@ -110,7 +110,7 @@ async function main() {
             },
         });
 
-        const newProjectDetail = await prisma.projectDetail.create({
+        await prisma.projectDetail.create({
             data: {
               project_id: newProject.id,
               title: params.title,
@@ -145,7 +145,7 @@ async function main() {
             data: newProjectTechnology
         });
 
-        let groupMembers = params.group_members || [];
+        const groupMembers = params.group_members || [];
         if (!groupMembers.includes(params.student_leader_id)) {
             groupMembers.push(params.student_leader_id);
         }

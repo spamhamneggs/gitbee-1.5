@@ -4,6 +4,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cn } from "cn";
 import * as React from "react";
+import { use } from "react";
 
 import { VisuallyHiddenInput } from "@/components/visually-hidden-input";
 import { useAsRef } from "@/hooks/use-as-ref";
@@ -98,7 +99,7 @@ interface Store {
 const StoreContext = React.createContext<Store | null>(null);
 
 function useStoreContext(consumerName: string) {
-  const context = React.useContext(StoreContext);
+  const context = use(StoreContext);
   if (!context) {
     throw new Error(`\`${consumerName}\` must be used within \`${ROOT_NAME}\``);
   }
@@ -109,7 +110,7 @@ function useStore<T>(
   selector: (state: StoreState) => T,
   ogStore?: Store | null,
 ): T {
-  const contextStore = React.useContext(StoreContext);
+  const contextStore = use(StoreContext);
 
   const store = ogStore ?? contextStore;
 
@@ -149,7 +150,7 @@ interface RatingContextValue {
 const RatingContext = React.createContext<RatingContextValue | null>(null);
 
 function useRatingContext(consumerName: string) {
-  const context = React.useContext(RatingContext);
+  const context = use(RatingContext);
   if (!context) {
     throw new Error(`\`${consumerName}\` must be used within \`${ROOT_NAME}\``);
   }
@@ -170,7 +171,7 @@ interface FocusContextValue {
 const FocusContext = React.createContext<FocusContextValue | null>(null);
 
 function useFocusContext(consumerName: string) {
-  const context = React.useContext(FocusContext);
+  const context = use(FocusContext);
   if (!context) {
     throw new Error(
       `\`${consumerName}\` must be used within \`FocusProvider\``,
@@ -496,9 +497,9 @@ function Rating(props: RatingProps) {
   });
 
   return (
-    <StoreContext.Provider value={store}>
-      <RatingContext.Provider value={contextValue}>
-        <FocusContext.Provider value={focusContextValue}>
+    <StoreContext value={store}>
+      <RatingContext value={contextValue}>
+        <FocusContext value={focusContextValue}>
           {element}
           <svg width="0" height="0" style={{ position: "absolute" }}>
             <defs>
@@ -528,9 +529,9 @@ function Rating(props: RatingProps) {
               required={required}
             />
           )}
-        </FocusContext.Provider>
-      </RatingContext.Provider>
-    </StoreContext.Provider>
+        </FocusContext>
+      </RatingContext>
+    </StoreContext>
   );
 }
 

@@ -1,9 +1,9 @@
-import type { RequestHandler, Request, Response, NextFunction } from "express";
-import SemesterService from "../../services/semester/semesterService";
-import { sendErrorResponse, sendSuccessResponse } from "../../utils/response/response";
+import type { Request, Response } from "express";
+import SemesterService from "../../services/semester/semesterService.js";
+import { sendErrorResponse, sendSuccessResponse } from "../../utils/response/response.js";
 
 export default class SemesterHandler {
-    static async getAllSemester(req : Request, res : Response, next : NextFunction) {
+    static async getAllSemester(req : Request, res : Response) {
         const result = await SemesterService.getAllSemesterData();
 
         if (result.status === true && result.data) {
@@ -13,7 +13,7 @@ export default class SemesterHandler {
         }
     }
 
-    static async getCurrentSemester(req : Request, res : Response, next : NextFunction) {
+    static async getCurrentSemester(req : Request, res : Response) {
         const result = await SemesterService.getCurrentSemesterData();
         
         if (result.status === true && result.data) {

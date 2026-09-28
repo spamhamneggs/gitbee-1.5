@@ -1,15 +1,25 @@
 import { StatusCodes } from "http-status-codes";
-import { z, ZodError, ZodType } from "zod";
+import { z } from "zod";
 
-interface ValidationResult<T> {
-  data: T | null;
+type ValidationSuccess<T> = {
+  data: T;
   message: string;
-  details: string[] | null;
-  error: boolean;
-  status: number | null;
-}
+  details: null;
+  error: false;
+  status: null;
+};
 
-const validateSchema = <T>(schema: z.ZodType<T>, object: any): ValidationResult<T> => {
+type ValidationFailure = {
+  data: null;
+  message: string;
+  details: string[];
+  error: true;
+  status: number;
+};
+
+export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
+
+const validateSchema = <T>(schema: z.ZodType<T>, object: unknown): ValidationResult<T> => {
   try {
     const parsed = schema.parse(object);
     return {
@@ -21,7 +31,7 @@ const validateSchema = <T>(schema: z.ZodType<T>, object: any): ValidationResult<
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const messages = error.issues.map((issue: any) => `${issue.path.join(".")} is ${issue.message}`);
+      const messages = error.issues.map((issue) => `${issue.path.join(".")} is ${issue.message}`);
       return {
         status: StatusCodes.BAD_REQUEST,
         message: "Invalid request data",

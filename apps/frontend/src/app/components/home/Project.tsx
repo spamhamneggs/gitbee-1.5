@@ -12,10 +12,20 @@ const charVariants = {
   reveal: { opacity: 1 },
 };
 
+type KeyedChar = { key: string; char: string };
+// The animated strings below are constants, so position-based keys built
+// once at module scope stay stable across renders.
+const keyChars = (value: string): KeyedChar[] =>
+  splitStringUsingRegex(value).map((char, index) => ({
+    key: `${index}-${char}`,
+    char,
+  }));
+
+const headingChars = keyChars(heading);
+const subHeadingChars = keyChars(subHeading);
+
 const Project = () => {
   const [showCard, setShowCard] = useState(0);
-  const headingChars = splitStringUsingRegex(heading);
-  const subHeadingChars = splitStringUsingRegex(subHeading);
   const router = useRouter();
 
   const allCards = [
@@ -111,6 +121,7 @@ const Project = () => {
     },
   ];
 
+  /* eslint-disable @eslint-react/set-state-in-effect, react-you-might-not-need-an-effect/no-initialize-state -- mount-only window read: a lazy initializer would run during SSR prerender where window does not exist */
   useEffect(() => {
     if (window.innerWidth > 1023) {
       setShowCard(3);
@@ -119,7 +130,8 @@ const Project = () => {
     } else {
       setShowCard(4);
     }
-  }, [window.innerWidth]);
+  }, []);
+  /* eslint-enable @eslint-react/set-state-in-effect, react-you-might-not-need-an-effect/no-initialize-state */
 
   const handleShowMore = () => {
     const increment =
@@ -144,13 +156,13 @@ const Project = () => {
           transition={{ staggerChildren: 0.05 }}
           className="font-bold font-montserrat text-4xl sm:text-4xl md:text-5xl text-center"
         >
-          {headingChars.map((char, index) => (
+          {headingChars.map((c) => (
             <motion.span
-              key={index}
+              key={c.key}
               transition={{ duration: 0.5 }}
               variants={charVariants}
             >
-              {char}
+              {c.char}
             </motion.span>
           ))}
         </motion.h1>
@@ -160,14 +172,14 @@ const Project = () => {
           className="text-center text-sm sm:text-base"
           transition={{ staggerChildren: 0.03 }}
         >
-          {subHeadingChars.map((char, index) => (
+          {subHeadingChars.map((c) => (
             <motion.span
               className="text-primary-orange"
-              key={index}
+              key={c.key}
               transition={{ duration: 0.5 }}
               variants={charVariants}
             >
-              {char}
+              {c.char}
             </motion.span>
           ))}
         </motion.h3>
@@ -178,9 +190,9 @@ const Project = () => {
         whileInView="reveal"
         transition={{ staggerChildren: 0.5 }}
       >
-        {allCards.slice(0, showCard).map((card, index) => (
+        {allCards.slice(0, showCard).map((card) => (
           <Card
-            key={index}
+            key={card.image}
             image={card.image}
             title={card.title}
             developers={card.developers}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { login } from "../actions";
 import { useAuth } from "@/app/context/AuthContext";
 
-const page = () => {
+const Page = () => {
   const { userData, setUserData } = useAuth();
   const { instance, inProgress, accounts } = useMsal();
   const router = useRouter();
@@ -14,8 +14,12 @@ const page = () => {
     const handleRedirect = async () => {
       if (inProgress === "none" && accounts.length > 0) {
         try {
+          const account = accounts[0];
+          if (!account) {
+            throw new Error("No account found");
+          }
           const response = await instance.acquireTokenSilent({
-            account: accounts[0],
+            account,
             scopes: ["user.read"],
           });
 
@@ -60,7 +64,7 @@ const page = () => {
     };
 
     handleRedirect();
-  }, [instance, accounts, inProgress]);
+  }, [instance, accounts, inProgress, router, setUserData]);
 
   return (
     <div className="fixed z-[100] bg-white w-screen h-screen flex justify-center items-center">
@@ -77,4 +81,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

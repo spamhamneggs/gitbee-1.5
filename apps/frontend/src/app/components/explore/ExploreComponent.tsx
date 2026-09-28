@@ -51,7 +51,7 @@ function ExploreComponent(props: ExploreProps) {
         transition={{ staggerChildren: 0.5, duration: 1 }}
       >
         {props.projects.map((project: any, index: number) => (
-          <div
+          <div key={project.id}
             className="flex justify-center items-center"
             onClick={() => {
               props.setShowDevelopers(!props.showDevelopers);

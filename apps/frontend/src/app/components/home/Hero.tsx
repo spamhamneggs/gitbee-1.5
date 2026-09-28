@@ -11,6 +11,7 @@ import useMeasure from "react-use-measure";
 import splitStringUsingRegex from "../../utlis/splitStringUsingRegex";
 import { useMsal } from "@azure/msal-react";
 import { useAuth } from "@/app/context/AuthContext";
+import Image from "next/image";
 
 const heading = "BINUS Project Gallery";
 const subHeadingStart = "Show the ";
@@ -24,6 +25,21 @@ const charVariants = {
   reveal: { opacity: 1 },
 };
 
+type KeyedChar = { key: string; char: string };
+// The animated strings below are constants, so position-based keys built
+// once at module scope stay stable across renders.
+const keyChars = (value: string): KeyedChar[] =>
+  splitStringUsingRegex(value).map((char, index) => ({
+    key: `${index}-${char}`,
+    char,
+  }));
+
+const headingChars = keyChars(heading);
+const subHeadingStartChars = keyChars(subHeadingStart);
+const subHeadingHighlightedChars = keyChars(subHeadingHighlighted);
+const subHeadingEndChars = keyChars(subHeadingEnd);
+const descriptionChars = keyChars(description);
+
 export const Hero = () => {
   const { instance, inProgress, accounts } = useMsal();
   const { userData, setUserData } = useAuth();
@@ -32,13 +48,6 @@ export const Hero = () => {
   const yTranslationDown = useMotionValue(0);
   let [ref1, { height: height1 }] = useMeasure({ debounce: 100 });
   let [ref2, { height: height2 }] = useMeasure({ debounce: 100 });
-  const headingChars = splitStringUsingRegex(heading);
-  const subHeadingStartChars = splitStringUsingRegex(subHeadingStart);
-  const subHeadingHighlightedChars = splitStringUsingRegex(
-    subHeadingHighlighted
-  );
-  const subHeadingEndChars = splitStringUsingRegex(subHeadingEnd);
-  const descriptionChars = splitStringUsingRegex(description);
   const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0.3]);
 
   useEffect(() => {
@@ -98,24 +107,24 @@ export const Hero = () => {
           whileInView="reveal"
           transition={{ staggerChildren: 0.02 }}
         >
-          {headingChars.map((char, index) => (
+          {headingChars.map((c) => (
             <motion.span
-              key={index}
+              key={c.key}
               transition={{ duration: 1 }}
               variants={charVariants}
             >
-              {char}
+              {c.char}
             </motion.span>
           ))}
           <br />
           <span className="font-semibold font-montserrat text-xl sm:text-4xl lg:text-3xl xl:text-4xl ">
-            {subHeadingStartChars.map((char, index) => (
+            {subHeadingStartChars.map((c) => (
               <motion.span
-                key={index}
+                key={c.key}
                 transition={{ duration: 0.5 }}
                 variants={charVariants}
               >
-                {char}
+                {c.char}
               </motion.span>
             ))}
             <motion.span
@@ -123,24 +132,24 @@ export const Hero = () => {
               variants={charVariants}
               className="relative after:bg-primary-orange after:absolute after:h-[0.15rem] after:w-full after:bottom-0 after:left-0"
             >
-              {subHeadingHighlightedChars.map((char, index) => (
+              {subHeadingHighlightedChars.map((c) => (
                 <motion.span
                   className=""
-                  key={index}
+                  key={c.key}
                   transition={{ duration: 0.5 }}
                   variants={charVariants}
                 >
-                  {char}
+                  {c.char}
                 </motion.span>
               ))}
             </motion.span>
-            {subHeadingEndChars.map((char, index) => (
+            {subHeadingEndChars.map((c) => (
               <motion.span
-                key={index}
+                key={c.key}
                 transition={{ duration: 0.5 }}
                 variants={charVariants}
               >
-                {char}
+                {c.char}
               </motion.span>
             ))}{" "}
           </span>
@@ -151,13 +160,13 @@ export const Hero = () => {
           className="text-sm px-1 sm:p-0 sm:text-base text-center lg:text-start w-full"
           transition={{ staggerChildren: 0.015 }}
         >
-          {descriptionChars.map((char, index) => (
+          {descriptionChars.map((c) => (
             <motion.span
-              key={index}
+              key={c.key}
               transition={{ duration: 0.5 }}
               variants={charVariants}
             >
-              {char}
+              {c.char}
             </motion.span>
           ))}{" "}
         </motion.h3>
@@ -220,44 +229,74 @@ export const Hero = () => {
           className="flex flex-col gap-5 h-auto"
           ref={ref1}
         >
-          <img
+          <Image
             src="/images/image-3.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-5.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-1.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-2.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-4.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-3.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-5.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-1.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-2.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-4.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
         </motion.div>
@@ -273,44 +312,74 @@ export const Hero = () => {
           className="flex flex-col gap-5 h-auto"
           ref={ref2}
         >
-          <img
+          <Image
             src="/images/image-5.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-3.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-2.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-1.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-4.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-3.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-5.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-1.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-2.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
-          <img
+          <Image
             src="/images/image-4.webp"
+            width={240}
+            height={320}
+            alt=""
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
         </motion.div>

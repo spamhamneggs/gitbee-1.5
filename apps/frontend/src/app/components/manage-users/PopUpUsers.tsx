@@ -19,14 +19,19 @@ function PopUpUsers(props: PopUpUsersProps) {
   );
   const [majors, setMajors] = useState<{ id: number; name: string }[]>([]);
 
-  const fetchMajors = async () => {
-    try {
-      const result = await getAllMajor();
-      setMajors(result?.data);
-    } catch (error) {
-      console.error("Failed to fetch majors:", error);
-    }
-  };
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: majors can only be populated asynchronously after mount */
+  useEffect(() => {
+    const fetchMajors = async () => {
+      try {
+        const result = await getAllMajor();
+        setMajors(result?.data);
+      } catch (error) {
+        console.error("Failed to fetch majors:", error);
+      }
+    };
+    fetchMajors();
+  }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
 
   const handleMajorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
@@ -60,10 +65,7 @@ function PopUpUsers(props: PopUpUsersProps) {
     }
   };
 
-  useEffect(() => {
-    console.log(props.selectedUserToUpdate);
-    fetchMajors();
-  }, []);
+
 
   return (
     <div

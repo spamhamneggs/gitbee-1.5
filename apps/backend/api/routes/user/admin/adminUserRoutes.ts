@@ -1,5 +1,5 @@
 import express from "express";
-import AdminUserHandler from "api/handlers/user/admin/adminUserHandler";
+import AdminUserHandler from "../../../handlers/user/admin/adminUserHandler.js";
 import multer from "multer";
 const upload = multer({ storage: multer.memoryStorage() });
 

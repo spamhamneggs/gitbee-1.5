@@ -31,9 +31,11 @@ const DDMenuSemester: React.FC<DDMenuSemesterProps> = ({
 }) => {
   const [position, setPosition] = React.useState("");
 
-  React.useEffect(() => {
+  const [prevSemester, setPrevSemester] = React.useState(currentSemester);
+  if (currentSemester !== prevSemester) {
+    setPrevSemester(currentSemester);
     setPosition(currentSemester?.data?.Description);
-  }, [currentSemester]);
+  }
 
   return (
     <DropdownMenu>
@@ -70,9 +72,9 @@ const DDMenuSemester: React.FC<DDMenuSemesterProps> = ({
             }
           }}
         >
-          {options?.data?.map((option: any, index: number) => (
+          {options?.data?.map((option: any) => (
             <DropdownMenuRadioItem
-              key={option?.SemesterId ? option.SemesterId : index}
+              key={option?.SemesterId ?? option?.Description}
               value={option.Description}
             >
               {option.Description}

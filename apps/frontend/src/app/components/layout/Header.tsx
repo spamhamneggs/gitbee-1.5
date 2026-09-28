@@ -23,7 +23,7 @@ const Header = () => {
   const { userData, setUserData } = useAuth();
   const { instance, inProgress, accounts } = useMsal();
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [onTop, setOnTop] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -35,14 +35,14 @@ const Header = () => {
       else if (currentScrollY != 0) setOnTop(false);
 
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -69,9 +69,11 @@ const Header = () => {
     };
   }, [scrollYProgress]);
 
-  useEffect(() => {
+  const [prevExpand, setPrevExpand] = useState(expand);
+  if (expand !== prevExpand) {
+    setPrevExpand(expand);
     setOpenHamburger(false);
-  }, [expand]);
+  }
 
   const loginMicrosoft = async () => {
     const loginRequest = {
@@ -123,10 +125,6 @@ const Header = () => {
       }
     }
   };
-
-  useEffect(() => {
-    console.log(userData);
-  }, []);
 
   return (
     <div

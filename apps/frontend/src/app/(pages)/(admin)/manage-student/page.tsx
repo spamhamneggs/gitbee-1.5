@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll } from "framer-motion";
 import { CiSearch } from "react-icons/ci";
 import {
@@ -17,9 +17,9 @@ import Loading from "@/app/components/Loading";
 import ImportExcel from "@/app/components/manage-student/ImportExcel";
 import PopUpConfirmation from "@/app/components/manage-student/PopUpConfirmation";
 
-const page = () => {
+const Page = () => {
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [search, setSearch] = useState("");
   const [students, setStudents] = useState<any>([]);
@@ -27,24 +27,24 @@ const page = () => {
   const [openPopUpConfirmation, setOpenPopUpConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const resultStudents = await getAllStudents(search);
     console.log(resultStudents?.data);
     setStudents(resultStudents?.data);
-  };
+  }, [search]);
 
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => { 
 
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -73,7 +73,7 @@ const page = () => {
 
   useEffect(() => {
     fetchData();
-  }, [search]);
+  }, [fetchData]);
 
   const handleDeleteAllStudents = async () => {
     setLoading(true);
@@ -143,7 +143,7 @@ const page = () => {
           </TableHeader>
           <TableBody>
             {students?.map((student: any, index: number) => (
-              <TableRow>
+              <TableRow key={student?.student_id}>
                 <TableCell className="text-start font-medium">
                   {index + 1}.
                 </TableCell>
@@ -187,4 +187,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

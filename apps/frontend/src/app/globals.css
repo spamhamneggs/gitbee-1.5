@@ -43,8 +43,7 @@
 
 * {
   box-sizing: border-box;
-  font-family: "Poppins", "sans-serif";
-  font-family: "Outfit", "sans-serif";
+  font-family: var(--font-outfit), "Outfit", sans-serif;
   color: #026CA6;
   margin: 0;
   padding: 0;

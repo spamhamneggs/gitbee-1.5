@@ -26,10 +26,10 @@ import {
 import { useAuth } from "@/app/context/AuthContext";
 import Loading from "@/app/components/Loading";
 
-const page = () => {
+const Page = () => {
   const { userData } = useAuth();
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [listSemester, setListSemester] = useState<any>([]);
   const [transactions, setTransactions] = useState<any>([]);
@@ -44,14 +44,14 @@ const page = () => {
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -77,24 +77,30 @@ const page = () => {
     };
   }, [scrollYProgress]);
 
-  const fetchData = async () => {
-    const resultListSemester = await getAllSemester();
-    setListSemester(resultListSemester);
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: reference data can only be populated asynchronously after mount */
+  useEffect(() => {
+    const fetchData = async () => {
+      const resultListSemester = await getAllSemester();
+      setListSemester(resultListSemester);
 
-    const resultCurrentSemester = await getCurrentSemester();
-    setCurrentSemester(resultCurrentSemester);
-  };
+      const resultCurrentSemester = await getCurrentSemester();
+      setCurrentSemester(resultCurrentSemester);
+    };
+    fetchData();
+  }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
 
-  const fetchTransactionData = async () => {
-    setLoading(true);
-    console.log(userData);
-    const resultTransactions = await getTranscationByLecturer(
-      currentSemester?.data?.SemesterId,
-      userData?.nim ? userData?.nim : "",
-      selectedCategoryFilter
-    );
-    console.log(resultTransactions?.data);
-    setTransactions(resultTransactions?.data);
+  /* eslint-disable react-you-might-not-need-an-effect/no-derived-state -- server fetch: the result depends on an async round-trip and cannot be computed during render */
+  useEffect(() => {
+    const fetchTransactionData = async () => {
+      setLoading(true);
+      const resultTransactions = await getTranscationByLecturer(
+        currentSemester?.data?.SemesterId,
+        userData?.nim ? userData?.nim : "",
+        selectedCategoryFilter
+      );
+      console.log(resultTransactions?.data);
+      setTransactions(resultTransactions?.data);
 
     const resultCourses = await getCoursesByLecturer(
       currentSemester?.data?.SemesterId,
@@ -103,15 +109,10 @@ const page = () => {
     console.log(resultCourses?.data);
     setCategories(resultCourses?.data);
     setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
+    };
     fetchTransactionData();
-  }, [currentSemester, selectedCategoryFilter]);
+  }, [currentSemester, selectedCategoryFilter, userData?.nim]);
+  /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
 
   return (
     <motion.div className="relative min-h-screen flex flex-col justify-start items-center px-5 sm:px-10 xl:px-[6.25rem] ">
@@ -169,7 +170,9 @@ const page = () => {
             </TableHeader>
             <TableBody>
               {transactions?.map((transaction: any, index: number) => (
-                <TableRow key={index}>
+                <TableRow
+                  key={`${transaction?.lecturer_code}-${transaction?.course_code}-${transaction?.class}`}
+                >
                   <TableCell className="text-start font-medium">
                     {transaction?.class}
                   </TableCell>
@@ -215,4 +218,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

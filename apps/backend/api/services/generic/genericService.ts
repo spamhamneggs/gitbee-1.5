@@ -1,16 +1,29 @@
-import validateSchema from "api/utils/validator/validateSchema";
-import { APIResponse, defaultResponse } from "api/models/generic/response";
+import validateSchema from "../../utils/validator/validateSchema.js";
+import { defaultResponse } from "../../models/generic/response.js";
+import type { APIResponse } from "../../models/generic/response.js";
+
+export interface AtlantisAccountData {
+    NIM?: string;
+    BinusianID?: string;
+    KodeDosen?: string;
+    Name?: string;
+    email?: { Email?: string }[];
+}
 import axios from "axios";
 import dotenv from "dotenv";
-import { atlantisSchema } from "api/models/generic/generic";
-import { getErrors } from "api/utils/response/response";
+import { atlantisSchema } from "../../models/generic/generic.js";
+import { getErrors } from "../../utils/response/response.js";
 
 dotenv.config();
 
 export default class GenericService {
   static async getAtlantisData (credential: string) : Promise<APIResponse> {
     try {
-      const res = await axios.get(process.env.ATLANTIS_API, {
+      const atlantisApi = process.env.ATLANTIS_API;
+      if (!atlantisApi) {
+        throw new Error("ATLANTIS_API is not configured");
+      }
+      const res = await axios.get(atlantisApi, {
         params: {
           input: credential,
         },
@@ -29,7 +42,7 @@ export default class GenericService {
         message: "successful",
         status: true,
         data: validationResult.data,
-      } as APIResponse;
+      };
       
     } catch (error) {
       const err = getErrors(error);
@@ -41,20 +54,22 @@ export default class GenericService {
     }
   };  
 
-  static async getName(credential: string) : Promise<APIResponse> {
+  static async getName(credential: string) : Promise<APIResponse<string>> {
     try {
       const result = await this.getAtlantisData(credential);
 
       let name = "";
-      if (result.data.hasOwnProperty('Name') && result.data.hasOwnProperty('email') && result.data.email) {
-          name = result.data.Name === "" ? result.data.email[0].Email : result.data.Name;
+      const account = result.data as AtlantisAccountData | null;
+      if (account && Object.hasOwn(account, 'Name') && Object.hasOwn(account, 'email') && account.email) {
+          const primaryEmail = account.email[0]?.Email ?? "";
+          name = account.Name === "" ? primaryEmail : (account.Name ?? "");
       }
 
       return {
         message: "successful",
         status: true,
         data: name,
-      } as APIResponse;
+      };
 
     } catch (error) {
       const err = getErrors(error);
@@ -66,20 +81,22 @@ export default class GenericService {
     }
   }
 
-  static async getBinusianID(credential: string) : Promise<APIResponse> {
+  static async getBinusianID(credential: string) : Promise<APIResponse<string>> {
     try {
       const result = await this.getAtlantisData(credential);
 
       let BinusianID = "";
-      if (result.data.hasOwnProperty('BinusianID') && result.data.hasOwnProperty('email') && result.data.email) {
-        BinusianID = result.data.BinusianID === "" ? result.data.email[0].Email : result.data.BinusianID;
+      const account = result.data as AtlantisAccountData | null;
+      if (account && Object.hasOwn(account, 'BinusianID') && Object.hasOwn(account, 'email') && account.email) {
+        const primaryEmail = account.email[0]?.Email ?? "";
+        BinusianID = account.BinusianID === "" ? primaryEmail : (account.BinusianID ?? "");
       }
 
       return {
         message: "successful",
         status: true,
         data: BinusianID,
-      } as APIResponse;
+      };
 
     } catch (error) {
       const err = getErrors(error);

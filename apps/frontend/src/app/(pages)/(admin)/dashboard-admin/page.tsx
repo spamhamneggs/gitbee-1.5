@@ -27,12 +27,13 @@ import {
 import DDMenuCourses from "@/app/components/DDMenuCourses";
 import { BsCalendar4Range } from "react-icons/bs";
 import Link from "next/link";
+import Image from "next/image";
 import DDMenuSemester from "@/app/components/DDMenuSemester";
 
-const page = () => {
+const Page = () => {
   const listStatus = ["submitted", "graded", "reviewed", "outstanding"];
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [showDevelopers, setShowDevelopers] = useState(false);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>(
@@ -46,47 +47,21 @@ const page = () => {
   const [selectedTechnologyFilter, setSelectedTechnologyFilter] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
-  const [selectedStatus, setSelectedStats] = useState(1);
+  const [selectedStatus, setSelectedStatus] = useState(1);
   const [listSemester, setListSemester] = useState<any>([]);
   const [currentSemester, setCurrentSemester] = useState<any>();
-
-  const fetchData = async () => {
-    const resultCategory = await getAllCategory();
-    if (resultCategory?.success) setCategories(resultCategory.data);
-
-    const resultMajor = await getAllMajor();
-    if (resultMajor?.success) setMajors(resultMajor.data);
-
-    const resultListSemester = await getAllSemester();
-    setListSemester(resultListSemester);
-
-    const resultCurrentSemester = await getCurrentSemester();
-    setCurrentSemester(resultCurrentSemester);
-  };
-
-  const fetchProjectData = async () => {
-    console.log(currentSemester?.data?.SemesterId);
-    const resultProject = await getAllProjects(
-      search,
-      selectedCategoryFilter,
-      selectedMajorFilter,
-      currentSemester?.data?.SemesterId
-    );
-    console.log(resultProject?.data);
-    if (resultProject?.success) setProjects(resultProject.data);
-  };
 
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -113,13 +88,41 @@ const page = () => {
     };
   }, [scrollYProgress]);
 
+  /* eslint-disable react-you-might-not-need-an-effect/no-derived-state -- server fetch: the result depends on an async round-trip and cannot be computed during render */
   useEffect(() => {
+    const fetchProjectData = async () => {
+      console.log(currentSemester?.data?.SemesterId);
+      const resultProject = await getAllProjects(
+        search,
+        selectedCategoryFilter,
+        selectedMajorFilter,
+        currentSemester?.data?.SemesterId
+      );
+      console.log(resultProject?.data);
+      if (resultProject?.success) setProjects(resultProject.data);
+    };
     fetchProjectData();
   }, [search, selectedCategoryFilter, selectedMajorFilter, currentSemester]);
+  /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
 
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: reference data can only be populated asynchronously after mount */
   useEffect(() => {
+    const fetchData = async () => {
+      const resultCategory = await getAllCategory();
+      if (resultCategory?.success) setCategories(resultCategory.data);
+
+      const resultMajor = await getAllMajor();
+      if (resultMajor?.success) setMajors(resultMajor.data);
+
+      const resultListSemester = await getAllSemester();
+      setListSemester(resultListSemester);
+
+      const resultCurrentSemester = await getCurrentSemester();
+      setCurrentSemester(resultCurrentSemester);
+    };
     fetchData();
   }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
 
   const handleScrollToTop = () => {
     window.scrollTo({
@@ -182,13 +185,16 @@ const page = () => {
       </div>
       <div className="w-auto bg-white shadow-md rounded-md mb-7 grid grid-cols-2 md:flex justify-around items-center py-7 px-5 gap-2">
         <div
-          onClick={() => setSelectedStats(1)}
+          onClick={() => setSelectedStatus(1)}
           className={`flex flex-col justify-center items-center text-lg gap-3 hover:bg-gray-50 px-3 lg:px-7 py-3 rounded-lg cursor-pointer ${
             selectedStatus == 1 && "border border-primary-binus"
           } `}
         >
-          <img
+          <Image
             src="/icons/submit.png"
+            width={96}
+            height={96}
+            alt="Submitted by student"
             className="w-14 h-14 lg:w-20 lg:h-20 xl:w-24 xl:h-24"
           />
           <div className="flex justify-center items-center gap-2 text-sm lg:text-base 2xl:text-lg">
@@ -199,13 +205,16 @@ const page = () => {
           </div>
         </div>
         <div
-          onClick={() => setSelectedStats(2)}
+          onClick={() => setSelectedStatus(2)}
           className={`flex flex-col justify-center items-center text-lg gap-3 hover:bg-gray-50 px-3 lg:px-7 py-3 rounded-lg cursor-pointer ${
             selectedStatus == 2 && "border border-primary-binus"
           } `}
         >
-          <img
+          <Image
             src="/icons/reviews.png"
+            width={96}
+            height={96}
+            alt="Graded by lecturer"
             className="w-14 h-14 lg:w-20 lg:h-20 xl:w-24 xl:h-24"
           />
           <div className="flex justify-center items-center gap-2 text-sm lg:text-base 2xl:text-lg">
@@ -216,13 +225,16 @@ const page = () => {
           </div>
         </div>
         <div
-          onClick={() => setSelectedStats(3)}
+          onClick={() => setSelectedStatus(3)}
           className={`flex flex-col justify-center items-center text-lg gap-3 hover:bg-gray-50 px-3 lg:px-7 py-3 rounded-lg cursor-pointer ${
             selectedStatus == 3 && "border border-primary-binus"
           } `}
         >
-          <img
+          <Image
             src="/icons/recommendation.png"
+            width={96}
+            height={96}
+            alt="Reviewed by SCC"
             className="w-14 h-14 lg:w-20 lg:h-20 xl:w-24 xl:h-24"
           />
           <div className="flex justify-center items-center gap-2 text-sm lg:text-base 2xl:text-lg">
@@ -233,13 +245,16 @@ const page = () => {
           </div>
         </div>
         <div
-          onClick={() => setSelectedStats(4)}
+          onClick={() => setSelectedStatus(4)}
           className={`flex flex-col justify-center items-center text-lg gap-3 hover:bg-gray-50 px-3 lg:px-7 py-3 rounded-lg cursor-pointer ${
             selectedStatus == 4 && "border border-primary-binus"
           } `}
         >
-          <img
+          <Image
             src="/icons/outstanding.png"
+            width={96}
+            height={96}
+            alt="Reviewed by HOP"
             className="w-14 h-14 lg:w-20 lg:h-20 xl:w-24 xl:h-24"
           />
           <div className="flex justify-center items-center gap-2 text-sm lg:text-base 2xl:text-lg">
@@ -264,9 +279,9 @@ const page = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {projects?.[listStatus[selectedStatus - 1]]?.map(
+            {projects?.[listStatus[selectedStatus - 1] ?? ""]?.map(
               (project: any, index: number) => (
-                <TableRow>
+                <TableRow key={project?.id}>
                   <TableCell className="text-start font-medium">
                     {index + 1}.
                   </TableCell>
@@ -287,7 +302,7 @@ const page = () => {
                     <div className="text-nowrap">
                       {project?.projectGroups?.map(
                         (member: any, index: number) => (
-                          <span>
+                          <span key={member?.student_id}>
                             {index + 1}.{" "}
                             <span className="capitalize">
                               {member?.student_name?.toLowerCase()}
@@ -318,7 +333,7 @@ const page = () => {
             )}
           </TableBody>
         </Table>
-        {projects?.[listStatus[selectedStatus - 1]]?.length < 1 && (
+        {projects?.[listStatus[selectedStatus - 1] ?? ""]?.length < 1 && (
           <div className="w-full text-center py-5 text-gray-500">
             No Data . . .
           </div>
@@ -328,4 +343,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

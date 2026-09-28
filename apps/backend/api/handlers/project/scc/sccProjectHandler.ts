@@ -1,13 +1,13 @@
 import { z } from "zod";
-import type { Request, Response, NextFunction } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
-import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
-import { formatProjects } from "api/utils/formatter/formatterProject";
+import type { Request, Response } from "express";
+import validateSchema from "../../../utils/validator/validateSchema.js";
+import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../../utils/response/response.js";
+import { prisma } from "../../../prisma/client.js";
+import { formatProjects } from "../../../utils/formatter/formatterProject.js";
 
 
 export default class SccProjectHandler {
-    static async getSccDashboard(req: Request, res: Response, next: NextFunction) {
+    static async getSccDashboard(req: Request, res: Response) {
         try {
             const schema = z.object({
                 major_id: z.string().optional(),
@@ -102,16 +102,16 @@ export default class SccProjectHandler {
                     });
 
                     const major = await prisma.major.findUnique({
-                        where: { id: project.projectDetail.major_id }
+                        where: { id: project.projectDetail!.major_id }
                     });
 
                     const category = await prisma.category.findUnique({
-                        where: { id: project.projectDetail.category_id }
+                        where: { id: project.projectDetail!.category_id }
                     });
 
                     const course = await prisma.classTransaction.findFirst({
                         where: { 
-                            course_code: project.projectDetail.course_id 
+                            course_code: project.projectDetail!.course_id 
                         }
                     });
     
@@ -135,16 +135,16 @@ export default class SccProjectHandler {
                     });
     
                     const major = await prisma.major.findUnique({
-                        where: { id: project.projectDetail.major_id }
+                        where: { id: project.projectDetail!.major_id }
                     });
 
                     const category = await prisma.category.findUnique({
-                        where: { id: project.projectDetail.category_id }
+                        where: { id: project.projectDetail!.category_id }
                     });
     
                     const course = await prisma.classTransaction.findFirst({
                         where: { 
-                            course_code: project.projectDetail.course_id 
+                            course_code: project.projectDetail!.course_id 
                         }
                     });
     
@@ -170,7 +170,7 @@ export default class SccProjectHandler {
     
             sendSuccessResponse(res, response);
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
         }
     }
 }

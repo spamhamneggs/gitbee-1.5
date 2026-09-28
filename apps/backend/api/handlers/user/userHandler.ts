@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { Request, Response } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
-import GenericService from "api/services/generic/genericService";
-import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
+import validateSchema from "../../utils/validator/validateSchema.js";
+import GenericService from "../../services/generic/genericService.js";
+import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../utils/response/response.js";
+import { prisma } from "../../prisma/client.js";
 
 
 export default class UserHandler {
@@ -12,7 +12,7 @@ export default class UserHandler {
 
         const validationResult = validateSchema(schema, req.query);
         if (validationResult.error) {
-            sendErrorResponse(res, validationResult.details, 400);
+            return sendErrorResponse(res, validationResult.details, 400);
         }
     
         const params = validationResult.data;
@@ -30,7 +30,7 @@ export default class UserHandler {
             const roles = await prisma.role.findMany();
             sendSuccessResponse(res, roles);
         } catch (error) {
-            sendErrorResponse(res, error.message || "Fetch Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
         }
     }    
 }

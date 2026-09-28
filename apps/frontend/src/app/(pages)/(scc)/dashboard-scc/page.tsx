@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll } from "framer-motion";
 import { CiSearch } from "react-icons/ci";
 import {
@@ -17,10 +17,10 @@ import DDMenuSemester from "@/app/components/DDMenuSemester";
 import DDMenu from "@/app/components/DDMenu";
 import { IoBookOutline } from "react-icons/io5";
 
-const page = () => {
+const Page = () => {
   const { scrollYProgress } = useScroll();
   const { toast } = useToast();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [showDevelopers, setShowDevelopers] = useState(false);
   const [selectedDetailProject, setSelectedDetailProject] = useState<any>();
@@ -31,19 +31,24 @@ const page = () => {
   const [majors, setMajors] = useState<{ id: number; name: string }[]>([]);
   const [selectedMajorFilter, setSelectedMajorFilter] = useState("");
 
-  const fetchData = async () => {
-    const resultListSemester = await getAllSemester();
-    setListSemester(resultListSemester);
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: reference data can only be populated asynchronously after mount */
+  useEffect(() => {
+    const fetchData = async () => {
+      const resultListSemester = await getAllSemester();
+      setListSemester(resultListSemester);
 
-    const resultMajor = await getAllMajor();
-    if (resultMajor?.success) setMajors(resultMajor.data);
+      const resultMajor = await getAllMajor();
+      if (resultMajor?.success) setMajors(resultMajor.data);
 
-    const resultCurrentSemester = await getCurrentSemester();
-    setCurrentSemester(resultCurrentSemester);
-    console.log(resultCurrentSemester);
-  };
+      const resultCurrentSemester = await getCurrentSemester();
+      setCurrentSemester(resultCurrentSemester);
+      console.log(resultCurrentSemester);
+    };
+    fetchData();
+  }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
 
-  const fetchProjectData = async () => {
+  const fetchProjectData = useCallback(async () => {
     const resultProject = await getAllProjects(
       search,
       selectedMajorFilter,
@@ -55,19 +60,23 @@ const page = () => {
       setProject(resultProject?.data);
     }
     console.log(resultProject);
-  };
+  }, [search, selectedMajorFilter, currentSemester]);
+
+  useEffect(() => {
+    fetchProjectData();
+  }, [fetchProjectData]);
 
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -94,13 +103,9 @@ const page = () => {
     };
   }, [scrollYProgress]);
 
-  useEffect(() => {
-    fetchProjectData();
-  }, [search, currentSemester, selectedMajorFilter]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+
+
 
   const handleScrollToTop = () => {
     window.scrollTo({
@@ -178,4 +183,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

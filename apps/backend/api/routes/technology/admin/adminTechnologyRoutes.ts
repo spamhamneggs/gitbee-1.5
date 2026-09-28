@@ -1,5 +1,5 @@
 import express from "express";
-import AdminTechnologyHandler from "api/handlers/technology/admin/adminTechnologyHandler";
+import AdminTechnologyHandler from "../../../handlers/technology/admin/adminTechnologyHandler.js";
 
 const adminTechnologyRoutes = express.Router();
 
