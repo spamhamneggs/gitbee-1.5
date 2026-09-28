@@ -3,7 +3,7 @@
 | App      | Dir             | Stack                    | Port |
 | -------- | --------------- | ------------------------ | ---- |
 | Backend  | `apps/backend`  | Express + Prisma (MySQL) | 5000 |
-| Frontend | `apps/frontend` | Next.js 14               | 8000 |
+| Frontend | `apps/frontend` | Next.js                  | 8000 |
 
 ## Quick start (Docker, recommended)
 
