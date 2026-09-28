@@ -21,7 +21,7 @@ const validateSchema = <T>(schema: z.ZodType<T>, object: any): ValidationResult<
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const messages = error.errors.map((issue: any) => `${issue.path.join(".")} is ${issue.message}`);
+      const messages = error.issues.map((issue: any) => `${issue.path.join(".")} is ${issue.message}`);
       return {
         status: StatusCodes.BAD_REQUEST,
         message: "Invalid request data",

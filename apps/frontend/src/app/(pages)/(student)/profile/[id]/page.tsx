@@ -10,7 +10,7 @@ import { IoIosVideocam } from "react-icons/io";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 const page = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
   const name = searchParams.get("name"); 

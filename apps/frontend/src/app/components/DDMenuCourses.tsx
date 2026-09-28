@@ -16,7 +16,7 @@ type DDMenuCoursesProps = {
   filter: string;
   options: { course_code: string; course_name: string }[];
   setSelectedValue: (value: string) => void;
-  icon: React.ReactElement;
+  icon: React.ReactElement<{ className?: string }>;
 };
 
 const DDMenuCourses: React.FC<DDMenuCoursesProps> = ({

@@ -14,31 +14,31 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@prisma/client": "^5.20.0",
-    "@types/multer": "^1.4.12",
-    "@types/xlsx": "^0.0.36",
+    "@prisma/adapter-mariadb": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "@types/multer": "^2.2.0",
     "axios": "^1.7.7",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.0",
+    "dotenv": "^18.0.1",
+    "express": "^5.2.1",
     "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",
     "module-alias": "^2.2.3",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.4.0",
     "qs": "^6.16.0",
     "tsc-alias": "^1.8.10",
     "tsconfig-paths": "^4.2.0",
     "xlsx": "^0.18.5",
-    "zod": "^3.23.8"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/node": "^22.5.5",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.2",
     "nodemon": "^3.1.4",
-    "prisma": "^5.20.0",
+    "prisma": "^7.10.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.2"
+    "typescript": "6.0.3"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

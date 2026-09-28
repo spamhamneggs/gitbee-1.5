@@ -4,7 +4,6 @@
   "rsc": true,
   "tsx": true,
   "tailwind": {
-    "config": "tailwind.config.ts",
     "css": "src/app/globals.css",
     "baseColor": "neutral",
     "cssVariables": true,
@@ -16,5 +15,8 @@
     "ui": "@/components/ui",
     "lib": "@/lib",
     "hooks": "@/hooks"
+  },
+  "registries": {
+    "@diceui": "https://diceui.com/r/{style}/{name}.json"
   }
 }

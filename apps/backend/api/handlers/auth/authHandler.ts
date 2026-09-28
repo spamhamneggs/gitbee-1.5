@@ -4,9 +4,8 @@ import type { Request, Response } from "express";
 import { createToken } from "api/utils/auth/auth";
 import { sendSuccessResponse, sendErrorResponse } from "api/utils/response/response";
 import GenericService from "api/services/generic/genericService";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "api/prisma/client";
 
-const prisma = new PrismaClient();
 
 export default class AuthHandler {
     static async login(req: Request, res: Response) {
@@ -17,7 +16,7 @@ export default class AuthHandler {
 
         const valid = schema.safeParse(req.body);
         if (valid.success != true) {    
-            return sendErrorResponse(res, valid?.error?.errors[0]?.message, 400);
+            return sendErrorResponse(res, valid?.error?.issues[0]?.message, 400);
         }
 
         try {

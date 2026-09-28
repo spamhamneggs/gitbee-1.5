@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Card from "../Card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { propTypesPlacement } from "@material-tailwind/react/types/components/menu";
 
 interface DashboardSccProps {
   setShowDevelopers: (value: boolean) => void;

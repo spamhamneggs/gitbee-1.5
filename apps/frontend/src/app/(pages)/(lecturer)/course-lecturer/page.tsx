@@ -5,8 +5,7 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { FaCheck } from "react-icons/fa";
 import { IoIosArrowRoundBack } from "react-icons/io";
 import Link from "next/link";
-import { RiStarSFill } from "react-icons/ri";
-import { Rating } from "@material-tailwind/react";
+import { Rating, RatingItem } from "@/components/ui/rating";
 import { LiaStarSolid } from "react-icons/lia";
 import { RiStarSLine } from "react-icons/ri";
 import { MdDelete } from "react-icons/md";
@@ -444,21 +443,20 @@ const page = () => {
                       <div className="w-1/2 flex flex-col justify-end items-end text-primary-binus  cursor-pointer">
                         <Rating
                           value={groupDetail?.assessment?.grade}
-                          ratedIcon={
-                            <LiaStarSolid className="fill-purple-500 w-6 h-6" />
-                          }
-                          unratedIcon={
-                            <RiStarSLine className="fill-purple-500 w-6 h-6" />
-                          }
-                          ratedColor="yellow"
-                          unratedColor="gray"
-                          placeholder={undefined}
-                          onPointerEnterCapture={undefined}
-                          onPointerLeaveCapture={undefined}
-                          onResize={undefined}
-                          onResizeCapture={undefined}
-                          readonly
-                        />
+                          readOnly
+                        >
+                          {[0, 1, 2, 3, 4].map((i) => (
+                            <RatingItem key={i}>
+                              {(state) =>
+                                state === "empty" ? (
+                                  <RiStarSLine className="fill-purple-500 w-6 h-6" />
+                                ) : (
+                                  <LiaStarSolid className="fill-purple-500 w-6 h-6" />
+                                )
+                              }
+                            </RatingItem>
+                          ))}
+                        </Rating>
                         {groupDetail?.assessment?.grade} of 5
                       </div>
                     </div>
@@ -482,23 +480,22 @@ const page = () => {
                       <div className="w-1/2 flex flex-col justify-end items-end text-primary-binus  cursor-pointer">
                         <Rating
                           value={ratings[index]}
-                          ratedIcon={
-                            <LiaStarSolid className="fill-yellow-500 w-6 h-6" />
-                          }
-                          unratedIcon={
-                            <RiStarSLine className="fill-yellow-500 w-6 h-6" />
-                          }
-                          ratedColor="yellow"
-                          unratedColor="gray"
-                          placeholder={undefined}
-                          onPointerEnterCapture={undefined}
-                          onPointerLeaveCapture={undefined}
-                          onResize={undefined}
-                          onResizeCapture={undefined}
-                          onChange={(newRating) =>
+                          onValueChange={(newRating) =>
                             handleRatingChange(newRating, index)
                           }
-                        />
+                        >
+                          {[0, 1, 2, 3, 4].map((i) => (
+                            <RatingItem key={i}>
+                              {(state) =>
+                                state === "empty" ? (
+                                  <RiStarSLine className="fill-yellow-500 w-6 h-6" />
+                                ) : (
+                                  <LiaStarSolid className="fill-yellow-500 w-6 h-6" />
+                                )
+                              }
+                            </RatingItem>
+                          ))}
+                        </Rating>
                         {ratings[index]} of 5
                       </div>
                     </div>

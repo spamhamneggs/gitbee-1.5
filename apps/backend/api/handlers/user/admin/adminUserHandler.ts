@@ -5,11 +5,10 @@ import {
   sendErrorResponse,
   sendSuccessResponse,
 } from "api/utils/response/response";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "api/prisma/client";
 import xlsx from "xlsx";
 import SemesterService from "api/services/semester/semesterService";
 
-const prisma = new PrismaClient();
 
 export default class AdminUserHandler {
   static async getUser(req: Request, res: Response) {
