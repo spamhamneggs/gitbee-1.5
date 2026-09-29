@@ -9,7 +9,6 @@ import { use } from "react";
 import { VisuallyHiddenInput } from "@/components/visually-hidden-input";
 import { useAsRef } from "@/hooks/use-as-ref";
 import { useIsomorphicLayoutEffect } from "@/hooks/use-isomorphic-layout-effect";
-import { useLazyRef } from "@/hooks/use-lazy-ref";
 import { useComposedRefs } from "@/lib/compose-refs";
 import { useDirection } from "@/components/ui/direction";
 import { IconPlaceholder } from "@/components/ui/icon-placeholder";
@@ -232,11 +231,11 @@ function Rating(props: RatingProps) {
   const instanceId = React.useId();
   const rootId = id ?? instanceId;
 
-  const listenersRef = useLazyRef(() => new Set<() => void>());
-  const stateRef = useLazyRef<StoreState>(() => ({
+  const listenersRef = React.useRef(new Set<() => void>());
+  const stateRef = React.useRef<StoreState>({
     value: valueProp ?? defaultValue,
     hoveredValue: null,
-  }));
+  });
 
   const propsRef = useAsRef({
     onValueChange,

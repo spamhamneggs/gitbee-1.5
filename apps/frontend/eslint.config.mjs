@@ -1,6 +1,7 @@
 import effect from "eslint-plugin-react-you-might-not-need-an-effect";
 import eslintReact from "@eslint-react/eslint-plugin";
 import next from "@next/eslint-plugin-next";
+import reactCompiler from "eslint-plugin-react-compiler";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
@@ -19,6 +20,8 @@ export default [
   // keep eslint-react's copies so each finding is reported once.
   eslintReact.configs["disable-conflict-eslint-plugin-react-hooks"],
   next.configs["core-web-vitals"],
+  // React Compiler violations as errors.
+  reactCompiler.configs.recommended,
   // Every effect rule as an error.
   effect.configs.strict,
   {
