@@ -172,7 +172,7 @@ function ProjectDetailScc(props: ProjectDetailSccProps) {
                 height={500}
                 alt="Project thumbnail"
                 unoptimized
-                className="w-full rounded-md border object-cover"
+                className="w-full h-auto rounded-md border object-cover"
               />
             </div>
           </div>

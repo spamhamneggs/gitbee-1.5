@@ -31,7 +31,7 @@ function ExploreComponent(props: ExploreProps) {
       }}
       initial="hidden"
       animate="show"
-      className="relative h-full max-w-full overflow-hidden bg-white mx-4 sm:mx-9 rounded-md flex flex-col mb-14 pb-7"
+      className="relative h-full max-w-full overflow-x-clip bg-white mx-4 sm:mx-9 rounded-md flex flex-col mb-14 pb-7"
     >
       <div
         className={`w-full h-auto bg-white sticky z-10 px-5 transition-all ease-in-out duration-300 visible ${

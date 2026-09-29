@@ -314,7 +314,7 @@ const Page = () => {
                         height={500}
                         alt="Project thumbnail"
                         unoptimized
-                        className="w-full rounded-md border object-cover"
+                        className="w-full h-auto rounded-md border object-cover"
                       />
                     </div>
                   </div>
@@ -327,7 +327,7 @@ const Page = () => {
                         height={384}
                         alt="Gallery image"
                         unoptimized
-                        className="h-full rounded-md border object-cover"
+                        className="h-full w-auto rounded-md border object-cover"
                       />
                     ))}
                   </div>

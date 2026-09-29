@@ -72,7 +72,7 @@ const Page = () => {
               height={720}
               alt="Project thumbnail"
               unoptimized
-              className="border w-full max-h-[30rem] object-cover p-5 my-3"
+              className="border w-full h-auto max-h-[30rem] object-cover p-5 my-3"
             />
             <div className="h-px w-full bg-gray-300"></div>
             <div className="w-full grid grid-cols-1 md:grid-cols-2 justify-start items-center gap-5">

@@ -12,14 +12,14 @@ type CardProps = {
 
 const Card: React.FC<CardProps> = ({ image, title, developers, delay, classStyle }) => {
   return (
-    <motion.div className={`w-full max-w-full ${classStyle == "full-parent-content" ? "" : "max-w-96"} h-[25rem] bg-white border rounded-lg shadow-sm hover:shadow-lg flex flex-col justify-center gap-4 overflow-hidden px-4 cursor-pointer hover:-translate-y-3 transition-transform duration-300 ease-in-out`}>
+    <motion.div className={`w-full ${classStyle == "full-parent-content" ? "max-w-full" : "max-w-96"} h-[25rem] bg-white border rounded-lg shadow-xs hover:shadow-lg flex flex-col justify-center gap-4 overflow-hidden px-4 cursor-pointer hover:-translate-y-3 transition-transform duration-300 ease-in-out`}>
       <Image
         src={image}
         width={384}
         height={288}
         alt={title}
         unoptimized
-        className="w-full max-w-full h-auto object-cover rounded-lg"
+        className="w-full max-w-full h-72 object-cover rounded-lg"
       />
       <div className="w-full flex flex-col gap-1">
         <h2 className="text-2xl sm:text-3xl truncate w-11/12 ms-1 font-montserrat font-semibold text-balance">

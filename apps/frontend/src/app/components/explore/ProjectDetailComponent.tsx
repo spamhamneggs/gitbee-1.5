@@ -155,7 +155,7 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
                 height={500}
                 alt="Project thumbnail"
                 unoptimized
-                className="w-full rounded-md border object-cover"
+                className="w-full h-auto rounded-md border object-cover"
               />
             </div>
           </div>
@@ -168,7 +168,7 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
                 height={384}
                 alt="Gallery image"
                 unoptimized
-                className="h-full rounded-md border-2 object-cover"
+                className="h-full w-auto rounded-md border-2 object-cover"
               />
             ))}
           </div>

@@ -570,7 +570,7 @@ const Page = () => {
           </div>
           {groupsClassData?.sortedGroups?.length < 1 &&
             groupsClassData?.updatedProjects?.length < 1 && (
-              <div className="w-full text-center py-5 shadow-sm rounded-md">
+              <div className="w-full text-center py-5 shadow-xs rounded-md">
                 No Group Has Been Created
               </div>
             )}

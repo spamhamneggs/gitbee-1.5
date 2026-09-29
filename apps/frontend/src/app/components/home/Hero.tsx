@@ -103,7 +103,7 @@ export const Hero = () => {
       style={{ opacity }}
       className="sticky top-0 min-h-screen w-full max-w-[100vw] flex justify-center lg:justify-normal items-center lg:items-stretch max-h-screen overflow-hidden xl:gap-10 px-5 sm:px-10"
     >
-      <div className="absolute z-10 bg-opacity-80 bg-gray-50 lg:bg-transparent lg:relative max-w-[90vw] w-auto shadow-lg lg:shadow-none px-3 py-10 sm:p-10 lg:p-0 lg:w-1/2 lg:min-w-0 lg:shrink-0 flex flex-col justify-center items-start gap-3 sm:gap-5 xl:ps-14 rounded-lg">
+      <div className="absolute z-10 bg-gray-50/80 lg:bg-transparent lg:relative max-w-[90vw] w-auto shadow-lg lg:shadow-none px-3 py-10 sm:p-10 lg:p-0 lg:w-1/2 lg:min-w-0 lg:shrink-0 flex flex-col justify-center items-start gap-3 sm:gap-5 xl:ps-14 rounded-lg">
         <motion.h1
           className="font-bold font-montserrat text-3xl sm:text-5xl lg:text-4xl xl:text-5xl text-center lg:text-start w-full text-balance"
           initial="hidden"
