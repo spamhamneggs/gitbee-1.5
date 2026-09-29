@@ -12,7 +12,7 @@ WORKDIR /repo
 FROM base AS build
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
-RUN pnpm --filter gitbee_backend exec prisma generate --schema ./api/prisma/schema.prisma
+RUN pnpm --filter gitbee_backend exec prisma generate --config ./api/prisma.config.ts
 RUN pnpm --filter gitbee_backend build
 
 # Production-only dependencies for the final image.

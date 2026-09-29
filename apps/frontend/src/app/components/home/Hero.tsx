@@ -1,17 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+
 import {
   animate,
-  useMotionValue,
   motion,
+  useMotionValue,
   useScroll,
   useTransform,
 } from "framer-motion";
-import useMeasure from "react-use-measure";
-import splitStringUsingRegex from "../../utlis/splitStringUsingRegex";
-import { useMsal } from "@azure/msal-react";
-import { useAuth } from "@/app/context/AuthContext";
 import Image from "next/image";
+import useMeasure from "react-use-measure";
+
+import { useAuth } from "@/app/context/AuthContext";
+import { useMsal } from "@azure/msal-react";
+
+import splitStringUsingRegex from "../../utlis/splitStringUsingRegex";
 
 const heading = "BINUS Project Gallery";
 const subHeadingStart = "Show the ";
@@ -75,7 +78,7 @@ export const Hero = () => {
         repeat: Infinity,
         repeatType: "loop",
         repeatDelay: 0,
-      }
+      },
     );
 
     return () => {
@@ -98,11 +101,11 @@ export const Hero = () => {
   return (
     <motion.div
       style={{ opacity }}
-      className="sticky top-0 min-h-screen flex justify-center lg:justify-normal items-center lg:items-stretch max-h-screen overflow-hidden xl:gap-10 px-10"
+      className="sticky top-0 min-h-screen w-full max-w-[100vw] flex justify-center lg:justify-normal items-center lg:items-stretch max-h-screen overflow-hidden xl:gap-10 px-5 sm:px-10"
     >
-      <div className="absolute z-10 bg-opacity-80 bg-gray-50 lg:bg-transparent lg:relative max-w-[90vw] w-auto shadow-lg lg:shadow-none px-3 py-10 sm:p-10 lg:p-0 lg:w-1/2 flex flex-col justify-center items-start gap-3 sm:gap-5 xl:ps-14 rounded-lg">
+      <div className="absolute z-10 bg-opacity-80 bg-gray-50 lg:bg-transparent lg:relative max-w-[90vw] w-auto shadow-lg lg:shadow-none px-3 py-10 sm:p-10 lg:p-0 lg:w-1/2 lg:min-w-0 lg:shrink-0 flex flex-col justify-center items-start gap-3 sm:gap-5 xl:ps-14 rounded-lg">
         <motion.h1
-          className="font-bold font-montserrat text-3xl sm:text-5xl lg:text-4xl xl:text-5xl text-center lg:text-start w-full"
+          className="font-bold font-montserrat text-3xl sm:text-5xl lg:text-4xl xl:text-5xl text-center lg:text-start w-full text-balance"
           initial="hidden"
           whileInView="reveal"
           transition={{ staggerChildren: 0.02 }}
@@ -181,7 +184,7 @@ export const Hero = () => {
             initial="hidden"
             whileInView="visible"
             transition={{ duration: 1, delay: 1 }}
-            className="text-sm sm:text-base relative cursor-pointer border border-primary-orange bg-transparent px-5 py-2.5 text-primary-orange transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-bottom-left before:scale-y-0 before:scale-x-0 before:bg-primary-orange before:transition-transform before:duration-300 before:content-[''] hover:text-white before:hover:scale-y-100 before:hover:scale-x-100 rounded-md before:rounded-sm overflow-hidden"
+            className="text-sm sm:text-base relative isolate whitespace-nowrap cursor-pointer border border-primary-orange bg-transparent px-5 py-2.5 text-primary-orange transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-bottom-left before:scale-y-0 before:scale-x-0 before:bg-primary-orange before:transition-transform before:duration-300 before:content-[''] hover:text-white before:hover:scale-y-100 before:hover:scale-x-100 rounded-md before:rounded-sm overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-orange"
           >
             Explore
           </motion.a>
@@ -195,13 +198,22 @@ export const Hero = () => {
               initial="hidden"
               whileInView="visible"
               transition={{ duration: 1, delay: 1.5 }}
-              className="text-sm sm:text-base border-none lg:border cursor-pointer py-2 px-1 relative after:absolute after:w-0 hover:after:w-full after:h-[1px] after:bottom-0 after:left-0 after:bg-primary-binus flex justify-center items-center after:transition-all after:ease-in-out after:duration-300"
+              className="text-sm sm:text-base whitespace-nowrap border-none lg:border cursor-pointer py-2 px-1 relative after:absolute after:w-0 hover:after:w-full after:h-[1px] after:bottom-0 after:left-0 after:bg-primary-binus flex justify-center items-center after:transition-all after:ease-in-out after:duration-300"
             >
               Submit a project
             </motion.a>
           ) : (
             <motion.div
+              role="button"
+              tabIndex={0}
+              aria-label="Submit a project (sign in required)"
               onClick={() => loginMicrosoft()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  loginMicrosoft();
+                }
+              }}
               variants={{
                 hidden: { opacity: 0, x: -175 },
                 visible: { opacity: 1, x: 0 },
@@ -209,14 +221,14 @@ export const Hero = () => {
               initial="hidden"
               whileInView="visible"
               transition={{ duration: 1, delay: 1.5 }}
-              className="text-sm sm:text-base border-none lg:border cursor-pointer py-2 px-1 relative after:absolute after:w-0 hover:after:w-full after:h-[1px] after:bottom-0 after:left-0 after:bg-primary-binus flex justify-center items-center after:transition-all after:ease-in-out after:duration-300"
+              className="text-sm sm:text-base whitespace-nowrap border-none lg:border cursor-pointer py-2 px-1 relative after:absolute after:w-0 hover:after:w-full after:h-[1px] after:bottom-0 after:left-0 after:bg-primary-binus flex justify-center items-center after:transition-all after:ease-in-out after:duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-binus rounded-sm"
             >
               Submit a project
             </motion.div>
           )}
         </div>
       </div>
-      <div className="relative lg:w-1/2 flex gap-7 h-full overflow-hidden lg:rotate-3 justify-end items-end lg:pe-24 xl:pe-36 opacity-30 lg:opacity-100">
+      <div className="relative lg:w-1/2 lg:min-w-0 lg:max-w-full lg:shrink lg:overflow-hidden flex gap-7 h-full overflow-hidden lg:rotate-3 justify-end items-end lg:pe-24 xl:pe-36 opacity-30 lg:opacity-100">
         <motion.div
           variants={{
             hidden: { opacity: 0, y: -75 },
@@ -234,6 +246,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -241,6 +254,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -248,6 +262,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -255,6 +270,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -262,6 +278,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -269,6 +286,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -276,6 +294,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -283,6 +302,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -290,6 +310,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -297,6 +318,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
         </motion.div>
@@ -317,6 +339,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -324,6 +347,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -331,6 +355,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -338,6 +363,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -345,6 +371,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -352,6 +379,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -359,6 +387,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -366,6 +395,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -373,6 +403,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
           <Image
@@ -380,6 +411,7 @@ export const Hero = () => {
             width={240}
             height={320}
             alt=""
+            loading="lazy"
             className="w-[240px] h-[320px] rounded-md relative overflow-hidden object-cover shadow-xl"
           />
         </motion.div>

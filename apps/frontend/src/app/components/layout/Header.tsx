@@ -370,7 +370,7 @@ const Header = () => {
           {!userData ? (
             <button
               onClick={() => loginMicrosoft()}
-              className="relative border border-primary-orange bg-transparent ml-1 px-5 py-1.5 lg:py-2.5 text-primary-orange transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-bottom-right before:scale-y-0 before:scale-x-0 before:bg-primary-orange before:transition-transform before:duration-300 before:content-[''] hover:text-white before:hover:scale-y-100 before:hover:scale-x-100 rounded-md before:rounded-sm overflow-hidden"
+              className="relative isolate whitespace-nowrap shrink-0 border border-primary-orange bg-transparent ml-1 px-5 py-1.5 lg:py-2.5 text-primary-orange transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-bottom-right before:scale-y-0 before:scale-x-0 before:bg-primary-orange before:transition-transform before:duration-300 before:content-[''] hover:text-white before:hover:scale-y-100 before:hover:scale-x-100 rounded-md before:rounded-sm overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-orange"
             >
               Login
             </button>
@@ -440,30 +440,36 @@ const Header = () => {
               )}
             </Popover>
           )}
-          <div
-            className="flex lg:hidden flex-col justify-between items-end h-7"
+          <button
+            type="button"
+            aria-label={openHamburger ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={openHamburger}
+            className="flex lg:hidden flex-col justify-between items-end h-7 bg-transparent cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-binus rounded-sm"
             onClick={() => setOpenHamburger(!openHamburger)}
           >
             <span
-              className={`transition-all duration-300 ease-in-out w-8 sm:w-9 h-[0.2rem] sm:h-1 bg-primary-binus rounded-lg ${
+              aria-hidden="true"
+              className={`transition-[transform,background-color] duration-300 ease-in-out w-8 sm:w-9 h-[0.2rem] sm:h-1 bg-primary-binus rounded-lg ${
                 openHamburger
                   ? "rotate-45 translate-y-3.5"
                   : "rotate-0 translate-y-0"
               }`}
             ></span>
             <span
-              className={`transition-all duration-300 ease-in-out w-6 sm:w-7 h-[0.2rem] sm:h-1 bg-primary-orange rounded-lg ${
+              aria-hidden="true"
+              className={`transition-[opacity] duration-300 ease-in-out w-6 sm:w-7 h-[0.2rem] sm:h-1 bg-primary-orange rounded-lg ${
                 openHamburger ? "opacity-0" : ""
               }`}
             ></span>
             <span
-              className={`transition-all duration-300 ease-in-out h-[0.2rem] sm:h-1 bg-primary-binus rounded-lg ${
+              aria-hidden="true"
+              className={`transition-[transform,width,background-color] duration-300 ease-in-out h-[0.2rem] sm:h-1 bg-primary-binus rounded-lg ${
                 openHamburger
                   ? "w-8 sm:w-9 -rotate-45 -translate-y-2.5 bg-primary-orange"
                   : "w-7 sm:w-8 rotate-0 translate-y-0"
               }`}
             ></span>
-          </div>
+          </button>
         </div>
       </div>
       {loading && <Loading />}

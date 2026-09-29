@@ -1,5 +1,6 @@
 # npm
 node_modules
+api/prisma/generated
 package-lock.json
 *.log
 *.env*

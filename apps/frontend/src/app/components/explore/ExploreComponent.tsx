@@ -31,7 +31,7 @@ function ExploreComponent(props: ExploreProps) {
       }}
       initial="hidden"
       animate="show"
-      className="relative h-full bg-white mx-9 rounded-md flex flex-col mb-14 pb-7"
+      className="relative h-full max-w-full overflow-hidden bg-white mx-4 sm:mx-9 rounded-md flex flex-col mb-14 pb-7"
     >
       <div
         className={`w-full h-auto bg-white sticky z-10 px-5 transition-all ease-in-out duration-300 visible ${
@@ -52,11 +52,22 @@ function ExploreComponent(props: ExploreProps) {
       >
         {props.projects.map((project: any, index: number) => (
           <div key={project.id}
-            className="flex justify-center items-center"
+            role="button"
+            tabIndex={0}
+            aria-label={`View ${project?.projectDetail?.title ?? "project"} details`}
+            className="flex justify-center items-center cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-binus"
             onClick={() => {
               props.setShowDevelopers(!props.showDevelopers);
               props.handleScrollToTop();
               props.setSelectedProjectId(project.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                props.setShowDevelopers(!props.showDevelopers);
+                props.handleScrollToTop();
+                props.setSelectedProjectId(project.id);
+              }
             }}
           >
             <Card
