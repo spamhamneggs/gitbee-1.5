@@ -1,29 +1,37 @@
-# Use the official Node.js image as a base
-FROM node:24
+# syntax=docker.io/docker/dockerfile:1
 
-# pnpm via corepack, version pinned by packageManager in package.json
-RUN corepack enable
-
-# Install workspace deps first for layer caching
+# Official pnpm base image (Debian slim + standalone pnpm, no Node bundled).
+# It sets PNPM_HOME=/pnpm (on PATH) with the store at /pnpm/store,
+# which is what the BuildKit cache mounts below target.
+FROM ghcr.io/pnpm/pnpm:12 AS base
+RUN pnpm runtime set node 24 -g
 WORKDIR /repo
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/backend/package.json ./apps/backend/package.json
-COPY apps/frontend/package.json ./apps/frontend/package.json
-RUN pnpm install --frozen-lockfile
 
-# Copy the rest of the repo (node_modules excluded via .dockerignore)
+# Full workspace install + backend build. Also the compose dev target:
+# it holds the source and devDependencies, so `prisma` and `pnpm dev` work here.
+FROM base AS build
 COPY . .
-
-# Run Prisma generate to generate the client
-WORKDIR /repo/apps/backend/api
-RUN pnpm exec prisma generate
-
-# Build the project
-WORKDIR /repo
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN pnpm --filter gitbee_backend exec prisma generate --config ./api/prisma.config.ts
 RUN pnpm --filter gitbee_backend build
 
-# Expose the port the app will run on
-EXPOSE 5000
+# Production-only dependencies for the final image.
+FROM base AS prod-deps
+COPY . .
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
-# Start the application using the "dev" script
-CMD ["pnpm", "--filter", "gitbee_backend", "dev"]
+# Minimal production runtime: prod node_modules + compiled output + Prisma
+# schema (used by `prisma db push`/`generate` at boot). No source, no devDependencies.
+FROM base AS runner
+WORKDIR /repo
+COPY --from=prod-deps /repo/package.json /repo/pnpm-lock.yaml /repo/pnpm-workspace.yaml ./
+COPY --from=prod-deps /repo/apps/backend/package.json ./apps/backend/package.json
+COPY --from=prod-deps /repo/apps/frontend/package.json ./apps/frontend/package.json
+COPY --from=prod-deps /repo/node_modules ./node_modules
+COPY --from=prod-deps /repo/apps/backend/node_modules ./apps/backend/node_modules
+COPY --from=build /repo/apps/backend/dist ./apps/backend/dist
+COPY --from=build /repo/apps/backend/api/prisma ./apps/backend/api/prisma
+
+EXPOSE 5000
+ENV NODE_ENV=production
+CMD ["pnpm", "--filter", "gitbee_backend", "start"]

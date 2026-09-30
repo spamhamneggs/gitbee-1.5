@@ -1,12 +1,12 @@
 import { z } from "zod";
-import type { Request, Response, NextFunction } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
-import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
+import type { Request, Response } from "express";
+import validateSchema from "../../../utils/validator/validateSchema.js";
+import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../../utils/response/response.js";
+import { prisma } from "../../../prisma/client.js";
 
 
 export default class HopOutstandingProjectHandler { 
-    static async insertOutstandingProject(req : Request, res : Response, next : NextFunction) {
+    static async insertOutstandingProject(req : Request, res : Response) {
         try {
             const schema = z.object({ 
                 project_id: z.number(),
@@ -25,7 +25,7 @@ export default class HopOutstandingProjectHandler {
                     data: {
                         project_id: params.project_id,
                         is_outstanding: params.is_outstanding,
-                        feedback: params.feedback,
+                        feedback: params.feedback ?? "",
                         created_at: new Date()
                     }
                 });
@@ -38,7 +38,7 @@ export default class HopOutstandingProjectHandler {
         
             sendSuccessResponse(res, "Project Successfully Finalized");
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Insert Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
         }
     }
 }

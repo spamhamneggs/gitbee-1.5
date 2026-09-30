@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll } from "framer-motion";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { FaCheck } from "react-icons/fa";
@@ -53,7 +53,7 @@ interface Status {
   created_at: string;
 }
 
-const page = () => {
+const Page = () => {
   const { userData } = useAuth();
   const searchParams = useSearchParams();
   const course_code = searchParams.get("course_code");
@@ -61,13 +61,13 @@ const page = () => {
   const semester_id = searchParams.get("semester_id");
   const class_id = searchParams.get("class_id");
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const { toast } = useToast();
   const [expand, setExpand] = useState(true);
   const [loading, setLoading] = useState(false);
   const [groupsClassData, setGroupsClassData] = useState<any>([]);
-  const [ratings, setRatings] = useState(Array(0).fill(0));
-  const [reasons, setReasons] = useState(Array(0).fill(""));
+  const [ratings, setRatings] = useState(() => Array(0).fill(0));
+  const [reasons, setReasons] = useState(() => Array(0).fill(""));
   const [status, setStatus] = useState<Status>({ id: 0, created_at: "" });
   const [showPreviewDetailProject, setShowPreviewDetailProject] =
     useState(false);
@@ -88,7 +88,7 @@ const page = () => {
     setReasons(updatedReasons);
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const resultAllGroupsData = await getAllGroupByClass(
       semester_id ? semester_id : "",
@@ -112,7 +112,7 @@ const page = () => {
     });
 
     setLoading(false);
-  };
+  }, [semester_id, course_code, class_id]);
 
   const handleFinalize = async () => {
     setLoading(true);
@@ -179,19 +179,19 @@ const page = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -381,7 +381,7 @@ const page = () => {
               (groupDetail: any, index: number) => (
                 <div
                   className="w-full h-fit overflow-y-auto shadow-xl border rounded-xl p-5"
-                  key={index}
+                  key={groupDetail?.projectDetail?.group}
                 >
                   <div className="w-full flex justify-between items-center">
                     <h1 className="text-xl">
@@ -409,7 +409,7 @@ const page = () => {
                       <TableBody>
                         {groupDetail?.projectGroups?.map(
                           (student: any, index: number) => (
-                            <TableRow>
+                            <TableRow key={student?.student_id}>
                               <TableCell className="font-medium text-center">
                                 {index + 1}
                               </TableCell>
@@ -507,7 +507,7 @@ const page = () => {
               (groupDetail: any, index: number) => (
                 <div
                   className="w-full h-fit overflow-y-auto shadow-xl border rounded-xl p-5"
-                  key={index}
+                  key={groupDetail?.group}
                 >
                   <div className="w-full flex justify-between items-center">
                     <h1 className="text-xl">Group {groupDetail?.group}</h1>
@@ -527,7 +527,7 @@ const page = () => {
                       <TableBody>
                         {groupDetail?.students?.map(
                           (student: any, index: number) => (
-                            <TableRow>
+                            <TableRow key={student?.student_id}>
                               <TableCell className="font-medium text-center">
                                 {index + 1}
                               </TableCell>
@@ -570,7 +570,7 @@ const page = () => {
           </div>
           {groupsClassData?.sortedGroups?.length < 1 &&
             groupsClassData?.updatedProjects?.length < 1 && (
-              <div className="w-full text-center py-5 shadow-sm rounded-md">
+              <div className="w-full text-center py-5 shadow-xs rounded-md">
                 No Group Has Been Created
               </div>
             )}
@@ -599,4 +599,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

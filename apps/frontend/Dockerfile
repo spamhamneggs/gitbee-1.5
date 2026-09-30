@@ -1,26 +1,16 @@
 # syntax=docker.io/docker/dockerfile:1
 
-FROM node:24-alpine AS base
-# pnpm via corepack, version pinned by packageManager in package.json
-RUN corepack enable
-
-# Install dependencies only when needed
-FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat
+# Official pnpm base image (Debian slim + standalone pnpm, no Node bundled).
+# It sets PNPM_HOME=/pnpm (on PATH) with the store at /pnpm/store,
+# which is what the BuildKit cache mount below targets.
+FROM ghcr.io/pnpm/pnpm:12 AS base
+RUN pnpm runtime set node 24 -g
 WORKDIR /repo
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/backend/package.json ./apps/backend/package.json
-COPY apps/frontend/package.json ./apps/frontend/package.json
-RUN pnpm install --frozen-lockfile
 
-
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /repo
-COPY --from=deps /repo/node_modules ./node_modules
-COPY --from=deps /repo/apps/frontend/node_modules ./apps/frontend/node_modules
+# Install the workspace and build the Next.js app.
+FROM base AS build
 COPY . .
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 ARG NEXT_PUBLIC_BACKEND_API
 ENV NEXT_PUBLIC_BACKEND_API=$NEXT_PUBLIC_BACKEND_API
@@ -32,25 +22,28 @@ ENV NEXT_PUBLIC_BACKEND_API=$NEXT_PUBLIC_BACKEND_API
 
 RUN pnpm --filter gitbee-frontend build
 
-# Production image, copy all the files and run next
-FROM base AS runner
+# Production image, copy standalone output and run next.
+# Plain Node image (not the pnpm base): the standalone server only needs
+# `node`, and the pnpm-managed node shim is unreadable for the non-root
+# `nextjs` user. Debian/glibc also matches the build stage (sharp binaries).
+FROM node:24-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs \
+  && useradd --system --uid 1001 --gid nodejs nextjs
 
 # In a workspace the standalone server keeps repo-relative paths:
 # server at apps/frontend/server.js needs .next/static + public beside it.
-COPY --from=builder /repo/apps/frontend/public ./apps/frontend/public
+COPY --from=build /repo/apps/frontend/public ./apps/frontend/public
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/frontend/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/frontend/.next/static ./apps/frontend/.next/static
+COPY --from=build --chown=nextjs:nodejs /repo/apps/frontend/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /repo/apps/frontend/.next/static ./apps/frontend/.next/static
 
 USER nextjs
 

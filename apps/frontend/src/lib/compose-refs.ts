@@ -58,9 +58,11 @@ function composeRefs<T>(...refs: PossibleRef<T>[]): React.RefCallback<T> {
  * A custom hook that composes multiple refs
  * Accepts callback refs and RefObject(s)
  */
+  // eslint-disable-next-line @eslint-react/no-unnecessary-use-prefix -- public utility API kept radix-compatible and intentionally hook-shaped
 function useComposedRefs<T>(...refs: PossibleRef<T>[]): React.RefCallback<T> {
-  // oxlint-disable-next-line react/exhaustive-deps -- we want to memoize by all values
-  return React.useCallback(composeRefs(...refs), refs);
+  // `refs` is a new array on every render, so useCallback would never
+  // memoize; calling composeRefs directly is exactly equivalent.
+  return composeRefs(...refs);
 }
 
 export { composeRefs, useComposedRefs };

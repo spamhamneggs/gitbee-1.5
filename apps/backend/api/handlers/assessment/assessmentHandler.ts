@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { Request, Response } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
-import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
+import validateSchema from "../../utils/validator/validateSchema.js";
+import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../utils/response/response.js";
+import { prisma } from "../../prisma/client.js";
 
 
 export default class AssessmentHandler {
@@ -80,7 +80,7 @@ export default class AssessmentHandler {
     
             sendSuccessResponse(res, insertedAssessments);
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Insert Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
         }
     }
 }

@@ -57,10 +57,12 @@ function VisuallyHiddenInput<T = InputValue>(
 
   React.useLayoutEffect(() => {
     if (!control) {
+      // eslint-disable-next-line @eslint-react/set-state-in-effect -- DOM measurement must run post-commit; size is unknowable during render
       setControlSize({});
       return;
     }
 
+    // eslint-disable-next-line @eslint-react/set-state-in-effect -- ResizeObserver callback: DOM measurement must run post-commit
     setControlSize({
       width: control.offsetWidth,
       height: control.offsetHeight,
@@ -117,6 +119,7 @@ function VisuallyHiddenInput<T = InputValue>(
 
     const setter = descriptor?.set;
 
+    // eslint-disable-next-line react-you-might-not-need-an-effect/no-event-handler -- native form-control sync: must dispatch DOM events post-commit so uncontrolled listeners observe the change
     if (prevValue !== currentValue && setter) {
       const event = new Event(eventType, { bubbles });
       setter.call(input, serializedCurrentValue);

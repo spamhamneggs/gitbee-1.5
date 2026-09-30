@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import {
 } from "@/app/(pages)/(student)/course/actions";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { IoIosArrowRoundBack, IoIosVideocam } from "react-icons/io";
 import { SiGithub } from "react-icons/si";
 import { BsGlobe2 } from "react-icons/bs";
@@ -62,7 +63,7 @@ interface PopUpInsertProps {
   }) => void;
   categories: any;
   technologies: any;
-  userId?: string;
+  userId?: string | undefined;
   course_code: string;
   semester_id: string;
   class_id: string;
@@ -85,6 +86,14 @@ function PopUpInsert(props: PopUpInsertProps) {
   const [projectLink, setProjectLink] = useState("");
   const [videoLink, setVideoLink] = useState("");
   const [thumbnail, setThumbnail] = useState<File | undefined>(undefined);
+  const thumbnailUrl = useMemo(
+    () => (thumbnail ? URL.createObjectURL(thumbnail) : undefined),
+    [thumbnail]
+  );
+  useEffect(() => {
+    if (!thumbnailUrl) return;
+    return () => URL.revokeObjectURL(thumbnailUrl);
+  }, [thumbnailUrl]);
   const [documentation, setDocumentation] = useState<File | undefined>(
     undefined
   );
@@ -100,26 +109,29 @@ function PopUpInsert(props: PopUpInsertProps) {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [listStudent, setListStudent] = useState();
 
-  useEffect(() => {
+  const [prevGroupMembers, setPrevGroupMembers] = useState(props.groupMembers);
+  if (props.groupMembers !== prevGroupMembers) {
+    setPrevGroupMembers(props.groupMembers);
     console.log(props.groupMembers.length);
     if (props.groupMembers?.length > 0) {
       setCurrentStep(2);
     }
-  }, [props.groupMembers]);
+  }
 
-  const fetchStudentList = async () => {
-    const resultStudentList = await getStudentDataInClass(
-      props.semester_id,
-      props.course_code,
-      props.class_id
-    );
-    console.log(resultStudentList);
-    setListStudent(resultStudentList?.data);
-  };
-
+  /* eslint-disable react-you-might-not-need-an-effect/no-derived-state -- server fetch: the result depends on an async round-trip and cannot be computed during render */
   useEffect(() => {
+    const fetchStudentList = async () => {
+      const resultStudentList = await getStudentDataInClass(
+        props.semester_id,
+        props.course_code,
+        props.class_id
+      );
+      console.log(resultStudentList);
+      setListStudent(resultStudentList?.data);
+    };
     fetchStudentList();
-  }, []);
+  }, [props.semester_id, props.course_code, props.class_id]);
+  /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
 
   const isValidUrl = (urlString: string) => {
     var urlPattern = new RegExp(
@@ -280,7 +292,7 @@ function PopUpInsert(props: PopUpInsertProps) {
         <div className="w-full flex gap-5">
           {steps?.map((step, i) => (
             <div
-              key={i}
+              key={step}
               className={`w-full flex flex-col ${
                 currentStep >= i + 1 && i !== 0
                   ? "cursor-pointer"
@@ -337,7 +349,7 @@ function PopUpInsert(props: PopUpInsertProps) {
             </TableHeader>
             <TableBody>
               {props.groupMembers.map((row: any, index: number) => (
-                <TableRow key={index}>
+                <TableRow key={row?.student_id}>
                   <TableCell className="font-medium text-center">
                     {index + 1}
                   </TableCell>
@@ -714,23 +726,23 @@ function PopUpInsert(props: PopUpInsertProps) {
               </div>
             </div>
             <div className="flex flex-col gap-3">
-              {dropdownsTechno.map((_, index) => (
+              {dropdownsTechno.map((techno) => (
                 <Popover
-                  key={index}
-                  open={openStatesTechno[index]}
-                  onOpenChange={(isOpen) => togglePopover(index, isOpen)}
+                  key={techno}
+                  open={openStatesTechno[techno] ?? false}
+                  onOpenChange={(isOpen) => togglePopover(techno, isOpen)}
                 >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       role="combobox"
-                      aria-expanded={openStatesTechno[index]}
+                      aria-expanded={openStatesTechno[techno]}
                       className="w-full justify-between"
                     >
-                      {selectedTechnologies[index]
+                      {selectedTechnologies[techno]
                         ? props.technologies.find(
                             (tech: any) =>
-                              tech.id === selectedTechnologies[index]
+                              tech.id === selectedTechnologies[techno]
                           )?.name || "Select technology"
                         : "Select technology"}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -750,15 +762,15 @@ function PopUpInsert(props: PopUpInsertProps) {
                               key={tech.id}
                               value={tech.id}
                               onSelect={() => {
-                                handleSelect(index, tech.id);
-                                togglePopover(index, false);
+                                handleSelect(techno, tech.id);
+                                togglePopover(techno, false);
                               }}
                               disabled={selectedTechnologies.includes(tech.id)}
                             >
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  selectedTechnologies[index] === tech.id
+                                  selectedTechnologies[techno] === tech.id
                                     ? "opacity-100"
                                     : "opacity-0"
                                 )}
@@ -814,7 +826,10 @@ function PopUpInsert(props: PopUpInsertProps) {
                     By:{" "}
                     {props.groupMembers.map((row: any, index: number) => {
                       return (
-                        <span className="capitalize text-gray-500">
+                        <span
+                          key={row?.student_id}
+                          className="capitalize text-gray-500"
+                        >
                           {row?.student_name.toLowerCase()}
                           {index + 1 < props.groupMembers.length ? ", " : ""}
                         </span>
@@ -867,17 +882,24 @@ function PopUpInsert(props: PopUpInsertProps) {
                   )}
                 </div>
                 <div className="w-1/3">
-                  <img
-                    src={thumbnail ? URL.createObjectURL(thumbnail) : undefined}
-                    className="w-full rounded-md border h-96 object-cover"
-                  />
+                  {thumbnailUrl ? (
+                    <Image
+                      src={thumbnailUrl}
+                      width={960}
+                      height={384}
+                      alt="Thumbnail preview"
+                      className="w-full rounded-md border h-96 object-cover"
+                    />
+                  ) : null}
                 </div>
               </div>
               <div className="w-full h-96 my-3 flex overflow-auto gap-3">
                 {gallery.map((file, index) => (
-                  <img
-                    key={index}
+                  <Image
+                    key={file.name}
                     src={URL.createObjectURL(file)}
+                    width={576}
+                    height={384}
                     alt={`Gallery Image ${index + 1}`}
                     className="w-full rounded-md border h-full object-cover"
                   />

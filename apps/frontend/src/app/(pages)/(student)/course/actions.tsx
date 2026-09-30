@@ -71,8 +71,8 @@ export const insertProject = async ({
   githubLink: string;
   projectLink: string;
   videoLink: string;
-  thumbnail?: File;
-  documentation?: File;
+  thumbnail?: File | undefined;
+  documentation?: File | undefined;
   gallery: File[];
   categoryId: string;
   selectedTechnologies: string[];

@@ -1,7 +1,12 @@
-import { prisma } from "api/prisma/client";
+import { prisma } from "../../prisma/client.js";
 
+type FormattableProject = {
+    projectGroups: { id: number; project_id: number }[];
+    galleries: { id: number; project_id: number }[];
+    projectTechnologies: { id: number; project_id: number; technology_id: number }[];
+};
 
-export const formatProjects = async (projects: any[]) => {
+export const formatProjects = async <T extends FormattableProject>(projects: T[]) => {
     return Promise.all(projects.map(async (project) => {
         const updatedProjectGroups = project.projectGroups.map(group => {
             const { id, project_id, ...otherAttributes } = group;

@@ -1,6 +1,6 @@
 import express from "express";
-import studentGroupRoutes from "./student/studentGroupRoutes";
-import lecturerGroupRoutes from "./lecturer/lecturerGroupRoutes";
+import studentGroupRoutes from "./student/studentGroupRoutes.js";
+import lecturerGroupRoutes from "./lecturer/lecturerGroupRoutes.js";
 
 const groupRoutes = express.Router();
 

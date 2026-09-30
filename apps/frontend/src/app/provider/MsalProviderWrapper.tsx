@@ -2,7 +2,7 @@
 
 import { MsalProvider } from "@azure/msal-react";
 import { PublicClientApplication } from "@azure/msal-browser";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 const msalConfig = {
   auth: {

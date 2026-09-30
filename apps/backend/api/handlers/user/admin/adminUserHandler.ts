@@ -1,13 +1,19 @@
 import { z } from "zod";
 import type { Request, Response } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
+import validateSchema from "../../../utils/validator/validateSchema.js";
 import {
+  getErrorMessage,
   sendErrorResponse,
   sendSuccessResponse,
-} from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
+} from "../../../utils/response/response.js";
+import { prisma } from "../../../prisma/client.js";
 import xlsx from "xlsx";
-import SemesterService from "api/services/semester/semesterService";
+import SemesterService from "../../../services/semester/semesterService.js";
+
+interface AtlantisSemester {
+  Description: string;
+  SemesterID: string;
+}
 
 
 export default class AdminUserHandler {
@@ -70,13 +76,21 @@ export default class AdminUserHandler {
             },
           },
         });
-        hop = hopData.map((h) => ({
-          ...h,
+        type HopDataItem = (typeof hopData)[number];
+        hop = hopData.map(
+          (
+            h
+          ): Omit<HopDataItem, "hopMajors"> & {
+            hopMajors?: HopDataItem["hopMajors"];
+            hop_major: { id: number; name: string }[];
+          } => ({
+            ...h,
           hop_major: h.hopMajors.map((hm) => ({
             id: hm.major.id,
             name: hm.major.name,
           })),
-        }));
+          })
+        );
         hop.forEach((h) => delete h.hopMajors);
       }
 
@@ -107,7 +121,7 @@ export default class AdminUserHandler {
 
       sendSuccessResponse(res, response);
     } catch (error) {
-      sendErrorResponse(res, error.message || "Fetch Failed");
+      sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
     }
   }
 
@@ -149,7 +163,7 @@ export default class AdminUserHandler {
 
       sendSuccessResponse(res, newUser);
     } catch (error) {
-      sendErrorResponse(res, error.message ? error.message : "Insert Failed");
+      sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
     }
   }
 
@@ -211,7 +225,7 @@ export default class AdminUserHandler {
 
       sendSuccessResponse(res, updatedUserRole);
     } catch (error) {
-      sendErrorResponse(res, error.message ? error.message : "Update Failed");
+      sendErrorResponse(res, getErrorMessage(error, "Update Failed"));
     }
   }
 
@@ -230,19 +244,26 @@ export default class AdminUserHandler {
 
       const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return sendErrorResponse(res, "Excel file has no sheets.");
+      }
       const worksheet = workbook.Sheets[sheetName];
-      const rows: Record<string, any>[] = xlsx.utils
-        .sheet_to_json(worksheet, { header: 1 })
+      if (!worksheet) {
+        return sendErrorResponse(res, "Excel sheet not found.");
+      }
+      const rows = xlsx.utils
+        .sheet_to_json<unknown[][]>(worksheet, { header: 1 })
         .slice(1);
 
-      const validatedUsers = rows
-        .map((row) => ({
+      const validatedUsers = rows.flatMap((row) => {
+        const parsed = schema.safeParse({
           lecturer_code: row[2],
           name: row[1],
           email: row[1],
           role: "Lecturer",
-        }))
-        .filter((row) => schema.safeParse(row).success);
+        });
+        return parsed.success ? [parsed.data] : [];
+      });
 
       if (validatedUsers.length === 0) {
         return sendErrorResponse(res, "No valid rows found in the file.");
@@ -257,7 +278,7 @@ export default class AdminUserHandler {
     } catch (error) {
       sendErrorResponse(
         res,
-        error.message || "Failed to process the Excel file."
+        getErrorMessage(error, "Failed to process the Excel file.")
       );
     }
   }
@@ -272,7 +293,7 @@ export default class AdminUserHandler {
 
       sendSuccessResponse(res, deletedUsers);
     } catch (error) {
-      sendErrorResponse(res, error.message ? error.message : "Remove Failed");
+      sendErrorResponse(res, getErrorMessage(error, "Remove Failed"));
     }
   }
 
@@ -307,7 +328,7 @@ export default class AdminUserHandler {
       });
       sendSuccessResponse(res, classTransactions);
     } catch (error) {
-      sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+      sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
     }
   }
 
@@ -329,28 +350,46 @@ export default class AdminUserHandler {
 
       const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return sendErrorResponse(res, "Excel file has no sheets.");
+      }
       const worksheet = workbook.Sheets[sheetName];
-      const rows: Record<string, any>[] = xlsx.utils
-        .sheet_to_json(worksheet, { header: 1 })
+      if (!worksheet) {
+        return sendErrorResponse(res, "Excel sheet not found.");
+      }
+      const rows = xlsx.utils
+        .sheet_to_json<unknown[][]>(worksheet, { header: 1 })
         .slice(1);
-      const semesterRaw = rows[0][0];
+      const firstRow = rows[0];
+      if (!firstRow) {
+        return sendErrorResponse(res, "Excel file is empty.");
+      }
+      const semesterRaw = firstRow[0];
       let semesterName = "";
       if (semesterRaw) {
-        const yearPart = Math.floor(semesterRaw / 100);
-        const termPart = semesterRaw % 100;
-        const year = 2000 + yearPart;
+        const numericRaw = Number(semesterRaw);
+        if (!Number.isNaN(numericRaw)) {
+          const yearPart = Math.floor(numericRaw / 100);
+          const termPart = numericRaw % 100;
+          const year = 2000 + yearPart;
 
-        if (termPart === 10) {
-          semesterName = `Odd Semester ${year}/${year + 1}`;
-        } else if (termPart === 20) {
-          semesterName = `Even Semester ${year}/${year + 1}`;
+          if (termPart === 10) {
+            semesterName = `Odd Semester ${year}/${year + 1}`;
+          } else if (termPart === 20) {
+            semesterName = `Even Semester ${year}/${year + 1}`;
+          }
         }
       }
 
       const semesterData = await SemesterService.getAllSemesterData();
-      const semesterId = semesterData.data.find(
-        (semester) => semester.Description === semesterName
-      );
+      const semesters: unknown = semesterData.data;
+      const semesterId = Array.isArray(semesters)
+        ? semesters.find((semester: AtlantisSemester) => semester.Description === semesterName)
+        : undefined;
+
+      if (!semesterId) {
+        return sendErrorResponse(res, "Invalid semester information.");
+      }
 
       const uniqueCombinations = new Set<string>();
  
@@ -365,7 +404,7 @@ export default class AdminUserHandler {
           location: row[6],
         }))
         .filter((row) => {
-          const uniqueKey = `${row.semester_id}|${row.lecturer_code}|${row.course_code}|${row.class}|${row.location}`;
+          const uniqueKey = `${row.semester_id}|${String(row.lecturer_code)}|${String(row.course_code)}|${String(row.class)}|${String(row.location)}`;
 
           if (uniqueCombinations.has(uniqueKey)) {
             return false;
@@ -373,7 +412,10 @@ export default class AdminUserHandler {
           uniqueCombinations.add(uniqueKey);
           return true;
         })
-        .filter((row) => schema.safeParse(row).success);
+        .flatMap((row) => {
+          const parsed = schema.safeParse(row);
+          return parsed.success ? [parsed.data] : [];
+        });
 
       if (validatedTransactions.length === 0) {
         return sendErrorResponse(res, "No valid rows found in the file.");
@@ -388,7 +430,7 @@ export default class AdminUserHandler {
     } catch (error) {
       sendErrorResponse(
         res,
-        error.message || "Failed to process the Excel file."
+        getErrorMessage(error, "Failed to process the Excel file.")
       );
     }
   }
@@ -399,7 +441,7 @@ export default class AdminUserHandler {
 
       sendSuccessResponse(res, deletedTransactions);
     } catch (error) {
-      sendErrorResponse(res, error.message ? error.message : "Remove Failed");
+      sendErrorResponse(res, getErrorMessage(error, "Remove Failed"));
     }
   }
 
@@ -433,7 +475,7 @@ export default class AdminUserHandler {
       });
       sendSuccessResponse(res, studentTransactions);
     } catch (error) {
-      sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+      sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
     }
   }
 
@@ -453,29 +495,43 @@ export default class AdminUserHandler {
 
       const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return sendErrorResponse(res, "Excel file has no sheets.");
+      }
       const worksheet = workbook.Sheets[sheetName];
-      const rows: Record<string, any>[] = xlsx.utils
-        .sheet_to_json(worksheet, { header: 1 })
+      if (!worksheet) {
+        return sendErrorResponse(res, "Excel sheet not found.");
+      }
+      const rows = xlsx.utils
+        .sheet_to_json<unknown[][]>(worksheet, { header: 1 })
         .slice(1);
 
-      const semesterRaw = rows[0][2];
+      const firstRow = rows[0];
+      if (!firstRow) {
+        return sendErrorResponse(res, "Excel file is empty.");
+      }
+      const semesterRaw = firstRow[2];
       let semesterName = "";
       if (semesterRaw) {
-        const yearPart = Math.floor(semesterRaw / 100);
-        const termPart = semesterRaw % 100;
-        const year = 2000 + yearPart;
+        const numericRaw = Number(semesterRaw);
+        if (!Number.isNaN(numericRaw)) {
+          const yearPart = Math.floor(numericRaw / 100);
+          const termPart = numericRaw % 100;
+          const year = 2000 + yearPart;
 
-        if (termPart === 10) {
-          semesterName = `Odd Semester ${year}/${year + 1}`;
-        } else if (termPart === 20) {
-          semesterName = `Even Semester ${year}/${year + 1}`;
+          if (termPart === 10) {
+            semesterName = `Odd Semester ${year}/${year + 1}`;
+          } else if (termPart === 20) {
+            semesterName = `Even Semester ${year}/${year + 1}`;
+          }
         }
       }
 
       const semesterData = await SemesterService.getAllSemesterData();
-      const semesterId = semesterData.data.find(
-        (semester) => semester.Description === semesterName
-      );
+      const semesters: unknown = semesterData.data;
+      const semesterId = Array.isArray(semesters)
+        ? semesters.find((semester: AtlantisSemester) => semester.Description === semesterName)
+        : undefined;
 
       if (!semesterId) {
         return sendErrorResponse(res, "Invalid semester information.");
@@ -484,12 +540,18 @@ export default class AdminUserHandler {
       const validatedTransactions = rows
         .map((row) => ({
           semester_id: semesterId.SemesterID,
-          student_id: row[0].toString(),
+          student_id:
+            typeof row[0] === "string" || typeof row[0] === "number"
+              ? String(row[0])
+              : row[0],
           student_name: row[1],
           course_code: row[3],
           class: row[4],
         }))
-        .filter((row) => schema.safeParse(row).success)
+        .flatMap((row) => {
+          const parsed = schema.safeParse(row);
+          return parsed.success ? [parsed.data] : [];
+        })
         .filter((row) => row.class.startsWith("L"));
 
       if (validatedTransactions.length === 0) {
@@ -506,7 +568,7 @@ export default class AdminUserHandler {
     } catch (error) {
       sendErrorResponse(
         res,
-        error.message || "Failed to process the Excel file."
+        getErrorMessage(error, "Failed to process the Excel file.")
       );
     }
   }
@@ -518,7 +580,7 @@ export default class AdminUserHandler {
 
       sendSuccessResponse(res, deletedTransactions);
     } catch (error) {
-      sendErrorResponse(res, error.message ? error.message : "Remove Failed");
+      sendErrorResponse(res, getErrorMessage(error, "Remove Failed"));
     }
   }
 }

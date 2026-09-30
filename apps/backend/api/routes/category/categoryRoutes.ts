@@ -1,6 +1,6 @@
 import express from "express";
-import CategoryHandler from "api/handlers/category/categoryHandler";
-import adminCategoryRoutes from "./admin/adminCategoryRoutes";
+import CategoryHandler from "../../handlers/category/categoryHandler.js";
+import adminCategoryRoutes from "./admin/adminCategoryRoutes.js";
 
 const categoryRoutes = express.Router();
 

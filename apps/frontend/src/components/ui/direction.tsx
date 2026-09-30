@@ -1,4 +1,5 @@
 import * as React from "react";
+import { use } from "react";
 
 type Direction = "ltr" | "rtl";
 
@@ -12,12 +13,10 @@ export function DirectionProvider({
   children: React.ReactNode;
 }) {
   return (
-    <DirectionContext.Provider value={dir}>
-      {children}
-    </DirectionContext.Provider>
+    <DirectionContext value={dir}>{children}</DirectionContext>
   );
 }
 
 export function useDirection(): Direction {
-  return React.useContext(DirectionContext);
+  return use(DirectionContext);
 }

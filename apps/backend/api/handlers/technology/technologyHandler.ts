@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { Request, Response } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
-import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
+import validateSchema from "../../utils/validator/validateSchema.js";
+import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../utils/response/response.js";
+import { prisma } from "../../prisma/client.js";
 
 
 export default class TechnologyHandler {
@@ -11,7 +11,7 @@ export default class TechnologyHandler {
             const technologies = await prisma.technology.findMany();
             sendSuccessResponse(res, technologies);
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
         }
     }
 
@@ -39,7 +39,7 @@ export default class TechnologyHandler {
     
             sendSuccessResponse(res, technology);
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
         }
     }    
 }

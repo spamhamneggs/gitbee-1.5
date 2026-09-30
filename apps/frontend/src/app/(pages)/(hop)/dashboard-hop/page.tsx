@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll } from "framer-motion";
 import { CiSearch } from "react-icons/ci";
 import DDMenu from "../../../components/DDMenu";
@@ -21,10 +21,10 @@ import { Toaster } from "@/components/ui/toaster";
 import ProjectDetailHop from "@/app/components/dashboard-hop/ProjectDetailHop";
 import DashboardHopComponent from "@/app/components/dashboard-hop/DashboardHopComponent";
 
-const page = () => {
+const Page = () => {
   const { scrollYProgress } = useScroll();
   const { toast } = useToast();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [showDevelopers, setShowDevelopers] = useState(false);
   const [selectedDetailProject, setSelectedDetailProject] = useState<any>();
@@ -41,43 +41,33 @@ const page = () => {
   const [listSemester, setListSemester] = useState<any>([]);
   const [currentSemester, setCurrentSemester] = useState<any>();
 
-  const fetchData = async () => {
-    const resultCategory = await getAllCategory();
-    if (resultCategory?.success) setCategories(resultCategory.data);
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: reference data can only be populated asynchronously after mount */
+  useEffect(() => {
+    const fetchData = async () => {
+      const resultCategory = await getAllCategory();
+      if (resultCategory?.success) setCategories(resultCategory.data);
 
-    const resultMajor = await getAllMajor();
-    if (resultMajor?.success) setMajors(resultMajor.data);
+      const resultMajor = await getAllMajor();
+      if (resultMajor?.success) setMajors(resultMajor.data);
 
-    const resultTech = await getAllTech();
-    if (resultTech?.success) setTechs(resultTech.data);
-  };
-
-  const fetchProjectData = async () => {
-    const resultProject = await getAllProjects(
-      search,
-      "6",
-      "be992b30-4b38-4361-8404-25f2d6912754",
-      "COMP6100001"
-    );
-
-    if (resultProject?.success) {
-      console.log();
-      setProject(resultProject?.data);
-    }
-    console.log(resultProject);
-  };
+      const resultTech = await getAllTech();
+      if (resultTech?.success) setTechs(resultTech.data);
+    };
+    fetchData();
+  }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
 
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -104,22 +94,30 @@ const page = () => {
     };
   }, [scrollYProgress]);
 
-  useEffect(() => {
-    fetchProjectData();
+  const fetchProjectData = useCallback(async () => {
+    const resultProject = await getAllProjects(
+      search,
+      "6",
+      "be992b30-4b38-4361-8404-25f2d6912754",
+      "COMP6100001"
+    );
+
+    if (resultProject?.success) {
+      console.log();
+      setProject(resultProject?.data);
+    }
+    console.log(resultProject);
   }, [search]);
 
   useEffect(() => {
     fetchProjectData();
-  }, [
-    search,
-    selectedCategoryFilter,
-    selectedMajorFilter,
-    selectedTechnologyFilter,
-  ]);
+  }, [fetchProjectData]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchProjectData();
+  }, [fetchProjectData]);
+
+
 
   const handleScrollToTop = () => {
     window.scrollTo({
@@ -180,4 +178,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

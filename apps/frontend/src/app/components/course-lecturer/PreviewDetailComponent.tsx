@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import React, { useEffect } from "react";
 import { BsGlobe2 } from "react-icons/bs";
 import { motion } from "framer-motion";
@@ -38,6 +39,7 @@ function PreviewDetailComponent(props: PreviewDetailProps) {
         {props.selectedPreviewProject?.projectGroups.map(
           (student: any, index: number) => (
             <Link
+              key={student?.student_id}
               href={{
                 pathname: `/profile/${student?.student_id}`,
                 query: {
@@ -46,8 +48,12 @@ function PreviewDetailComponent(props: PreviewDetailProps) {
               }}
               className="flex justify-start items-center gap-5 border-b pb-5 mr-4 cursor-pointer"
             >
-              <img
+              <Image
                 src="https://github.com/shadcn.png"
+                width={80}
+                height={80}
+                alt="Student avatar"
+                unoptimized
                 className="rounded-full h-20 w-20 p-1 border object-cover"
               />
               <div className="w-48">
@@ -87,7 +93,10 @@ function PreviewDetailComponent(props: PreviewDetailProps) {
                 {props.selectedPreviewProject?.projectGroups?.map(
                   (row: any, index: number) => {
                     return (
-                      <span className="capitalize text-gray-500">
+                      <span
+                        key={row?.student_id}
+                        className="capitalize text-gray-500"
+                      >
                         {row?.student_name.toLowerCase()}
                         {index + 1 <
                         props.selectedPreviewProject?.projectGroups.length
@@ -107,7 +116,7 @@ function PreviewDetailComponent(props: PreviewDetailProps) {
                 <h1 className="text-primary-binus italic">
                   {props.selectedPreviewProject?.projectTechnologies?.map(
                     (tech: any, index: number) => (
-                      <span>
+                      <span key={tech?.technology_name}>
                         {tech?.technology_name}
                         {index + 1 <
                         props.selectedPreviewProject?.projectTechnologies
@@ -153,15 +162,27 @@ function PreviewDetailComponent(props: PreviewDetailProps) {
                     src="/images/image-1.webp"
                     className="w-full rounded-md"
                     /> */}
-              <img
+              <Image
                 src={props.selectedPreviewProject?.projectDetail?.thumbnail}
-                className="w-full rounded-md border"
+                width={800}
+                height={500}
+                alt="Project thumbnail"
+                unoptimized
+                className="w-full h-auto rounded-md border object-cover"
               />
             </div>
           </div>
           <div className="w-full h-96 my-3 flex overflow-auto gap-3">
             {props.selectedPreviewProject?.galleries.map((gallery: any) => (
-              <img src={gallery?.image} className="h-full rounded-md border" />
+              <Image
+                key={gallery?.image}
+                src={gallery?.image}
+                width={576}
+                height={384}
+                alt="Gallery image"
+                unoptimized
+                className="h-full w-auto rounded-md border object-cover"
+              />
             ))}
           </div>
           <div className="w-full h-[30rem] overflow-auto flex flex-col">

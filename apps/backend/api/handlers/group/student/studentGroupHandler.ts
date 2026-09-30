@@ -1,13 +1,13 @@
 import { z } from "zod";
-import type { Request, Response, NextFunction } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
-import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
-import GenericService from "api/services/generic/genericService";
+import type { Request, Response } from "express";
+import validateSchema from "../../../utils/validator/validateSchema.js";
+import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../../utils/response/response.js";
+import { prisma } from "../../../prisma/client.js";
+import GenericService from "../../../services/generic/genericService.js";
 
 
 export default class StudentGroupHandler {
-    static async insertTemporaryGroup(req : Request, res : Response, next : NextFunction) {
+    static async insertTemporaryGroup(req : Request, res : Response) {
         try {
             const schema = z.object({
                 semester_id: z.string(),
@@ -145,11 +145,11 @@ export default class StudentGroupHandler {
     
             sendSuccessResponse(res, insertedGroups);
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Insert Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
         }
     }
 
-    static async getCurrentStudentGroup(req : Request, res : Response, next : NextFunction) {
+    static async getCurrentStudentGroup(req : Request, res : Response) {
         try {
             const schema = z.object({
                 semester_id: z.string(),
@@ -190,7 +190,7 @@ export default class StudentGroupHandler {
     
             sendSuccessResponse(res, groupMembers);
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
         }
     }
 }

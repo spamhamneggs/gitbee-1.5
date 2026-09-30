@@ -1,10 +1,10 @@
 import express from "express";
-import ProjectHandler from "api/handlers/project/projectHandler";
-import lecturerProjectRoutes from "./lecturer/lecturerProjectRoutes";
-import adminProjectRoutes from "./admin/adminProjectRoutes";
-import studentProjectRoutes from "./student/studentProjectRoutes";
-import sccProjectRoutes from "./scc/sccProjectRoutes";
-import hopProjectRoutes from "./hop/hopProjectRoutes";
+import ProjectHandler from "../../handlers/project/projectHandler.js";
+import lecturerProjectRoutes from "./lecturer/lecturerProjectRoutes.js";
+import adminProjectRoutes from "./admin/adminProjectRoutes.js";
+import studentProjectRoutes from "./student/studentProjectRoutes.js";
+import sccProjectRoutes from "./scc/sccProjectRoutes.js";
+import hopProjectRoutes from "./hop/hopProjectRoutes.js";
 
 const projectRoutes = express.Router();
 

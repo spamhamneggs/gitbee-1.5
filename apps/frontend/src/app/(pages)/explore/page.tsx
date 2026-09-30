@@ -15,9 +15,9 @@ import {
   getAllTech,
 } from "./actions";
 
-const page = () => {
+const Page = () => {
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [showDevelopers, setShowDevelopers] = useState(false);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>(
@@ -32,39 +32,54 @@ const page = () => {
   const [selectedTechnologyFilter, setSelectedTechnologyFilter] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
 
-  const fetchData = async () => {
-    const resultCategory = await getAllCategory();
-    if (resultCategory?.success) setCategories(resultCategory.data);
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: reference data can only be populated asynchronously after mount */
+  useEffect(() => {
+    const fetchData = async () => {
+      const resultCategory = await getAllCategory();
+      if (resultCategory?.success) setCategories(resultCategory.data);
 
-    const resultMajor = await getAllMajor();
-    if (resultMajor?.success) setMajors(resultMajor.data);
+      const resultMajor = await getAllMajor();
+      if (resultMajor?.success) setMajors(resultMajor.data);
 
-    const resultTech = await getAllTech();
-    if (resultTech?.success) setTechs(resultTech.data);
-  };
+      const resultTech = await getAllTech();
+      if (resultTech?.success) setTechs(resultTech.data);
+    };
+    fetchData();
+  }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
 
-  const fetchProjectData = async () => {
-    const resultProject = await getAllProjects(
-      search,
-      selectedCategoryFilter,
-      selectedMajorFilter,
-      selectedTechnologyFilter
-    );
-    if (resultProject?.success) setProjects(resultProject.data);
-    console.log(resultProject?.data);
-  };
+  /* eslint-disable react-you-might-not-need-an-effect/no-derived-state -- server fetch: the result depends on an async round-trip and cannot be computed during render */
+  useEffect(() => {
+    const fetchProjectData = async () => {
+      const resultProject = await getAllProjects(
+        search,
+        selectedCategoryFilter,
+        selectedMajorFilter,
+        selectedTechnologyFilter
+      );
+      if (resultProject?.success) setProjects(resultProject.data);
+      console.log(resultProject?.data);
+    };
+    fetchProjectData();
+  }, [
+    search,
+    selectedCategoryFilter,
+    selectedMajorFilter,
+    selectedTechnologyFilter,
+  ]);
+  /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
 
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -91,18 +106,9 @@ const page = () => {
     };
   }, [scrollYProgress]);
 
-  useEffect(() => {
-    fetchProjectData();
-  }, [
-    search,
-    selectedCategoryFilter,
-    selectedMajorFilter,
-    selectedTechnologyFilter,
-  ]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+
+
 
   const handleScrollToTop = () => {
     window.scrollTo({
@@ -112,7 +118,7 @@ const page = () => {
   };
 
   return (
-    <motion.div className="relative min-h-screen flex flex-col pt-28 xl:px-16 bg-gray-50">
+    <motion.div className="relative min-h-screen w-full max-w-full overflow-x-clip flex flex-col pt-28 xl:px-16 bg-gray-50">
       <div
         className={`bg-gray-50 fixed top-0 ${
           expand ? "h-[21rem] sm:h-60 lg:h-[12.25rem]" : "h-[7rem]"
@@ -121,24 +127,28 @@ const page = () => {
       <div
         className={`sticky ${
           expand ? "top-28" : "top-7"
-        } z-10 w-full flex flex-col lg:flex-row justify-between items-end lg:items-center gap-3 sm:gap-5 px-9 h-[5.25rem] transition-all ease-in-out duration-300 bg-gray-50 pb-7`}
+        } z-10 w-full max-w-full overflow-x-clip flex flex-col lg:flex-row justify-between items-end lg:items-center gap-3 sm:gap-5 px-4 sm:px-9 h-auto min-h-[5.25rem] lg:h-[5.25rem] transition-[height] ease-in-out duration-300 bg-gray-50 pb-7`}
       >
-        <div className="relative w-full flex justify-start items-center h-full">
+        <div className="relative w-full min-w-0 flex-1 flex justify-start items-center h-12 lg:h-full">
           <CiSearch
+            aria-hidden="true"
             className="absolute ml-3 w-7 h-7 pr-2 border-r"
             fill="#6B7280"
           />
           <input
             type="text"
-            placeholder="Search"
+            name="search"
+            autoComplete="off"
+            aria-label="Search projects"
+            placeholder="Search…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className={`border ${
-              expand ? "w-full" : "w-[35.5rem]"
-            } h-full p-3 px-12 rounded-md`}
+            className={`border min-w-0 max-w-full ${
+              expand ? "w-full" : "w-full lg:w-[35.5rem]"
+            } h-full p-3 px-12 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-binus`}
           />
         </div>
-        <div className="relative w-fit flex flex-wrap sm:flex-nowrap justify-end items-center h-full gap-2 sm:gap-5">
+        <div className="relative w-full lg:w-fit min-w-0 flex flex-wrap sm:flex-nowrap justify-end items-center h-auto lg:h-full gap-2 sm:gap-5">
           <DDMenu
             options={categories}
             filter="Category Project"
@@ -181,4 +191,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { parseJwt } from "api/utils/auth/auth";
+import { parseJwt } from "../../utils/auth/auth.js";
 import type { Request, Response } from "express";
-import { createToken } from "api/utils/auth/auth";
-import { sendSuccessResponse, sendErrorResponse } from "api/utils/response/response";
-import GenericService from "api/services/generic/genericService";
-import { prisma } from "api/prisma/client";
+import { createToken } from "../../utils/auth/auth.js";
+import { getErrorMessage, sendSuccessResponse, sendErrorResponse } from "../../utils/response/response.js";
+import GenericService from "../../services/generic/genericService.js";
+import type { AtlantisAccountData } from "../../services/generic/genericService.js";
+import { prisma } from "../../prisma/client.js";
 
 
 export default class AuthHandler {
@@ -35,8 +36,9 @@ export default class AuthHandler {
                 return sendErrorResponse(res, "Failed to fetch Binusian data", 401);
             }
 
-            const username = atlantis.data.BinusianID ?? "";
-            const lecturer_code = atlantis.data.KodeDosen ?? "";
+            const atlantisAccount = atlantis.data as AtlantisAccountData | null;
+            const username = atlantisAccount?.BinusianID ?? "";
+            const lecturer_code = atlantisAccount?.KodeDosen ?? "";
 
             const user = await prisma.user.findFirst({
                 where: {
@@ -58,9 +60,9 @@ export default class AuthHandler {
                 : [user.role, "Lecturer"]
             : ["Student"];
 
-            const nim = user?.role != null ? user?.lecturer_code : atlantis.data.NIM;
+            const nim = user?.role != null ? user?.lecturer_code : (atlantisAccount?.NIM ?? "");
 
-            let activeRole = null;
+            let activeRole: string | undefined;
             if (valid.data.role) {
                 const checkedUser = await prisma.user.findFirst({
                     where: {
@@ -92,6 +94,11 @@ export default class AuthHandler {
                 activeRole,
             );
 
+            const cookieName = process.env.COOKIE_NAME;
+            if (!cookieName) {
+                return sendErrorResponse(res, "Cookie name is not configured", 500);
+            }
+
             return sendSuccessResponse(res, {
                 nim: nim,
                 BinusianId: username,
@@ -101,12 +108,12 @@ export default class AuthHandler {
                 ActiveRole: activeRole,
                 MicrosoftToken: microsoftToken
             }, {
-                name: process.env.COOKIE_NAME,
+                name: cookieName,
                 value: token.token,
                 expires: token.expires,
             });
         } catch (error) {
-            return sendErrorResponse(res, error.message, 400);
+            return sendErrorResponse(res, getErrorMessage(error), 400);
         }
     }
 }

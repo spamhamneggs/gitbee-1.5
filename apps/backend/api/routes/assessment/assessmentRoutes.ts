@@ -1,5 +1,5 @@
 import express from "express";
-import AssessmentHandler from "api/handlers/assessment/assessmentHandler";
+import AssessmentHandler from "../../handlers/assessment/assessmentHandler.js";
 
 const assessmentRoutes = express.Router();
 

@@ -32,6 +32,7 @@ import {
 import { useAuth } from "@/app/context/AuthContext";
 import Loading from "@/app/components/Loading";
 import Link from "next/link";
+import Image from "next/image";
 import { SiGithub } from "react-icons/si";
 import { BsGlobe2 } from "react-icons/bs";
 import { useSearchParams } from "next/navigation";
@@ -39,7 +40,7 @@ import { FaVideo } from "react-icons/fa";
 import { IoIosVideocam } from "react-icons/io";
 import { MdDelete } from "react-icons/md";
 
-const page = () => {
+const Page = () => {
   const searchParams = useSearchParams();
   const course_code = searchParams.get("course_code");
   const course_name = searchParams.get("course_name");
@@ -47,7 +48,7 @@ const page = () => {
   const class_id = searchParams.get("class_id");
   const { userData } = useAuth();
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const { toast } = useToast();
   const [expand, setExpand] = useState(true);
   const [showInsertForm, setShowInsertForm] = useState(false);
@@ -61,14 +62,14 @@ const page = () => {
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -144,9 +145,11 @@ const page = () => {
     setLoading(false);
   };
 
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state, @eslint-react/exhaustive-deps -- loading flag tracks the mount-snapshot fetch lifecycle; depending on fetchData would refetch in a loop since it reads the initial projectDetail */
   useEffect(() => {
     fetchData();
   }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state, @eslint-react/exhaustive-deps */
 
   return (
     <motion.div className="relative min-h-screen flex flex-col justify-start items-center px-5 sm:px-10 xl:px-[6.25rem] ">
@@ -242,7 +245,7 @@ const page = () => {
               </TableHeader>
               <TableBody>
                 {groupDetail.map((row: any, index: number) => (
-                  <TableRow key={index}>
+                  <TableRow key={row?.student_id}>
                     <TableCell className="font-medium text-center">
                       {index + 1}
                     </TableCell>
@@ -277,7 +280,7 @@ const page = () => {
             <TableBody>
               {projectDetail?.length > 0 ? (
                 projectDetail?.map((project: any, index: number) => (
-                  <TableRow key={index}>
+                  <TableRow key={project?.student_leader_id}>
                     <TableCell className="font-medium text-center">
                       Project-1
                     </TableCell>
@@ -374,7 +377,10 @@ const page = () => {
                       By:{" "}
                       {groupDetail?.map((row: any, index: number) => {
                         return (
-                          <span className="capitalize text-gray-500">
+                          <span
+                            key={row?.student_id}
+                            className="capitalize text-gray-500"
+                          >
                             {row?.student_name.toLowerCase()}
                             {index + 1 < groupDetail?.length ? ", " : ""}
                           </span>
@@ -390,7 +396,7 @@ const page = () => {
                       <h1 className="text-primary-binus italic">
                         {projectDetail[0]?.projectTechnologies?.map(
                           (tech: any, index: number) => (
-                            <span>
+                            <span key={tech?.technology_name}>
                               {tech?.technology_name}
                               {index + 1 <
                               projectDetail[0]?.projectTechnologies?.length
@@ -427,8 +433,12 @@ const page = () => {
                       )}
                   </div>
                   <div className="w-full lg:w-1/3">
-                    <img
+                    <Image
                       src={projectDetail[0]?.projectDetail?.thumbnail}
+                      width={960}
+                      height={384}
+                      alt="Project thumbnail"
+                      unoptimized
                       className="w-full rounded-md border h-96 object-cover"
                     />
                   </div>
@@ -436,10 +446,13 @@ const page = () => {
                 <div className="w-full h-96 my-3 flex overflow-auto gap-3">
                   {projectDetail[0]?.galleries?.map(
                     (file: any, index: number) => (
-                      <img
-                        key={index}
+                      <Image
+                        key={file?.image}
                         src={file?.image}
+                        width={576}
+                        height={384}
                         alt={`Gallery Image ${index + 1}`}
+                        unoptimized
                         className="w-full rounded-md border h-full object-cover"
                       />
                     )
@@ -476,4 +489,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

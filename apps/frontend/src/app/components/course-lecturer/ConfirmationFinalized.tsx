@@ -21,7 +21,10 @@ const ConfirmationFinalized = (props: ConfirmationFinalzedProps) => {
         <ul>
           {props.groupsClassData?.updatedProjects.map(
             (groupDetail: any, index: number) => (
-              <li className="border-b-2 w-full">
+              <li
+                key={groupDetail?.projectDetail?.group}
+                className="border-b-2 w-full"
+              >
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg">
                     Group {groupDetail?.projectDetail?.group} -{" "}

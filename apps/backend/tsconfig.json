@@ -1,20 +1,39 @@
 {
   "compilerOptions": {
-      "module": "node16",
-      "target": "es6",
-      "rootDir": "./api",
-      "outDir": "./dist",
-      "moduleResolution": "node16",
-      "esModuleInterop": true,
-      "forceConsistentCasingInFileNames": true,
-      "skipLibCheck": true,
-      "baseUrl": ".",
-      "paths": {
-        "api/*": ["api/*"]
-      }
-  },
-  "ts-node": {
-    "require": ["tsconfig-paths/register"]
+    /* Base Options: */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "es2022",
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+
+    /* Transpiling with TypeScript for Node: */
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "./api",
+    "sourceMap": true,
+
+    /* Incremental rebuilds: */
+    "incremental": true,
+
+    /* Code doesn't run in the DOM: */
+    "lib": ["es2022"],
+
+    /* 
+      NOTE(rifkik): baseURL is deprecated in TS 6 and was removed in TS 7. 
+                    No "paths" mapping: ESM under NodeNext cannot use bare-specifier
+                    aliases, so all imports are explicit relative paths. 
+    */
   },
   "include": ["api/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts"]

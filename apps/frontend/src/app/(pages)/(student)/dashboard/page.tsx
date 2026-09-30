@@ -14,10 +14,10 @@ import {
 import Loading from "@/app/components/Loading";
 import { useAuth } from "@/app/context/AuthContext";
 
-const page = () => {
+const Page = () => {
   const { userData } = useAuth();
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [listSemester, setListSemester] = useState<any>([]);
   const [currentSemester, setCurrentSemester] = useState<any>();
@@ -27,14 +27,14 @@ const page = () => {
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -60,38 +60,44 @@ const page = () => {
     };
   }, [scrollYProgress]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    const resultListSemester = await getAllSemester();
-    console.log(resultListSemester);
-    setListSemester(resultListSemester);
-
-    const resultCurrentSemester = await getCurrentSemester();
-    setCurrentSemester(resultCurrentSemester);
-    console.log(resultCurrentSemester);
-    setLoading(false);
-  };
-
-  const fetchTransactionData = async () => {
-    setLoading(true);
-    console.log(userData?.nim);
-    console.log(currentSemester?.data?.SemesterId);
-    const resultTransactions = await getTranscationByStudent(
-      currentSemester?.data?.SemesterId,
-      userData?.nim ? userData?.nim : ""
-    );
-    console.log(resultTransactions?.data);
-    setTransactions(resultTransactions?.data);
-    setLoading(false);
-  };
-
+  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: reference data can only be populated asynchronously after mount */
   useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      const resultListSemester = await getAllSemester();
+      console.log(resultListSemester);
+      setListSemester(resultListSemester);
+
+      const resultCurrentSemester = await getCurrentSemester();
+      setCurrentSemester(resultCurrentSemester);
+      console.log(resultCurrentSemester);
+      setLoading(false);
+    };
     fetchData();
   }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
 
+  /* eslint-disable react-you-might-not-need-an-effect/no-derived-state -- server fetch: the result depends on an async round-trip and cannot be computed during render */
   useEffect(() => {
+    const fetchTransactionData = async () => {
+      setLoading(true);
+      console.log(userData?.nim);
+      console.log(currentSemester?.data?.SemesterId);
+      const resultTransactions = await getTranscationByStudent(
+        currentSemester?.data?.SemesterId,
+        userData?.nim ? userData?.nim : ""
+      );
+      console.log(resultTransactions?.data);
+      setTransactions(resultTransactions?.data);
+      setLoading(false);
+    };
     fetchTransactionData();
-  }, [currentSemester]);
+  }, [currentSemester, userData?.nim]);
+  /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
+
+
+
+
 
   return (
     <motion.div className="relative min-h-screen flex flex-col justify-start items-center px-5 sm:px-9 xl:px-[6.25rem] ">
@@ -129,6 +135,7 @@ const page = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 h-fit pt-44 w-full gap-5">
         {transactions?.map((transaction: any) => (
           <Link
+            key={`${transaction?.course_code}-${transaction?.class}`}
             href={{
               pathname: `/course`,
               query: {
@@ -177,4 +184,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

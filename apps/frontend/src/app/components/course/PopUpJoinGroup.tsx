@@ -26,7 +26,7 @@ interface PopUpJoinGroupProps {
     description: string;
     variant?: "default" | "destructive" | null;
   }) => void;
-  userId?: string;
+  userId?: string | undefined;
   setCurrentStep: (value: number) => void;
   setLoading: (value: boolean) => void;
   course_code: string;
@@ -115,8 +115,9 @@ function PopUpJoinGroup(props: PopUpJoinGroupProps) {
       <div className="w-full h-fit flex flex-col gap-5">
         {Array.from({ length: totalMember }).map((_, i) => (
           <Popover
+            // eslint-disable-next-line @eslint-react/no-array-index-key -- member slots have no stable id; position is their identity and sibling state (openStates, togglePopover, selectedStudents) is indexed the same way
             key={i}
-            open={openStates[i]}
+            open={openStates[i] ?? false}
             onOpenChange={(isOpen) => togglePopover(i, isOpen)}
           >
             <PopoverTrigger asChild>
