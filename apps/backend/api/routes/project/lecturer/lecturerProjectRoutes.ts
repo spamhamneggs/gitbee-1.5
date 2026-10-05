@@ -1,5 +1,5 @@
 import express from "express";
-import LecturerProjectHandler from "api/handlers/project/lecturer/lecturerProjectHandler";
+import LecturerProjectHandler from "../../../handlers/project/lecturer/lecturerProjectHandler.js";
 
 const lecturerProjectRoutes = express.Router();
 

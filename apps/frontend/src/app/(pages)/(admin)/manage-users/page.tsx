@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll } from "framer-motion";
 import { CiSearch } from "react-icons/ci";
 import { deleteAllUser, getAllUsers } from "./actions";
@@ -18,11 +18,11 @@ import PopUpUsers from "@/app/components/manage-users/PopUpUsers";
 import Loading from "@/app/components/Loading";
 import PopUpConfirmation from "@/app/components/manage-users/PopUpConfirmation";
 
-const page = () => {
+const Page = () => {
   const listRoleUser = ["admin", "hop", "scc", "lecturer"];
   const [selectedRole, setSelectedRole] = useState(0);
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<any>([]);
@@ -32,13 +32,13 @@ const page = () => {
   const [openPopUpConfirmation, setOpenPopUpConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const resultUsers = await getAllUsers(search);
     console.log(resultUsers?.data);
     setUsers(resultUsers?.data);
     setLoading(false);
-  };
+  }, [search]);
 
   const handleDeleteAllLecturer = async () => {
     setLoading(true);
@@ -53,14 +53,14 @@ const page = () => {
     const handleScroll = (currentScrollY: number) => { 
 
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -89,7 +89,7 @@ const page = () => {
 
   useEffect(() => {
     fetchData();
-  }, [search]);
+  }, [fetchData]);
 
   return (
     <motion.div className="relative min-h-screen flex flex-col pt-20 sm:pt-28 2xl:px-16 pb-10 bg-gray-50">
@@ -190,9 +190,9 @@ const page = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users?.[listRoleUser[selectedRole]]?.map(
+            {users?.[listRoleUser[selectedRole] ?? ""]?.map(
               (user: any, index: number) => (
-                <TableRow>
+                <TableRow key={user?.email}>
                   <TableCell className="text-start font-medium">
                     {index + 1}.
                   </TableCell>
@@ -204,7 +204,7 @@ const page = () => {
                   {selectedRole == 1 && (
                     <TableCell className="text-center">
                       {user?.hop_major?.map((major: any, index: number) => (
-                        <span>
+                        <span key={major?.id ?? major?.name}>
                           {major?.name}
                           {index + 1 < user?.hop_major?.length && ", "}
                         </span>
@@ -226,7 +226,7 @@ const page = () => {
             )}
           </TableBody>
         </Table>
-        {users?.[listRoleUser[selectedRole]]?.length < 1 && (
+        {users?.[listRoleUser[selectedRole] ?? ""]?.length < 1 && (
           <div className="w-full text-center py-5 text-gray-500">
             No Data . . .
           </div>
@@ -257,4 +257,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

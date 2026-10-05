@@ -12,10 +12,20 @@ const charVariants = {
   reveal: { opacity: 1 },
 };
 
+type KeyedChar = { key: string; char: string };
+// The animated strings below are constants, so position-based keys built
+// once at module scope stay stable across renders.
+const keyChars = (value: string): KeyedChar[] =>
+  splitStringUsingRegex(value).map((char, index) => ({
+    key: `${index}-${char}`,
+    char,
+  }));
+
+const headingChars = keyChars(heading);
+const subHeadingChars = keyChars(subHeading);
+
 const Project = () => {
   const [showCard, setShowCard] = useState(0);
-  const headingChars = splitStringUsingRegex(heading);
-  const subHeadingChars = splitStringUsingRegex(subHeading);
   const router = useRouter();
 
   const allCards = [
@@ -111,6 +121,7 @@ const Project = () => {
     },
   ];
 
+  /* eslint-disable @eslint-react/set-state-in-effect, react-you-might-not-need-an-effect/no-initialize-state -- mount-only window read: a lazy initializer would run during SSR prerender where window does not exist */
   useEffect(() => {
     if (window.innerWidth > 1023) {
       setShowCard(3);
@@ -119,7 +130,8 @@ const Project = () => {
     } else {
       setShowCard(4);
     }
-  }, [window.innerWidth]);
+  }, []);
+  /* eslint-enable @eslint-react/set-state-in-effect, react-you-might-not-need-an-effect/no-initialize-state */
 
   const handleShowMore = () => {
     const increment =
@@ -138,36 +150,36 @@ const Project = () => {
   return (
     <div className="relative min-h-[42.5rem] overflow-hidden flex flex-col justify-center items-center gap-10 bg-white mb-10 mx-5 md:mx-16 rounded-xl shadow-xl py-10 px-5 md:p-10">
       <div className="flex flex-col justify-center items-center gap-2">
-        <motion.h1
+        <motion.h2
           initial="hidden"
           whileInView="reveal"
           transition={{ staggerChildren: 0.05 }}
-          className="font-bold font-montserrat text-4xl sm:text-4xl md:text-5xl text-center"
+          className="font-bold font-montserrat text-4xl sm:text-4xl md:text-5xl text-center text-balance"
         >
-          {headingChars.map((char, index) => (
+          {headingChars.map((c) => (
             <motion.span
-              key={index}
+              key={c.key}
               transition={{ duration: 0.5 }}
               variants={charVariants}
             >
-              {char}
+              {c.char}
             </motion.span>
           ))}
-        </motion.h1>
+        </motion.h2>
         <motion.h3
           initial="hidden"
           whileInView="reveal"
           className="text-center text-sm sm:text-base"
           transition={{ staggerChildren: 0.03 }}
         >
-          {subHeadingChars.map((char, index) => (
+          {subHeadingChars.map((c) => (
             <motion.span
               className="text-primary-orange"
-              key={index}
+              key={c.key}
               transition={{ duration: 0.5 }}
               variants={charVariants}
             >
-              {char}
+              {c.char}
             </motion.span>
           ))}
         </motion.h3>
@@ -178,9 +190,9 @@ const Project = () => {
         whileInView="reveal"
         transition={{ staggerChildren: 0.5 }}
       >
-        {allCards.slice(0, showCard).map((card, index) => (
+        {allCards.slice(0, showCard).map((card) => (
           <Card
-            key={index}
+            key={card.image}
             image={card.image}
             title={card.title}
             developers={card.developers}
@@ -198,14 +210,14 @@ const Project = () => {
           onClick={handleShowMore}
           transition={{ duration: 0.5 }}
           variants={charVariants}
-          className="w-32 cursor-pointer relative flex justify-center items-center border border-primary-binus bg-transparent px-5 py-2.5 hover:text-primary-binus transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-bottom-left before:scale-y-100 before:bg-primary-binus before:transition-transform before:duration-300 before:content-[''] text-white before:hover:scale-y-0 rounded-md before:rounded-sm overflow-hidden"
+          className="w-32 cursor-pointer relative isolate whitespace-nowrap flex justify-center items-center border border-primary-binus bg-transparent px-5 py-2.5 hover:text-primary-binus transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-bottom-left before:scale-y-100 before:bg-primary-binus before:transition-transform before:duration-300 before:content-[''] text-white before:hover:scale-y-0 rounded-md before:rounded-sm overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-binus"
         >
           {showCard+1 >= allCards?.length ? "Explore" : "Show More"}
         </motion.button>
         <motion.button
           transition={{ duration: 0.5 }}
           variants={charVariants}
-          className="w-32 relative border border-primary-binus bg-transparent px-5 py-2.5 text-primary-binus transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-top-left before:scale-y-0 before:bg-primary-binus before:transition-transform before:duration-300 before:content-[''] hover:text-white before:hover:scale-y-100 rounded-md before:rounded-sm overflow-hidden"
+          className="w-32 relative isolate whitespace-nowrap flex justify-center items-center border border-primary-binus bg-transparent px-5 py-2.5 text-primary-binus transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-top-left before:scale-y-0 before:bg-primary-binus before:transition-transform before:duration-300 before:content-[''] hover:text-white before:hover:scale-y-100 rounded-md before:rounded-sm overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-binus"
         >
           Contact Us
         </motion.button>

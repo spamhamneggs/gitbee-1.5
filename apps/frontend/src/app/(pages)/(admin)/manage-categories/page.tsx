@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useScroll } from "framer-motion";
 import { CiSearch } from "react-icons/ci";
 import { AddCategory, AddTech, getAllCategory, getAllTech } from "./actions";
@@ -15,9 +15,9 @@ import {
 import PopUpCategories from "@/app/components/manage-categories/PopUpCategories";
 import PopUpTechnologies from "@/app/components/manage-categories/PopUpTechnologies";
 
-const page = () => {
+const Page = () => {
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>(
     []
@@ -32,26 +32,26 @@ const page = () => {
   const [selectedTechnologiesToUpdate, setSelectedTechnologiesToUpdate] =
     useState<any>();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const resultCategory = await getAllCategory();
     if (resultCategory?.success) setCategories(resultCategory.data);
     console.log(resultCategory?.data);
 
     const resultTech = await getAllTech();
     if (resultTech?.success) setTechs(resultTech.data);
-  };
+  }, []);
 
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -79,7 +79,7 @@ const page = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleAddCategory = async () => {
     const result = await AddCategory(inputCategory);
@@ -188,7 +188,7 @@ const page = () => {
               </TableHeader>
               <TableBody>
                 {categories?.map((category, index) => (
-                  <TableRow>
+                  <TableRow key={category?.id}>
                     <TableCell className="text-start font-medium w-40">
                       {index + 1}
                     </TableCell>
@@ -298,7 +298,7 @@ const page = () => {
               </TableHeader>
               <TableBody>
                 {techs.map((tech, index) => (
-                  <TableRow>
+                  <TableRow key={tech?.id}>
                     <TableCell className="text-start font-medium w-40">
                       {index + 1}
                     </TableCell>
@@ -339,4 +339,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

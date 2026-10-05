@@ -10,11 +10,21 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-padmin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
 
   backend:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
+      # Dev target: full source + devDependencies, so the override command
+      # below (`prisma ...`, `pnpm dev`) works. A plain `docker build`
+      # (no target) yields the minimal production runner instead.
+      target: build
     container_name: gitbee-backend
     restart: unless-stopped
     ports:
@@ -34,10 +44,17 @@ services:
       PORT: "5000"
       SEED_ON_BOOT: "${SEED_ON_BOOT:-false}"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     volumes:
-      - ./apps/backend:/app
-      - /app/node_modules
+      # Live-reload: host source overlays the image copy, so edits to
+      # apps/backend apply without rebuilding (tsx watch picks them up).
+      # The anonymous volume keeps the container-built (linux) node_modules,
+      # which the bind would otherwise hide and the host's macOS
+      # node_modules cannot replace (native binaries differ).
+      # After changing dependencies, rebuild instead: docker compose build backend
+      - ./apps/backend:/repo/apps/backend
+      - /repo/apps/backend/node_modules
 
   frontend:
     build:

@@ -1,7 +1,11 @@
-import jwt, { JsonWebTokenError } from "jsonwebtoken"
+import jwt from "jsonwebtoken"
 import dotenv from "dotenv"
+import { getErrorMessage } from "../response/response.js"
 dotenv.config()
 const secret = process.env.JWT_SECRET
+if (!secret) {
+    throw new Error("JWT_SECRET is not configured")
+}
 
 const addHour = (hour: number) => {
     const now = new Date();
@@ -38,7 +42,7 @@ export const createToken = (
 
 export const verifyToken = (token: string) : {
     status: boolean,
-    data: any,
+    data: unknown,
 } => {
     try {
         const verified = jwt.verify(token, secret);
@@ -54,14 +58,20 @@ export const verifyToken = (token: string) : {
     }
 }
 
-export const parseJwt = (token: string): any => {
+export interface MicrosoftTokenPayload {
+    preferred_username?: string;
+    unique_name?: string;
+    name?: string;
+}
+
+export const parseJwt = (token: string): MicrosoftTokenPayload => {
     try {
         const decoded = jwt.decode(token);
-        if (!decoded) {
+        if (!decoded || typeof decoded === "string") {
             throw new Error("Invalid token");
         }
-        return decoded;
+        return decoded as MicrosoftTokenPayload;
     } catch (error) {
-        throw new Error("Failed to parse token: " + (error as JsonWebTokenError).message);
+        throw new Error(`Failed to parse token: ${getErrorMessage(error, "unknown error")}`, { cause: error });
     }
 }

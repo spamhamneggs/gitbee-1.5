@@ -17,15 +17,16 @@ docker compose up
 - Frontend is on <http://localhost:8000>
 - Backend is on <http://localhost:5001/api/> (host port 5001, macOS AirPlay usually squats on 5000).
 
-## Local dev (no Docker)
+## Local dev (host servers, Docker MySQL)
 
-Needs MySQL on 3306 with database `gitbee`, plus per-app env files:
+The app servers run on the host, but MySQL still comes from Docker:
 
 ```bash
+docker compose up mysql   # database `gitbee` on :3306
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env.local
 pnpm install
-pnpm dev:backend   # nodemon on :5000
+pnpm dev:backend   # tsx watch on :5001 (run in a separate terminal)
 pnpm dev:frontend  # next dev on :8000
 ```
 

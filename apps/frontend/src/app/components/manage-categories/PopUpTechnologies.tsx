@@ -3,7 +3,7 @@ import {
   getAllMajor,
   updateUserRole,
 } from "@/app/(pages)/(admin)/manage-users/actions";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 interface PopUpTechnologiesProps {
   setOpenPopUpTechnologies: (value: boolean) => void;
@@ -31,10 +31,6 @@ function PopUpTechnologies(props: PopUpTechnologiesProps) {
       console.error("Failed to update user role:", error);
     }
   };
-
-  useEffect(() => {
-    console.log(props.selectedTechnologiesToUpdate);
-  }, []);
 
   return (
     <div

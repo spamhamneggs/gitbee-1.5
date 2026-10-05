@@ -41,13 +41,33 @@
   --radius-sm: calc(var(--radius) - 4px);
 }
 
-* {
-  box-sizing: border-box;
-  font-family: "Poppins", "sans-serif";
-  font-family: "Outfit", "sans-serif";
-  color: #026CA6;
-  margin: 0;
-  padding: 0;
+/*
+ * Must stay inside @layer base. Tailwind v4 puts utilities in
+ * @layer utilities, and unlayered CSS beats every layer, so an unlayered
+ * `*` rule would override all padding/margin/color/font utilities.
+ * Setting font and color on `*` (not body) keeps the Tailwind v3 look:
+ * elements without their own utility use Outfit and BINUS blue rather
+ * than inheriting from their parent.
+ */
+@layer base {
+  * {
+    box-sizing: border-box;
+    font-family: var(--font-outfit), "Outfit", sans-serif;
+    color: #026CA6;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Tailwind v3 preflight defaults that v4 dropped */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -76,6 +96,17 @@ html {
   /* background-color: #008ed0; */
   background-color: #d4f7fb;
   /* background-color: white; */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @layer base {

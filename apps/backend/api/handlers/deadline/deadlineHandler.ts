@@ -1,15 +1,16 @@
 import type { Request, Response } from "express";
-import { sendSuccessResponse, sendErrorResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
-import SemesterService from "api/services/semester/semesterService";
+import { getErrorMessage, sendSuccessResponse, sendErrorResponse } from "../../utils/response/response.js";
+import { prisma } from "../../prisma/client.js";
+import SemesterService from "../../services/semester/semesterService.js";
 
 
 export default class DeadlineHandler {
     static async checkDeadline(req: Request, res: Response) {
         try {
             const result = await SemesterService.getCurrentSemesterData();
-            const description = result.data.Description;
-            const periode = description.split(" ")[0];
+            const semesterData: unknown = result.data;
+            const description = typeof semesterData === "object" && semesterData !== null && "Description" in semesterData && typeof semesterData.Description === "string" ? semesterData.Description : "";
+            const periode = description.split(" ")[0] ?? "";
 
             const deadline = await prisma.deadline.findFirst({
                 where: { periode },
@@ -45,7 +46,7 @@ export default class DeadlineHandler {
             });
 
         } catch (error) {
-            return sendErrorResponse(res, error.message, 400);
+            return sendErrorResponse(res, getErrorMessage(error), 400);
         }
     }
 }

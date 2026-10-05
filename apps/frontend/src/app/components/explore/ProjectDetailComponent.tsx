@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { BsGlobe2 } from "react-icons/bs";
 import { motion } from "framer-motion";
@@ -6,6 +7,7 @@ import { IoIosArrowRoundBack, IoIosVideocam } from "react-icons/io";
 import { SiGithub } from "react-icons/si";
 import { getProjectById } from "@/app/(pages)/explore/actions";
 import { useAuth } from "@/app/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProjectDetailProps {
   selectedProjectId: string;
@@ -17,21 +19,28 @@ interface ProjectDetailProps {
 
 function ProjectDetailComponent(props: ProjectDetailProps) {
   const { userData } = useAuth();
+  const { toast } = useToast();
   const [detailProject, setDetailProject] = useState<any>();
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { duration: 1 } },
   };
 
-  const fetchSelectedProject = async () => {
-    const resultProject = await getProjectById(props.selectedProjectId);
-    if (resultProject?.success) setDetailProject(resultProject?.data[0]);
-    console.log(resultProject?.data[0]);
-  };
-
+  /* eslint-disable react-you-might-not-need-an-effect/no-derived-state -- server fetch: the result depends on an async round-trip and cannot be computed during render */
   useEffect(() => {
+    const fetchSelectedProject = async () => {
+      const resultProject = await getProjectById(props.selectedProjectId);
+      if (resultProject.success) {
+        setDetailProject(resultProject.data[0]);
+      } else {
+        toast({ title: "Could not load project details", description: resultProject.message });
+      }
+    };
     fetchSelectedProject();
-  }, []);
+  }, [props.selectedProjectId, toast]);
+  /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
+
+
 
   return (
     <motion.div
@@ -48,6 +57,7 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
       >
         {detailProject?.projectGroups.map((student: any) => (
           <Link
+            key={student?.student_id}
             href={{
               pathname: `/profile/${student?.student_id}`,
               query: {
@@ -56,8 +66,11 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
             }}
             className="flex justify-start items-center gap-5 border-b pb-5 mr-4 cursor-pointer"
           >
-            <img
+            <Image
               src="/images/1.jpg"
+              width={80}
+              height={80}
+              alt="Student avatar"
               className="rounded-full h-20 w-20 p-1 border object-cover"
             />
             <div className="w-48">
@@ -137,21 +150,30 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
                 )}
             </div>
             <div className="w-1/3">
-              <img
+              <Image
                 src={
                   detailProject?.projectDetail?.thumbnail
                     ? detailProject?.projectDetail?.thumbnail
                     : ""
                 }
-                className="w-full rounded-md border"
+                width={800}
+                height={500}
+                alt="Project thumbnail"
+                unoptimized
+                className="w-full h-auto rounded-md border object-cover"
               />
             </div>
           </div>
           <div className="w-full h-96 my-3 flex overflow-auto gap-3 pb-2">
             {detailProject?.galleries.map((gallery: any) => (
-              <img
+              <Image
+                key={gallery?.image}
                 src={gallery?.image ? gallery?.image : ""}
-                className="h-full rounded-md border-2"
+                width={576}
+                height={384}
+                alt="Gallery image"
+                unoptimized
+                className="h-full w-auto rounded-md border-2 object-cover"
               />
             ))}
           </div>

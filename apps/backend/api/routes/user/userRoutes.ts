@@ -1,6 +1,6 @@
 import express from "express";
-import UserHandler from "api/handlers/user/userHandler";
-import adminUserRoutes from "./admin/adminUserRoutes";
+import UserHandler from "../../handlers/user/userHandler.js";
+import adminUserRoutes from "./admin/adminUserRoutes.js";
 
 const userRoutes = express.Router();
 

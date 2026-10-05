@@ -1,8 +1,9 @@
 import axios from "axios";
 import dotenv from "dotenv";
-import z from "zod";
-import { APIResponse, defaultResponse } from "../../models/generic/response";
-import { getErrors } from "../../utils/response/response";
+
+import { defaultResponse } from "../../models/generic/response.js";
+import type { APIResponse } from "../../models/generic/response.js";
+import { getErrors } from "../../utils/response/response.js";
 
 dotenv.config();
 
@@ -17,7 +18,7 @@ export default class SemesterService {
                 message: "successful",
                 status: true,
                 data: res.data,
-            } as APIResponse;
+            };
     
         } catch (error) {
             const err = getErrors(error);
@@ -39,7 +40,7 @@ export default class SemesterService {
                 message: "successful",
                 status: true,
                 data: res.data,
-            } as APIResponse;
+            };
     
         } catch (error) {
             const err = getErrors(error);

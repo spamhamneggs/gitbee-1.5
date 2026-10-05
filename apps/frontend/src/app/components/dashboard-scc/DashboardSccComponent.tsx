@@ -91,7 +91,7 @@ function DashboardSccComponent(props: DashboardSccProps) {
         {currentStatus === 1
           ? props.projects?.["reviewed"]?.map((project: any, index: number) => (
               <div
-                key={index}
+                key={project.id}
                 className="flex justify-center items-center"
                 onClick={() => {
                   props.setShowDevelopers(!props.showDevelopers);
@@ -110,7 +110,7 @@ function DashboardSccComponent(props: DashboardSccProps) {
           : props.projects?.["not reviewed"]?.map(
               (project: any, index: number) => (
                 <div
-                  key={index}
+                  key={project.id}
                   className="flex justify-center items-center"
                   onClick={() => {
                     props.setShowDevelopers(!props.showDevelopers);

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import { BsGlobe2 } from "react-icons/bs";
 import { motion } from "framer-motion";
@@ -72,6 +73,7 @@ function ProjectDetailHop(props: ProjectDetailHopProps) {
         {props.selectedDetailProject?.projectGroups?.map(
           (projectGroup: any) => (
             <Link
+              key={projectGroup?.student_id}
               href={{
                 pathname: `/profile/${projectGroup?.student_id}`,
                 query: {
@@ -80,8 +82,11 @@ function ProjectDetailHop(props: ProjectDetailHopProps) {
               }}
               className="hidden lg:flex justify-start items-center gap-5 border-b pb-5 mr-4 cursor-pointer"
             >
-              <img
+              <Image
                 src="/images/1.jpg"
+                width={80}
+                height={80}
+                alt="Student avatar"
                 className="rounded-full h-20 w-20 p-1 border object-cover"
               />
               <div className="w-48">
@@ -113,7 +118,10 @@ function ProjectDetailHop(props: ProjectDetailHopProps) {
                 By.{" "}
                 {props.selectedDetailProject?.projectGroups?.map(
                   (projectGroup: any, index: number) => (
-                    <span className="text-gray-500">
+                    <span
+                      key={projectGroup?.student_id}
+                      className="text-gray-500"
+                    >
                       {projectGroup?.student_name.toLowerCase()}
                       {props.selectedDetailProject?.projectGroups?.length >
                       index + 1
@@ -157,15 +165,27 @@ function ProjectDetailHop(props: ProjectDetailHopProps) {
                 )}
             </div>
             <div className="sm:w-1/3 mx-2 sm:mx-0">
-              <img
+              <Image
                 src={props.selectedDetailProject?.projectDetail?.thumbnail}
-                className="w-full rounded-md border"
+                width={800}
+                height={500}
+                alt="Project thumbnail"
+                unoptimized
+                className="w-full h-auto rounded-md border object-cover"
               />
             </div>
           </div>
           <div className="w-full h-96 my-3 flex overflow-auto gap-3">
             {props.selectedDetailProject?.galleries?.map((gallery: any) => (
-              <img src={gallery?.image} className="h-full rounded-md border" />
+              <Image
+                key={gallery?.image}
+                src={gallery?.image}
+                width={576}
+                height={384}
+                alt="Gallery image"
+                unoptimized
+                className="h-full w-auto rounded-md border object-cover"
+              />
             ))}
           </div>
 

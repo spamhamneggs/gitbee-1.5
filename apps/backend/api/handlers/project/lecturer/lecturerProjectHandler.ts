@@ -1,12 +1,12 @@
 import { z } from "zod";
-import type { Request, Response, NextFunction } from "express";
-import validateSchema from "api/utils/validator/validateSchema";
-import { sendErrorResponse, sendSuccessResponse } from "api/utils/response/response";
-import { prisma } from "api/prisma/client";
+import type { Request, Response } from "express";
+import validateSchema from "../../../utils/validator/validateSchema.js";
+import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../../utils/response/response.js";
+import { prisma } from "../../../prisma/client.js";
 
 
 export default class LecturerProjectHandler {
-    static async getAllLecturerClassProject(req : Request, res : Response, next : NextFunction) {
+    static async getAllLecturerClassProject(req : Request, res : Response) {
         try {
             const schema = z.object({
                 semester_id: z.string(),
@@ -67,7 +67,7 @@ export default class LecturerProjectHandler {
                         const { id, project_id, ...otherAttributes } = technology;
                         return {
                             ...otherAttributes,
-                            technology_name: technologyDetails.name
+                            technology_name: technologyDetails?.name
                         };
                     })
                 );
@@ -96,14 +96,12 @@ export default class LecturerProjectHandler {
                 }
             });
     
-            const groupedData = studentGroup.reduce((acc: any, current: any) => {
+            const groupedData = studentGroup.reduce<Record<string, typeof studentGroup[number][]>>((acc, current) => {
                 const groupName = current.group;
 
-                if (!acc[groupName]) {
-                    acc[groupName] = [];
-                }
-    
-                acc[groupName].push(current);
+                const list = acc[groupName] ?? [];
+                list.push(current);
+                acc[groupName] = list;
     
                 return acc;
             }, {});
@@ -112,7 +110,7 @@ export default class LecturerProjectHandler {
                 .sort((a, b) => Number(a) - Number(b))
                 .map(name => ({
                     group: Number(name),
-                    students: groupedData[name]
+                    students: groupedData[name] ?? []
                 }));
 
             let studentsInProjectGroups = 0;
@@ -128,11 +126,11 @@ export default class LecturerProjectHandler {
 
             sendSuccessResponse(res, {updatedProjects, sortedGroups, totalStudents, countStudentSubmitted});
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
         }
     }
 
-    static async getAllLecturerGoodProject(req : Request, res : Response, next : NextFunction) {
+    static async getAllLecturerGoodProject(req : Request, res : Response) {
         try {
             const schema = z.object({
                 semester_id: z.string().optional(),
@@ -195,7 +193,7 @@ export default class LecturerProjectHandler {
                         const { id, project_id, ...otherAttributes } = technology;
                         return {
                             ...otherAttributes,
-                            technology_name: technologyDetails.name
+                            technology_name: technologyDetails?.name
                         };
                     })
                 );
@@ -210,7 +208,7 @@ export default class LecturerProjectHandler {
 
             sendSuccessResponse(res, updatedProjects);
         } catch (error) {
-            sendErrorResponse(res, error.message ? error.message : "Fetch Failed");
+            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
         }
     }
 }

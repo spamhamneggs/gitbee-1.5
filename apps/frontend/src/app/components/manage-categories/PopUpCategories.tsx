@@ -3,7 +3,7 @@ import {
   getAllMajor,
   updateUserRole,
 } from "@/app/(pages)/(admin)/manage-users/actions";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 interface PopUpCategoriesProps {
   setOpenPopUpCategories: (value: boolean) => void;
@@ -32,9 +32,7 @@ function PopUpCategories(props: PopUpCategoriesProps) {
     }
   };
 
-  useEffect(() => {
-    console.log(props.selectedCategoryToUpdate);
-  }, []);
+
 
   return (
     <div

@@ -6,6 +6,7 @@ import { BsCalendar4Range, BsGlobe2 } from "react-icons/bs";
 import DDMenuSemester from "@/app/components/DDMenuSemester";
 import Card from "@/app/components/Card";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Table,
   TableBody,
@@ -25,10 +26,10 @@ import { CiSearch } from "react-icons/ci";
 import { useAuth } from "@/app/context/AuthContext";
 import { IoIosVideocam } from "react-icons/io";
 
-const page = () => {
+const Page = () => {
   const { userData } = useAuth();
   const { scrollYProgress } = useScroll();
-  const prevScrollY = useRef(0);
+  const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [previewGroup, setPreviewGroup] = useState(false);
   const [listSemester, setListSemester] = useState<any>([]);
@@ -46,14 +47,14 @@ const page = () => {
   useEffect(() => {
     const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
-      else if (currentScrollY > prevScrollY.current) setExpand(false);
-      else if (currentScrollY < prevScrollY.current) setExpand(true);
+      else if (currentScrollY > prevScrollYRef.current) setExpand(false);
+      else if (currentScrollY < prevScrollYRef.current) setExpand(true);
 
       if (
-        currentScrollY - prevScrollY.current > 0.15 ||
-        currentScrollY - prevScrollY.current < -0.15
+        currentScrollY - prevScrollYRef.current > 0.15 ||
+        currentScrollY - prevScrollYRef.current < -0.15
       ) {
-        prevScrollY.current = currentScrollY;
+        prevScrollYRef.current = currentScrollY;
       }
     };
 
@@ -90,9 +91,11 @@ const page = () => {
     fetchHistroyData();
   };
 
+  /* eslint-disable react-you-might-not-need-an-effect/no-derived-state, react-you-might-not-need-an-effect/no-initialize-state, @eslint-react/exhaustive-deps -- chained fetch timing must be preserved: depending on fetchData would alter the request pattern, and the semester list can only be populated asynchronously after mount */
   useEffect(() => {
     fetchData();
   }, []);
+  /* eslint-enable react-you-might-not-need-an-effect/no-derived-state, react-you-might-not-need-an-effect/no-initialize-state, @eslint-react/exhaustive-deps */
 
   const fetchHistroyData = async () => {
     const resultHistoryOutstandingData = await getHistoryByLecturer(
@@ -103,9 +106,11 @@ const page = () => {
     setHistoryOutstandingProject(resultHistoryOutstandingData?.data);
   };
 
+  /* eslint-disable react-you-might-not-need-an-effect/no-derived-state, @eslint-react/exhaustive-deps -- server fetch cannot be computed during render, and fetch timing must be preserved: depending on fetchHistroyData would refetch when its closure values change */
   useEffect(() => {
     fetchHistroyData();
   }, [search, currentSemester]);
+  /* eslint-enable react-you-might-not-need-an-effect/no-derived-state, @eslint-react/exhaustive-deps */
 
   return (
     <motion.div className="relative min-h-screen flex flex-col justify-start items-center px-5 sm:px-10 xl:px-[6.25rem] ">
@@ -170,7 +175,7 @@ const page = () => {
           </TableHeader>
           <TableBody>
             {historyOutstandingProject?.map((project: any, index: number) => (
-              <TableRow>
+              <TableRow key={project?.assessment?.id}>
                 <TableCell className="text-start font-medium">
                   {project?.projectDetail?.class}
                 </TableCell>
@@ -255,7 +260,10 @@ const page = () => {
                         By.{" "}
                         {selectedPreviewProject?.projectGroups?.map(
                           (student: any) => (
-                            <span className="text-sm text-gray-500 capitalize">
+                            <span
+                              key={student?.student_id}
+                              className="text-sm text-gray-500 capitalize"
+                            >
                               {student?.student_name.toLowerCase()},{" "}
                             </span>
                           )
@@ -300,17 +308,26 @@ const page = () => {
                         )}
                     </div>
                     <div className="md:w-1/3 w-full">
-                      <img
+                      <Image
                         src={selectedPreviewProject?.projectDetail?.thumbnail}
-                        className="w-full rounded-md border"
+                        width={800}
+                        height={500}
+                        alt="Project thumbnail"
+                        unoptimized
+                        className="w-full h-auto rounded-md border object-cover"
                       />
                     </div>
                   </div>
                   <div className="w-full h-96 my-3 flex overflow-auto gap-3">
                     {selectedPreviewProject?.galleries?.map((gallery: any) => (
-                      <img
+                      <Image
+                        key={gallery?.image}
                         src={gallery?.image}
-                        className="h-full rounded-md border"
+                        width={576}
+                        height={384}
+                        alt="Gallery image"
+                        unoptimized
+                        className="h-full w-auto rounded-md border object-cover"
                       />
                     ))}
                   </div>
@@ -341,4 +358,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default Page;

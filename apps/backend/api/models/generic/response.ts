@@ -1,8 +1,8 @@
-export interface APIResponse {
+export interface APIResponse<T = unknown> {
     status: boolean
     message: string
-    errors?: any
-    data: any,
+    errors?: unknown
+    data: T | null,
 }
 
 export const defaultResponse: APIResponse = {
