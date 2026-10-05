@@ -4,10 +4,10 @@ services:
     container_name: gitbee-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: admin
-      MYSQL_DATABASE: gitbee
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-admin}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-gitbee}"
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -28,7 +28,7 @@ services:
     container_name: gitbee-backend
     restart: unless-stopped
     ports:
-      - "5001:5000"
+      - "${BACKEND_PORT:-5001}:${BACKEND_CONTAINER_PORT:-5000}"
     # ponytail: seed is destructive (deleteMany + AUTO_INCREMENT reset), so it
     # runs only when SEED_ON_BOOT=true. First boot: SEED_ON_BOOT=true docker compose up backend
     command: >
@@ -38,10 +38,13 @@ services:
       && if [ \"$$SEED_ON_BOOT\" = \"true\" ]; then pnpm exec prisma db seed; fi
       && pnpm --filter gitbee_backend dev"
     environment:
-      DATABASE_URL: "mysql://root:admin@mysql:3306/gitbee"
-      WEB_URL: "http://localhost:8000"
-      JWT_SECRET: "change-me"
-      PORT: "5000"
+      DATABASE_URL: "${DATABASE_URL_DOCKER:-mysql://root:admin@mysql:3306/gitbee}"
+      WEB_URL: "${WEB_URL:-http://localhost:8000}"
+      JWT_SECRET: "${JWT_SECRET:-change-me}"
+      COOKIE_NAME: "${COOKIE_NAME:-gitbee_token}"
+      BLUEJACK_API: "${BLUEJACK_API:-}"
+      ATLANTIS_API: "${ATLANTIS_API:-}"
+      PORT: "${BACKEND_CONTAINER_PORT:-5000}"
       SEED_ON_BOOT: "${SEED_ON_BOOT:-false}"
     depends_on:
       mysql:
@@ -61,11 +64,11 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
-        NEXT_PUBLIC_BACKEND_API: "http://localhost:5001/api/"
+        NEXT_PUBLIC_BACKEND_API: "${NEXT_PUBLIC_BACKEND_API:-http://localhost:5001/api/}"
     container_name: gitbee-frontend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${FRONTEND_PORT:-8000}:8000"
     depends_on:
       - backend
 

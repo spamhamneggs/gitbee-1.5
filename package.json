@@ -5,6 +5,7 @@
   "description": "GitBee monorepo — Next.js frontend (apps/frontend) + Express/Prisma backend (apps/backend)",
   "packageManager": "pnpm@12.6.0",
   "scripts": {
+    "env:sync": "node ./scripts/sync-env.mjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
