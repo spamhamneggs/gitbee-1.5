@@ -8,6 +8,8 @@ import { IoBookOutline } from "react-icons/io5";
 import { FaCode } from "react-icons/fa";
 import ProjectDetailComponent from "@/app/components/explore/ProjectDetailComponent";
 import ExploreComponent from "@/app/components/explore/ExploreComponent";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 import {
   getAllCategory,
   getAllMajor,
@@ -17,6 +19,7 @@ import {
 
 const Page = () => {
   const { scrollYProgress } = useScroll();
+  const { toast } = useToast();
   const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [showDevelopers, setShowDevelopers] = useState(false);
@@ -32,21 +35,25 @@ const Page = () => {
   const [selectedTechnologyFilter, setSelectedTechnologyFilter] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
 
-  /* eslint-disable react-you-might-not-need-an-effect/no-initialize-state -- server fetch: reference data can only be populated asynchronously after mount */
   useEffect(() => {
     const fetchData = async () => {
-      const resultCategory = await getAllCategory();
-      if (resultCategory?.success) setCategories(resultCategory.data);
-
-      const resultMajor = await getAllMajor();
-      if (resultMajor?.success) setMajors(resultMajor.data);
-
-      const resultTech = await getAllTech();
-      if (resultTech?.success) setTechs(resultTech.data);
+      const [resultCategory, resultMajor, resultTech] = await Promise.all([
+        getAllCategory(),
+        getAllMajor(),
+        getAllTech(),
+      ]);
+      if (resultCategory.success) setCategories(resultCategory.data);
+      if (resultMajor.success) setMajors(resultMajor.data);
+      if (resultTech.success) setTechs(resultTech.data);
+      const failure = [resultCategory, resultMajor, resultTech].find(
+        (result) => !result.success
+      );
+      if (failure) {
+        toast({ title: "Could not load filters", description: failure.message });
+      }
     };
     fetchData();
-  }, []);
-  /* eslint-enable react-you-might-not-need-an-effect/no-initialize-state */
+  }, [toast]);
 
   /* eslint-disable react-you-might-not-need-an-effect/no-derived-state -- server fetch: the result depends on an async round-trip and cannot be computed during render */
   useEffect(() => {
@@ -57,8 +64,11 @@ const Page = () => {
         selectedMajorFilter,
         selectedTechnologyFilter
       );
-      if (resultProject?.success) setProjects(resultProject.data);
-      console.log(resultProject?.data);
+      if (resultProject.success) {
+        setProjects(resultProject.data);
+      } else {
+        toast({ title: "Could not load projects", description: resultProject.message });
+      }
     };
     fetchProjectData();
   }, [
@@ -66,6 +76,7 @@ const Page = () => {
     selectedCategoryFilter,
     selectedMajorFilter,
     selectedTechnologyFilter,
+    toast,
   ]);
   /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
 
@@ -119,6 +130,7 @@ const Page = () => {
 
   return (
     <motion.div className="relative min-h-screen w-full max-w-full overflow-x-clip flex flex-col pt-28 xl:px-16 bg-gray-50">
+      <Toaster />
       <div
         className={`bg-gray-50 fixed top-0 ${
           expand ? "h-[21rem] sm:h-60 lg:h-[12.25rem]" : "h-[7rem]"

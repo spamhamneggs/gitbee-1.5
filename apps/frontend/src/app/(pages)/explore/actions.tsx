@@ -1,89 +1,50 @@
-export const getAllCategory = async () => {
+const getExploreData = async (path: string, params?: Record<string, string>) => {
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}category/all`
-    );
-    const result = await response.json();
-
-    if (result.status) {
-      return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
+    const api = process.env.NEXT_PUBLIC_BACKEND_API;
+    if (!api) {
+      throw new Error(
+        "NEXT_PUBLIC_BACKEND_API is not configured. Set it and restart the frontend."
+      );
     }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
+
+    const url = new URL(path, api.endsWith("/") ? api : `${api}/`);
+    url.search = new URLSearchParams(params).toString();
+    const response = await fetch(url);
+    const contentType = response.headers.get("content-type") ?? "unknown content type";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      throw new Error(
+        `${url.origin}${url.pathname} returned HTTP ${response.status} (${contentType}) instead of JSON. Check that the backend is running and NEXT_PUBLIC_BACKEND_API points to its /api/ URL.`
+      );
+    }
+
+    const result = await response.json();
+    if (!response.ok || !result.status) {
+      const message = typeof result.errors === "string" ? result.errors : result.message;
+      throw new Error(
+        `${url.origin}${url.pathname} returned HTTP ${response.status}: ${message || "API request failed"}`
+      );
+    }
+    return { success: true as const, data: result.data ?? [] };
+  } catch (error: unknown) {
+    console.warn(`Explore API request failed (${path}):`, error instanceof Error ? error.message : error);
+    return { success: false as const, message: "Could not load data. Please try again." };
   }
 };
 
-export const getAllMajor = async () => {
-  try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}major/all`
-    );
-    const result = await response.json();
+export const getAllCategory = () => getExploreData("category/all");
+export const getAllMajor = () => getExploreData("major/all");
+export const getAllTech = () => getExploreData("technology/all");
 
-    if (result.status) {
-      return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
-    }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
-  }
-};
-
-export const getAllTech = async () => {
-  try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}technology/all`
-    );
-    const result = await response.json();
-
-    if (result.status) {
-      return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
-    }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
-  }
-};
-
-export const getAllProjects = async (
+export const getAllProjects = (
   search: string,
   categoryFilter: string,
   majorFilter: string,
   technologyFilter: string
-) => {
-  try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}project/all?search=${search}&categoryFilter=${categoryFilter}&majorFilter=${majorFilter}&technologyFilter=${technologyFilter}`
-    );
-    const result = await response.json();
+) => getExploreData("project/all", {
+  search,
+  categoryFilter,
+  majorFilter,
+  technologyFilter,
+});
 
-    if (result.status) {
-      return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
-    }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
-  }
-};
-
-export const getProjectById = async (id: string) => {
-  try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}project/detail?id=${id}`
-    );
-    const result = await response.json();
-
-    if (result.status) {
-      return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
-    }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
-  }
-};
+export const getProjectById = (id: string) => getExploreData("project/detail", { id });

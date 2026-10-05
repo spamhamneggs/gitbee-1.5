@@ -26,7 +26,7 @@ docker compose up mysql   # database `gitbee` on :3306
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.example apps/frontend/.env.local
 pnpm install
-pnpm dev:backend   # nodemon on :5000
+pnpm dev:backend   # tsx watch on :5001 (run in a separate terminal)
 pnpm dev:frontend  # next dev on :8000
 ```
 

@@ -7,6 +7,7 @@ import { IoIosArrowRoundBack, IoIosVideocam } from "react-icons/io";
 import { SiGithub } from "react-icons/si";
 import { getProjectById } from "@/app/(pages)/explore/actions";
 import { useAuth } from "@/app/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProjectDetailProps {
   selectedProjectId: string;
@@ -18,6 +19,7 @@ interface ProjectDetailProps {
 
 function ProjectDetailComponent(props: ProjectDetailProps) {
   const { userData } = useAuth();
+  const { toast } = useToast();
   const [detailProject, setDetailProject] = useState<any>();
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -28,11 +30,14 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
   useEffect(() => {
     const fetchSelectedProject = async () => {
       const resultProject = await getProjectById(props.selectedProjectId);
-      if (resultProject?.success) setDetailProject(resultProject?.data[0]);
-      console.log(resultProject?.data[0]);
+      if (resultProject.success) {
+        setDetailProject(resultProject.data[0]);
+      } else {
+        toast({ title: "Could not load project details", description: resultProject.message });
+      }
     };
     fetchSelectedProject();
-  }, [props.selectedProjectId]);
+  }, [props.selectedProjectId, toast]);
   /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
 
 
