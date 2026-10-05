@@ -33,7 +33,7 @@ services:
     # runs only when SEED_ON_BOOT=true. First boot: SEED_ON_BOOT=true docker compose up backend
     command: >
       sh -c "cd /repo/apps/backend/api
-      && pnpm exec prisma db push
+      && pnpm exec prisma migrate deploy
       && pnpm exec prisma generate
       && if [ \"$$SEED_ON_BOOT\" = \"true\" ]; then pnpm exec prisma db seed; fi
       && pnpm --filter gitbee_backend dev"

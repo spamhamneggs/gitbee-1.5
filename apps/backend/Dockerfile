@@ -21,7 +21,7 @@ COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
 # Minimal production runtime: prod node_modules + compiled output + Prisma
-# schema (used by `prisma db push`/`generate` at boot). No source, no devDependencies.
+# schema and migration history. No source, no devDependencies.
 FROM base AS runner
 WORKDIR /repo
 COPY --from=prod-deps /repo/package.json /repo/pnpm-lock.yaml /repo/pnpm-workspace.yaml ./
