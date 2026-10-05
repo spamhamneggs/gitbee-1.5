@@ -8,6 +8,10 @@
 ## Quick start (Docker, recommended)
 
 ```bash
+# create the shared env once
+cp .env.example .env
+pnpm env:sync
+
 # first boot only; seed the fresh DB (seed wipes tables, never runs by default)
 SEED_ON_BOOT=true docker compose up --build
 # normal boots
@@ -23,8 +27,8 @@ The app servers run on the host, but MySQL still comes from Docker:
 
 ```bash
 docker compose up mysql   # database `gitbee` on :3306
-cp apps/backend/.env.example apps/backend/.env
-cp apps/frontend/.env.example apps/frontend/.env.local
+cp .env.example .env
+pnpm env:sync
 pnpm install
 pnpm dev:backend   # tsx watch on :5001 (run in a separate terminal)
 pnpm dev:frontend  # next dev on :8000
@@ -32,8 +36,28 @@ pnpm dev:frontend  # next dev on :8000
 
 ## Env wiring
 
-Backend CORS trusts `WEB_URL`; frontend calls `${NEXT_PUBLIC_BACKEND_API}…` (trailing slash required).
-`NEXT_PUBLIC_*` values are baked in at frontend build time, rebuild the image after changing them.
+Use the root `.env` as the shared source of truth for this monorepo.
+
+- Run `pnpm env:sync` after changing the root `.env`.
+- The script generates `apps/backend/.env` and `apps/frontend/.env.local`.
+- Backend CORS trusts `WEB_URL`.
+- Frontend calls `${NEXT_PUBLIC_BACKEND_API}…`; the trailing slash is required.
+- `NEXT_PUBLIC_*` values are baked in at frontend build time, so rebuild the frontend image after changing them for Docker.
+
+### Shared variables
+
+The root `.env.example` includes the shared settings for the full stack:
+
+- database: `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_PORT`
+- backend: `BACKEND_PORT`, `BACKEND_CONTAINER_PORT`, `DATABASE_URL`, `DATABASE_URL_DOCKER`, `WEB_URL`, `JWT_SECRET`, `COOKIE_NAME`, `BLUEJACK_API`, `ATLANTIS_API`
+- frontend: `FRONTEND_PORT`, `NEXT_PUBLIC_BACKEND_API`, `NEXT_PUBLIC_CLIENT_ID`, `NEXT_PUBLIC_TENANT_ID`, `NEXT_PUBLIC_REDIRECT_URI`, `NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI`, `NEXT_PUBLIC_STORE_AUTH_STATE_IN_COOKIE`, `NEXT_PUBLIC_CACHE_LOCATION`
+- docker behavior: `SEED_ON_BOOT`
+
+### Notes on app-specific env files
+
+- `apps/backend/.env.example` now lists every backend variable currently used in code.
+- `apps/frontend/.env.example` matches the public variables used by the MSAL and API client setup.
+- `NEXT_PUBLIC_TENANT_ID` is used as the MSAL `authority`, so it should contain the full Microsoft authority URL, not only a raw tenant id.
 
 ## Notes
 
