@@ -7,6 +7,8 @@
 
 ## Quick start (Docker, recommended)
 
+For an existing database, complete the baseline steps below before starting the backend.
+
 ```bash
 # create the shared env once
 cp .env.example .env
@@ -30,9 +32,42 @@ docker compose up mysql   # database `gitbee` on :3306
 cp .env.example .env
 pnpm env:sync
 pnpm install
+pnpm --filter gitbee_backend exec prisma migrate deploy --config ./api/prisma.config.ts
 pnpm dev:backend   # tsx watch on :5001 (run in a separate terminal)
 pnpm dev:frontend  # next dev on :8000
 ```
+
+## Database migrations
+
+Docker startup runs `prisma migrate deploy`. The `0_init` migration captures the
+complete schema previously managed with `prisma db push` and replaces the partial
+`20241007122240_project_table` migration. Fresh databases apply it normally.
+
+For each existing database created with `db push`, point `apps/backend/.env` at
+that database and run these commands once from the repository root, before
+starting the backend:
+
+```bash
+docker compose up -d mysql  # when using the local Docker database
+# Must report no difference (exit code 0) before resolving the baseline.
+pnpm --filter gitbee_backend exec prisma migrate diff --from-config-datasource --to-schema ./api/prisma/schema.prisma --config ./api/prisma.config.ts --exit-code
+pnpm --filter gitbee_backend exec prisma migrate resolve --applied 0_init --config ./api/prisma.config.ts
+pnpm --filter gitbee_backend exec prisma migrate status --config ./api/prisma.config.ts
+```
+
+`resolve --applied` records the baseline without executing its SQL or changing
+application data. If the diff reports changes, reconcile them before resolving;
+do not reset or seed a database whose data must be preserved.
+
+The baseline was generated with Prisma 7's `--to-schema` option:
+
+```bash
+pnpm --filter gitbee_backend exec prisma migrate diff --from-empty --to-schema ./api/prisma/schema.prisma --config ./api/prisma.config.ts --script --output ./api/prisma/migrations/0_init/migration.sql
+```
+
+For future schema changes, create a migration with
+`pnpm --filter gitbee_backend exec prisma migrate dev --name <name> --config ./api/prisma.config.ts`
+against a development database. Commit its SQL and deploy with `prisma migrate deploy`.
 
 ## Env wiring
 
