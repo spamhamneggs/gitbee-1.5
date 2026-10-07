@@ -40,15 +40,21 @@ export default class AuthHandler {
             const username = atlantisAccount?.BinusianID ?? "";
             const lecturer_code = atlantisAccount?.KodeDosen ?? "";
 
+            const userLookupConditions = [
+                { email: email },
+                ...(lecturer_code ? [{ lecturer_code }] : []),
+                ...(atlantisAccount?.NIM ? [{ student_id: atlantisAccount.NIM }] : []),
+                ...(atlantisAccount?.BinusianID ? [{ binusian_id: atlantisAccount.BinusianID }] : []),
+            ];
+
             const user = await prisma.user.findFirst({
                 where: {
-                    OR: [
-                        { email: email }, 
-                        { lecturer_code: lecturer_code },
-                    ],
+                    OR: userLookupConditions,
                 },
                 select: {
                     lecturer_code: true,
+                    student_id: true,
+                    binusian_id: true,
                     email: true,
                     role: true
                 },
@@ -60,7 +66,9 @@ export default class AuthHandler {
                 : [user.role, "Lecturer"]
             : ["Student"];
 
-            const nim = user?.role != null ? user?.lecturer_code : (atlantisAccount?.NIM ?? "");
+            const nim = user?.role != null
+                ? user.lecturer_code ?? user.student_id ?? user.binusian_id ?? ""
+                : (atlantisAccount?.NIM ?? user?.student_id ?? user?.binusian_id ?? "");
 
             let activeRole: string | undefined;
             if (valid.data.role) {

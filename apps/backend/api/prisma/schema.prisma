@@ -14,15 +14,18 @@ datasource db {
 }
 
 model User {
-  id                  Int                @id @default(autoincrement())
-  lecturer_code       String             @unique @db.VarChar(50)
-  email               String             @db.VarChar(150)
-  name                String             @db.VarChar(150)
-  role                String             @db.VarChar(50)
-  created_at          DateTime           @default(now())
-  hopMajors           HoPMajor[]
+  id            Int      @id @default(autoincrement())
+  email         String   @db.VarChar(150)
+  name          String   @db.VarChar(150)
+  role          String   @db.VarChar(50)
+  password      String?  @db.VarChar(255)
+  user_type     String?  @db.VarChar(50)
+  binusian_id   String?  @unique @db.VarChar(150)
+  student_id    String?  @unique @db.VarChar(50)
+  lecturer_code String?  @unique @db.VarChar(50)
+  created_at    DateTime @default(now())
+  hopMajors     HoPMajor[]
 
-  @@unique([lecturer_code, name])
   @@map("user")
 }
 
