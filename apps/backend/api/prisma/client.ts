@@ -3,4 +3,15 @@ import { PrismaClient } from "./generated/prisma/client.js";
 
 const adapter = new PrismaMariaDb(process.env.DATABASE_URL as string);
 
-export const prisma = new PrismaClient({ adapter });
+export const prisma = new PrismaClient({ adapter }).$extends({
+  result: {
+    user: {
+      password: {
+        needs: {},
+        compute() {
+          return undefined;
+        },
+      },
+    },
+  },
+});
