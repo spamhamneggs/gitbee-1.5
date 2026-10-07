@@ -14,25 +14,17 @@ datasource db {
 }
 
 model User {
-  id            Int        @id @default(autoincrement())
-  email         String     @db.VarChar(150)
-  name          String     @db.VarChar(150)
-  role          String     @db.VarChar(50)
-
-  // V1.5 Identity Fields
-  password      String?    @db.VarChar(255)
-  user_type     String?    @db.VarChar(50)
-  binusian_id   String?    @unique @db.VarChar(150)
-  student_id    String?    @unique @db.VarChar(50)
-
-  // Modified from String to String? (Nullable)
-  lecturer_code String?    @unique @db.VarChar(50)
-
-  created_at    DateTime   @default(now())
+  id            Int      @id @default(autoincrement())
+  email         String   @db.VarChar(150)
+  name          String   @db.VarChar(150)
+  role          String   @db.VarChar(50)
+  password      String?  @db.VarChar(255)
+  user_type     String?  @db.VarChar(50)
+  binusian_id   String?  @unique @db.VarChar(150)
+  student_id    String?  @unique @db.VarChar(50)
+  lecturer_code String?  @unique @db.VarChar(50)
+  created_at    DateTime @default(now())
   hopMajors     HoPMajor[]
-
-  // Ensure this line is REMOVED from the bottom of model User:
-  // @@unique([lecturer_code, name])
 
   @@map("user")
 }
