@@ -56,11 +56,16 @@ export default class AuthHandler {
                     student_id: true,
                     binusian_id: true,
                     email: true,
-                    role: true
+                    role: true,
+                    user_type: true
                 },
             });
 
-            const role = user?.role
+            // Students can have user rows too (role "Student", user_type "student"),
+            // so a matched row alone doesn't make someone staff.
+            const isStaff = user != null && user.role !== "Student" && user.user_type !== "student";
+
+            const role = isStaff
             ? user.role === "Lecturer"
                 ? ["Lecturer"]
                 : [user.role, "Lecturer"]
@@ -72,23 +77,12 @@ export default class AuthHandler {
 
             let activeRole: string | undefined;
             if (valid.data.role) {
-                const checkedUser = await prisma.user.findFirst({
-                    where: {
-                        OR: [
-                            { email: email }, 
-                            { lecturer_code: lecturer_code },
-                        ],
-                    },
-                    select: {
-                        role: true
-                    },
-                });
-
-                if(checkedUser) {
+                // Only allow switching to a role this user actually has.
+                if (role.includes(valid.data.role)) {
                     activeRole = valid.data.role;
                 }
             } else {
-                activeRole = user?.role ? "Lecturer": "Student";
+                activeRole = isStaff ? "Lecturer" : "Student";
             }
 
             const token = createToken(
