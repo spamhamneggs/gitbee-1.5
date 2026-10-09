@@ -39,6 +39,7 @@ model Role {
 model Project {
   id                  Int                @id @default(autoincrement())
   lecturer_id         String             @db.VarChar(50)
+  // NIM, not an FK to User: students have no guaranteed user row
   student_leader_id   String             @db.VarChar(50)
   is_disable          Int
   created_at          DateTime           @default(now())
@@ -71,9 +72,9 @@ model ProjectDetail {
   major_id          Int
   group             Int
   project           Project         @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  status            Status          @relation(fields: [status_id], references: [id], onDelete: Cascade)
-  category          Category        @relation(fields: [category_id], references: [id], onDelete: Cascade)
-  major             Major           @relation(fields: [major_id], references: [id], onDelete: Cascade)
+  status            Status          @relation(fields: [status_id], references: [id], onDelete: Restrict)
+  category          Category        @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  major             Major           @relation(fields: [major_id], references: [id], onDelete: Restrict)
 
   @@map("project_detail")
 }
@@ -114,6 +115,7 @@ model OutstandingProject {
 model ProjectGroup {
   id                    Int             @id @default(autoincrement())
   project_id            Int     
+  // NIM snapshot from the class roster, not an FK to User (see Project.student_leader_id)
   student_id            String          @db.VarChar(50)
   student_name          String          @db.VarChar(200)
   student_binusian_id   String          @db.VarChar(150)
@@ -181,6 +183,7 @@ model TemporaryGroup {
   course_id             String          @db.VarChar(50)
   class                 String          @db.VarChar(20)
   group                 Int             
+  // NIM, not an FK: short-lived rows, cleared once the group submits its project
   student_id            String          @db.VarChar(50)
   student_name          String          @db.VarChar(200)
   student_binusian_id   String          @db.VarChar(150)

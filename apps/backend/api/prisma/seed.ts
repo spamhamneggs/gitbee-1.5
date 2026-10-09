@@ -11,15 +11,16 @@ import { roles } from "./seeds/role.js";
 import { students } from "./seeds/student.js";
 
 async function main() {
-    await prisma.status.deleteMany({});
-    await prisma.category.deleteMany({});
-    await prisma.technology.deleteMany({});
-    await prisma.major.deleteMany({});
+    // Projects first: project_detail restricts deleting the status/category/major it points at
     await prisma.project.deleteMany({});
     await prisma.projectDetail.deleteMany({});
     await prisma.projectGroup.deleteMany({});
     await prisma.projectTechnology.deleteMany({});
     await prisma.gallery.deleteMany({});
+    await prisma.status.deleteMany({});
+    await prisma.category.deleteMany({});
+    await prisma.technology.deleteMany({});
+    await prisma.major.deleteMany({});
     await prisma.user.deleteMany({});
     await prisma.deadline.deleteMany({});
     await prisma.role.deleteMany({});
