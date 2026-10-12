@@ -1,4 +1,3 @@
-import GenericService from "../services/generic/genericService.js";
 import { categories } from "./seeds/category.js";
 import { majors } from "./seeds/major.js";
 import { projects } from "./seeds/project.js";
@@ -9,6 +8,7 @@ import { users } from "./seeds/user.js";
 import { deadlines } from "./seeds/deadline.js";
 import { roles } from "./seeds/role.js";
 import { students } from "./seeds/student.js";
+import { getStudentData } from "./seeds/studentLookup.js";
 
 async function main() {
     await prisma.status.deleteMany({});
@@ -151,21 +151,17 @@ async function main() {
         }
 
         if (groupMembers.length > 0) {
-            const newProjectGroupPromises = groupMembers.map(async (student_id) => {
-                const nameResponse = await GenericService.getName(student_id);
-                const BinusianIdResponse = await GenericService.getBinusianID(student_id);
-                const name = nameResponse.data ?? student_id;
-                const binusianId = BinusianIdResponse.data ?? student_id;
+            // Use offline student lookup instead of API calls
+            const newProjectGroup = groupMembers.map((student_id) => {
+                const studentData = getStudentData(student_id);
 
                 return {
                     project_id: newProject.id,
-                    student_id,
-                    student_name: name,
-                    student_binusian_id: binusianId
+                    student_id: studentData.student_id,
+                    student_name: studentData.student_name,
+                    student_binusian_id: studentData.student_binusian_id
                 };
             });
-        
-            const newProjectGroup = await Promise.all(newProjectGroupPromises);
         
             await prisma.projectGroup.createMany({
                 data: newProjectGroup
