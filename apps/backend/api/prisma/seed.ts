@@ -159,7 +159,8 @@ async function main() {
                 project_id: newProject.id,
                 student_id,
                 student_name: studentNamesById[student_id] ?? student_id,
-                student_binusian_id: student_id
+                // The local roster has no Binusian IDs; don't put the NIM in this field.
+                student_binusian_id: ""
             }));
         
             await prisma.projectGroup.createMany({
