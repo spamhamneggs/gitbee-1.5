@@ -1,4 +1,3 @@
-import GenericService from "../services/generic/genericService.js";
 import { categories } from "./seeds/category.js";
 import { majors } from "./seeds/major.js";
 import { projects } from "./seeds/project.js";
@@ -9,6 +8,10 @@ import { users } from "./seeds/user.js";
 import { deadlines } from "./seeds/deadline.js";
 import { roles } from "./seeds/role.js";
 import { students } from "./seeds/student.js";
+
+const studentNamesById = Object.fromEntries(
+    students.map(({ student_id, student_name }) => [student_id, student_name])
+);
 
 async function main() {
     // Projects first: project_detail restricts deleting the status/category/major it points at
@@ -152,21 +155,12 @@ async function main() {
         }
 
         if (groupMembers.length > 0) {
-            const newProjectGroupPromises = groupMembers.map(async (student_id) => {
-                const nameResponse = await GenericService.getName(student_id);
-                const BinusianIdResponse = await GenericService.getBinusianID(student_id);
-                const name = nameResponse.data ?? student_id;
-                const binusianId = BinusianIdResponse.data ?? student_id;
-
-                return {
-                    project_id: newProject.id,
-                    student_id,
-                    student_name: name,
-                    student_binusian_id: binusianId
-                };
-            });
-        
-            const newProjectGroup = await Promise.all(newProjectGroupPromises);
+            const newProjectGroup = groupMembers.map((student_id) => ({
+                project_id: newProject.id,
+                student_id,
+                student_name: studentNamesById[student_id] ?? student_id,
+                student_binusian_id: student_id
+            }));
         
             await prisma.projectGroup.createMany({
                 data: newProjectGroup
