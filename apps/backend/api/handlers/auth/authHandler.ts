@@ -71,9 +71,23 @@ export default class AuthHandler {
                 : [user.role, "Lecturer"]
             : ["Student"];
 
-            const nim = user?.role != null
-                ? user.lecturer_code ?? user.student_id ?? user.binusian_id ?? ""
-                : (atlantisAccount?.NIM ?? user?.student_id ?? user?.binusian_id ?? "");
+            let nim: string;
+
+            if (isStaff) {
+                nim = user?.lecturer_code ?? "";
+            } else if (user) {
+                // A student account must carry its NIM. binusian_id is NOT a NIM and
+                // cannot substitute for it: downstream student class/group queries
+                // match on the NIM, so a wrong value silently returns no data.
+                if (!user.student_id) {
+                    return sendErrorResponse(res, "Student account is missing its student_id (NIM). Please contact an administrator.", 401);
+                }
+                nim = user.student_id;
+            } else {
+                // No local user row yet (students are not guaranteed one): fall back to
+                // Atlantis until every student account has been backfilled with a student_id.
+                nim = atlantisAccount?.NIM ?? "";
+            }
 
             let activeRole: string | undefined;
             if (valid.data.role) {

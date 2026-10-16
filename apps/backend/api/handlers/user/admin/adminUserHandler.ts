@@ -37,6 +37,8 @@ export default class AdminUserHandler {
         ? {
             OR: [
               { lecturer_code: { contains: params.search } },
+              { student_id: { contains: params.search } },
+              { binusian_id: { contains: params.search } },
               { email: { contains: params.search } },
               { name: { contains: params.search } },
             ],
@@ -286,9 +288,7 @@ export default class AdminUserHandler {
   static async removeUserExcel(req: Request, res: Response) {
     try {
       const deletedUsers = await prisma.user.deleteMany({
-        where: {
-          NOT: [{ role: "Admin" }, { role: "SCC" }, { role: "HoP" }],
-        },
+        where: { role: "Lecturer" },
       });
 
       sendSuccessResponse(res, deletedUsers);
