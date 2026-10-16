@@ -37,13 +37,52 @@ The `user` table is extended so it can store **students** (not just staff).
 | # | Query | Identifier(s) used |
 |---|---|---|
 | 1 | `prisma.user.findFirst({ where: { OR: [{ email }, { lecturer_code }, { student_id }, { binusian_id }] } })` (L50) | `email`, `lecturer_code`, `student_id`, `binusian_id` |
-| 2 | `createToken(nim, username, …)` where `nim = user.lecturer_code ?? user.student_id ?? user.binusian_id` (L74–76) | `lecturer_code`, `student_id`, `binusian_id` |
+| 2 | `createToken(nim, username, …)` (L102) — **pre-fix** `nim = user.lecturer_code ?? user.student_id ?? user.binusian_id` (L74–76) | `lecturer_code`, `student_id`, `binusian_id` (see breakage below) |
 
-**Assessment — ✅ No breakage.**
+**Assessment — 🔴 Breakage (the earlier "no breakage" call was wrong).**
 
-- The handler already reads the new fields (`student_id`, `binusian_id`, `user_type`) and uses them for staff/student disambiguation (L66: `user.role !== "Student" && user.user_type !== "student"`).
-- The `OR` lookup (L43–48) correctly falls back through all three identity columns.
-- The `nim` claim computation (L74–76) correctly prefers `lecturer_code` for staff and `student_id`/`binusian_id` for students.
+The `OR` lookup itself is fine. The breakage is in how `nim` is derived, and it only surfaces because the migration made `student_id` nullable.
+
+#### 🔴 BREAKAGE — `authHandler.login`: student row with `NULL student_id` yields a non-NIM `nim`
+
+The migration makes `user.student_id` **nullable**, so a student account row can exist with `student_id = NULL` and still be matched by `email` or `binusian_id` in the `OR` lookup (L43–48). The old `nim` computation (L74–76) then walks the fallback chain:
+
+```ts
+const nim = user?.role != null
+    ? user.lecturer_code ?? user.student_id ?? user.binusian_id ?? ""
+    : (atlantisAccount?.NIM ?? user?.student_id ?? user?.binusian_id ?? "");
+```
+
+For a matched student row this evaluates `lecturer_code (null) ?? student_id (null) ?? binusian_id` → **`nim` becomes `binusian_id`**. If `binusian_id` is also absent, it becomes the **empty string `""`**. In **both** cases `atlantisAccount.NIM` is ignored entirely.
+
+- **Why it breaks:** `nim` is embedded in the JWT and returned to the client as the student NIM. Every student-scoped query matches that value against NIM columns (`student_list_transaction.student_id`, `project_group.student_id`, `temporary_group.student_id`). A Binusian ID — or `""` — never matches a NIM, so **student class/group queries return no matches**. Reproduced for both the `binusian_id` case and the `""` case.
+- **Impact:** High — affected students cannot see their class projects, group, or submissions; they appear to have no data.
+- **Root cause:** `binusian_id` is **not** a NIM and cannot substitute for one. The handler conflated the identity columns instead of requiring the authoritative NIM.
+
+**Fix (applied):** use `user.student_id` as `nim` for student accounts and return an explicit error when it is missing; never fall back to `binusian_id`; keep the Atlantis `NIM` fallback only for the no-user-row case.
+
+```ts
+let nim: string;
+
+if (isStaff) {
+    nim = user?.lecturer_code ?? "";
+} else if (user) {
+    // A student account must carry its NIM; binusian_id is not a NIM.
+    if (!user.student_id) {
+        return sendErrorResponse(res, "Student account is missing its student_id (NIM)...", 401);
+    }
+    nim = user.student_id;
+} else {
+    // No local user row yet: fall back to Atlantis until accounts are backfilled.
+    nim = atlantisAccount?.NIM ?? "";
+}
+```
+
+#### Remediation & sequencing (must precede removing Atlantis)
+
+1. **Backfill** `user.student_id` for every existing student account. The source of truth is Atlantis `NIM` (or the `student_list_transaction` roster). Accounts matched by `email`/`binusian_id` but with a `NULL student_id` are exactly the rows that previously produced a bad `nim`.
+2. **Require** `user.student_id` for every account with `role = 'Student'` (or `user_type = 'student'`). The code above enforces this at the boundary with an explicit error, so incomplete data fails loudly instead of silently yielding a wrong NIM.
+3. **Only after** (1) and (2) are complete may the Atlantis dependency be removed — until then, the no-user-row path still relies on `atlantisAccount.NIM`.
 
 ---
 
@@ -73,35 +112,42 @@ The `user` table is extended so it can store **students** (not just staff).
 
 | # | Method | Query | Identifier(s) |
 |---|---|---|---|
-| 1 | `getUser` | `prisma.user.findMany({ where: { role, OR: [{ lecturer_code contains }, { email contains }, { name contains }] } })` (L52–113) | `lecturer_code`, `email`, `name` |
+| 1 | `getUser` | `prisma.user.findMany(...)` ×4 (SCC/Lecturer/HoP/Admin) with `role` + `OR: [{ lecturer_code contains }, { email contains }, { name contains }]` (L52–113) | `lecturer_code`, `email`, `name` |
 | 2 | `insertUser` | `prisma.user.create({ data: { lecturer_code, email, name, role } })` (L145) | `lecturer_code` |
-| 3 | `updateRole` | `prisma.user.findUnique({ where: { id } })` + `prisma.user.update({ where: { id }, data: { role } })` (L184, L200) | `id` |
-| 4 | `uploadUserExcel` | `prisma.user.createMany({ data: validatedUsers, skipDuplicates: true })` (L272) | `lecturer_code` |
-| 5 | `removeUserExcel` | `prisma.user.deleteMany({ where: { NOT: [{ role: 'Admin' }, { role: 'SCC' }, { role: 'HoP' }] } })` (L288) | `role` |
-| 6 | `getAllStudent` | `prisma.studentListTransaction.findMany(...)` (L473) | `student_id` (in `student_list_transaction`, **not** `user`) |
-| 7 | `uploadStudentExcel` | `prisma.studentListTransaction.createMany(...)` (L562) | `student_id` (in `student_list_transaction`, **not** `user`) |
+| 3 | `insertUser` (HoP) | `prisma.hoPMajor.createMany({ data: [{ user_id, major_id }] })` (L159) | `user_id` (FK → `user.id`) |
+| 4 | `updateRole` | `prisma.user.findUnique({ id })` (L184) + `prisma.user.update({ id, role })` (L200) + `prisma.hoPMajor.deleteMany({ user_id })` (L193, L210) / `createMany({ user_id })` (L220) | `id`, `user_id` |
+| 5 | `uploadUserExcel` | `prisma.user.createMany({ data: validatedUsers, skipDuplicates: true })` (L272) | `lecturer_code` |
+| 6 | `removeUserExcel` | `prisma.user.deleteMany({ where: { NOT: [{ role: 'Admin' }, { role: 'SCC' }, { role: 'HoP' }] } })` (L288) | `role` |
+| 7 | `getAllTransaction` | `prisma.classTransaction.findMany({ where: { OR: [{ lecturer_code contains }, { lecturer_name contains }, …] } })` (L326) | `lecturer_code`, `lecturer_name` (in `class_transaction`, **not** `user`) |
+| 8 | `uploadTransactionExcel` | `prisma.classTransaction.createMany({ data: [{ lecturer_code, lecturer_name, … }], skipDuplicates: true })` (L424) | `lecturer_code`, `lecturer_name` (in `class_transaction`) |
+| 9 | `removeTransactionExcel` | `prisma.classTransaction.deleteMany({})` (L440) | — (deletes all rows; no identifier filter) |
+| 10 | `getAllStudent` | `prisma.studentListTransaction.findMany({ where: { OR: [{ student_id contains }, { student_name contains }, …] } })` (L473) | `student_id`, `student_name` (in `student_list_transaction`, **not** `user`) |
+| 11 | `uploadStudentExcel` | `prisma.studentListTransaction.createMany({ data: [{ student_id, … }], skipDuplicates: true })` (L562) | `student_id` (in `student_list_transaction`) |
+| 12 | `removeStudentExcel` | `prisma.studentListTransaction.deleteMany({})` (L579) | — (deletes all rows; no identifier filter) |
 
 **Breakages:**
 
-#### ⚠️ BREAKAGE 1 — `getUser` search misses `binusian_id` / `student_id` (minor)
+Methods 7–12 touch only the `class_transaction` / `student_list_transaction` tables (denormalized `lecturer_code` / `student_id` strings, no FK to `user`) and are **unaffected**. Methods 3–4 touch `hop_major.user_id` (FK → `user.id`), which the migration does not alter. Only `getUser`, `removeUserExcel`, and `uploadUserExcel` interact with the changed `user` columns.
+
+#### ⚠️ BREAKAGE — `getUser` search misses `binusian_id` / `student_id` (minor)
 
 The search `OR` (L36–44) only covers `lecturer_code`, `email`, `name`. It does **not** search `binusian_id` or `student_id`.
 
 - **Why it breaks:** Staff users seeded/imported without `binusian_id` are unaffected. But if a user row carries `binusian_id` (e.g. populated after a Microsoft login in the future), searching by Binusian ID in the admin user list returns nothing.
 - **Impact:** Low — currently no code populates `user.binusian_id`, so the field is `NULL` for every row and the gap is invisible today. It becomes a real bug once `binusian_id` starts being written.
-- **Fix:** Add `{ binusian_id: { contains: params.search } }` (and optionally `{ student_id: { contains: params.search } }`) to the `OR` clause.
+- **Fix (applied):** `{ student_id: { contains: params.search } }` and `{ binusian_id: { contains: params.search } }` added to the `OR` clause.
 
-#### 🔴 BREAKAGE 2 — `removeUserExcel` deletes Student user rows (critical)
+#### 🔴 BREAKAGE — `removeUserExcel` deletes Student user rows (critical)
 
 `removeUserExcel` (L286–298) deletes **every** user whose role is not `Admin`, `SCC`, or `HoP`. Before the schema change only `Lecturer` rows matched. After the change, any `user` row with `role = 'Student'` (created for students) will also be deleted.
 
 - **Why it breaks:** The endpoint's intent is "clear uploaded lecturer Excel data", but the `NOT IN (Admin, SCC, HoP)` filter now also sweeps student users.
 - **Impact:** High — a single admin "remove lecturer excel" action wipes all student identity rows from the `user` table, breaking login lookup for those students.
-- **Fix:** Explicitly target `Lecturer` only:
+- **Fix (applied):** Explicitly target `Lecturer` only:
   ```ts
   where: { role: 'Lecturer' }
   ```
-  or add `{ role: 'Student' }` to the `NOT` exclusion list.
+  (chosen over extending the `NOT` list, since the endpoint's intent is to clear uploaded lecturer data).
 
 #### ℹ️ Note — `uploadUserExcel` unique-dedup still works
 
@@ -125,7 +171,7 @@ The search `OR` (L36–44) only covers `lecturer_code`, `email`, `name`. It does
 | 2 | `insertProject` | `prisma.project.create({ data: { lecturer_id, student_leader_id } })` (L73) | `lecturer_id`, `student_leader_id` (both plain strings) |
 | 3 | `insertProject` | `prisma.projectGroup.createMany({ data: [{ student_id, student_name, student_binusian_id }] })` (L139) | `student_id` (NIM), `student_binusian_id` |
 | 4 | `getAllProject` | `prisma.project.findMany({ where: { projectGroups: { some: { student_name/student_id/student_binusian_id contains } } } })` (L199) | `student_id`, `student_name`, `student_binusian_id` (in `project_group`) |
-| 5 | `getDetailProject` | `prisma.project.findMany({ where: { id } })` (L285) | `id` |
+| 5 | `getDetailProject` | `prisma.project.findMany({ where: { id } })` (L285) | — (filters on project `id`; only *reads* `project_group.student_id` via `include`) |
 
 **Assessment — ✅ No breakage.**
 
@@ -180,7 +226,7 @@ Seeds projects with `lecturer_id` (`"D2345"`, `"D6789"`, `"D5432"`) and `student
 
 ### 3.5 Seed gap worth noting
 
-No seed creates a **student** row in the `user` table (i.e. a row with `student_id` set, `user_type = 'student'`, `role = 'Student'`). The migration's new `user.student_id` / `user.binansian_id` columns are never exercised by seeds. This means:
+No seed creates a **student** row in the `user` table (i.e. a row with `student_id` set, `user_type = 'student'`, `role = 'Student'`). The migration's new `user.student_id` / `user.binusian_id` columns are never exercised by seeds. This means:
 - The unique indexes on `student_id` and `binusian_id` are not validated by the seed run.
 - The auth flow for a student who *does* have a `user` row is not seed-tested.
 
@@ -201,10 +247,13 @@ If the team wants seed coverage for the new student-user path, add a seed user l
 
 ## 4. Breakage Summary
 
-| # | Handler | Severity | Issue |
-|---|---|---|---|
-| 1 | `adminUserHandler.getUser` | ⚠️ Minor | Search `OR` omits `binusian_id` / `student_id` |
-| 2 | `adminUserHandler.removeUserExcel` | 🔴 Critical | Deletes `role='Student'` user rows alongside lecturers |
-| 3 | (seed) `seed.ts` | ℹ️ Info | No seed exercises the new student-user columns |
+| # | Handler | Severity | Issue | Fix status |
+|---|---|---|---|---|
+| 1 | `authHandler.login` | 🔴 Critical | Student row with `NULL student_id` → `nim` becomes `binusian_id` or `""`, not a NIM; student class/group queries return no matches | ✅ applied |
+| 2 | `adminUserHandler.removeUserExcel` | 🔴 Critical | Deletes `role='Student'` user rows alongside lecturers | ✅ applied |
+| 3 | `adminUserHandler.getUser` | ⚠️ Minor | Search `OR` omits `binusian_id` / `student_id` | ✅ applied |
+| 4 | (seed) `seed.ts` | ℹ️ Info | No seed exercises the new student-user columns | 📝 documented |
 
-Everything else (`authHandler`, `userHandler`, `projectHandler`, `studentGroupHandler`) is **compatible** with the schema change because project/group student identifiers are denormalized NIM strings, not FKs to `User`.
+Verified with `pnpm --filter gitbee_backend build` (prisma generate + `tsc`) and `lint` — both exit 0.
+
+**Not breakages:** `userHandler`, `projectHandler`, and `studentGroupHandler` are compatible — project/group student identifiers are denormalized NIM strings, not FKs to `User`. `authHandler`'s `OR` lookup is also fine; only its `nim` derivation broke (see 2.1).
