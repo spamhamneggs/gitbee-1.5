@@ -73,10 +73,16 @@ if (isStaff) {
     }
     nim = user.student_id;
 } else {
-    // No local user row yet: fall back to Atlantis until accounts are backfilled.
-    nim = atlantisAccount?.NIM ?? "";
+    // No local user row yet: fall back to the Atlantis NIM until accounts are
+    // backfilled. Still fail loudly rather than emitting an empty NIM claim.
+    if (!atlantisAccount?.NIM) {
+        return sendErrorResponse(res, "No student_id (NIM) could be resolved for this account...", 401);
+    }
+    nim = atlantisAccount.NIM;
 }
 ```
+
+**Deliberately left unchanged — the staff path (`nim = user?.lecturer_code ?? ""`).** The migration makes `lecturer_code` nullable, so a staff row lacking one still yields `nim = ""`. This is *not* hardened with an error on purpose: `nim` is only written into the JWT and echoed to the client (`utils/auth/auth.ts`), and **no backend query reads it for staff** — staff-scoped lookups use `lecturer_code` / `email` directly. Erroring here would only risk blocking otherwise-valid staff logins for no benefit. Flagged for awareness rather than fixed.
 
 #### Remediation & sequencing (must precede removing Atlantis)
 
@@ -117,7 +123,7 @@ if (isStaff) {
 | 3 | `insertUser` (HoP) | `prisma.hoPMajor.createMany({ data: [{ user_id, major_id }] })` (L159) | `user_id` (FK → `user.id`) |
 | 4 | `updateRole` | `prisma.user.findUnique({ id })` (L184) + `prisma.user.update({ id, role })` (L200) + `prisma.hoPMajor.deleteMany({ user_id })` (L193, L210) / `createMany({ user_id })` (L220) | `id`, `user_id` |
 | 5 | `uploadUserExcel` | `prisma.user.createMany({ data: validatedUsers, skipDuplicates: true })` (L272) | `lecturer_code` |
-| 6 | `removeUserExcel` | `prisma.user.deleteMany({ where: { NOT: [{ role: 'Admin' }, { role: 'SCC' }, { role: 'HoP' }] } })` (L288) | `role` |
+| 6 | `removeUserExcel` | **pre-fix:** `prisma.user.deleteMany({ where: { NOT: [{ role: 'Admin' }, { role: 'SCC' }, { role: 'HoP' }] } })` → **fixed:** `where: { role: 'Lecturer', OR: [{ user_type: null }, { user_type: { not: 'student' } }] }` (L288–303) | `role`, `user_type` |
 | 7 | `getAllTransaction` | `prisma.classTransaction.findMany({ where: { OR: [{ lecturer_code contains }, { lecturer_name contains }, …] } })` (L326) | `lecturer_code`, `lecturer_name` (in `class_transaction`, **not** `user`) |
 | 8 | `uploadTransactionExcel` | `prisma.classTransaction.createMany({ data: [{ lecturer_code, lecturer_name, … }], skipDuplicates: true })` (L424) | `lecturer_code`, `lecturer_name` (in `class_transaction`) |
 | 9 | `removeTransactionExcel` | `prisma.classTransaction.deleteMany({})` (L440) | — (deletes all rows; no identifier filter) |
@@ -257,6 +263,6 @@ If the team wants seed coverage for the new student-user path, add a seed user l
 | 3 | `adminUserHandler.getUser` | ⚠️ Minor | Search `OR` omits `binusian_id` / `student_id` | ✅ applied |
 | 4 | (seed) `seed.ts` | ℹ️ Info | No seed exercises the new student-user columns | 📝 documented |
 
-Verified with `pnpm --filter gitbee_backend build` (prisma generate + `tsc`) and `lint` — both exit 0.
+Verified after the final edit with `pnpm --filter gitbee_backend exec tsc --noEmit` and `pnpm --filter gitbee_backend lint` — both exit 0. (The `pnpm build` wrapper is `prisma:generate && tsc`; `prisma generate` also succeeds, though the wrapper intermittently aborts on a sandbox cache-write restriction unrelated to the code.)
 
 **Not breakages:** `userHandler`, `projectHandler`, and `studentGroupHandler` are compatible — project/group student identifiers are denormalized NIM strings, not FKs to `User`. `authHandler`'s `OR` lookup is also fine; only its `nim` derivation broke (see 2.1).

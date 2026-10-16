@@ -85,8 +85,12 @@ export default class AuthHandler {
                 nim = user.student_id;
             } else {
                 // No local user row yet (students are not guaranteed one): fall back to
-                // Atlantis until every student account has been backfilled with a student_id.
-                nim = atlantisAccount?.NIM ?? "";
+                // the Atlantis NIM until every student account has been backfilled with a
+                // student_id. Still fail loudly rather than emitting an empty NIM claim.
+                if (!atlantisAccount?.NIM) {
+                    return sendErrorResponse(res, "No student_id (NIM) could be resolved for this account. Please contact an administrator.", 401);
+                }
+                nim = atlantisAccount.NIM;
             }
 
             let activeRole: string | undefined;
