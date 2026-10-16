@@ -288,7 +288,13 @@ export default class AdminUserHandler {
   static async removeUserExcel(req: Request, res: Response) {
     try {
       const deletedUsers = await prisma.user.deleteMany({
-        where: { role: "Lecturer" },
+        where: {
+          role: "Lecturer",
+          // Keep accounts that authHandler treats as students. user_type is
+          // nullable, so NULL must be matched explicitly: in SQL, NOT
+          // (user_type = 'student') is NULL (and thus excluded) when user_type IS NULL.
+          OR: [{ user_type: null }, { user_type: { not: "student" } }],
+        },
       });
 
       sendSuccessResponse(res, deletedUsers);

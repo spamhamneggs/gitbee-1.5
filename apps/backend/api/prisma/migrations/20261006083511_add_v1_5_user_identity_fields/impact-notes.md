@@ -143,11 +143,14 @@ The search `OR` (L36–44) only covers `lecturer_code`, `email`, `name`. It does
 
 - **Why it breaks:** The endpoint's intent is "clear uploaded lecturer Excel data", but the `NOT IN (Admin, SCC, HoP)` filter now also sweeps student users.
 - **Impact:** High — a single admin "remove lecturer excel" action wipes all student identity rows from the `user` table, breaking login lookup for those students.
-- **Fix (applied):** Explicitly target `Lecturer` only:
+- **Fix (applied):** target `Lecturer` only, while preserving accounts that `authHandler` treats as students (`user_type = 'student'`):
   ```ts
-  where: { role: 'Lecturer' }
+  where: {
+    role: 'Lecturer',
+    OR: [{ user_type: null }, { user_type: { not: 'student' } }],
+  }
   ```
-  (chosen over extending the `NOT` list, since the endpoint's intent is to clear uploaded lecturer data).
+  The `OR` is required because `user_type` is nullable: in SQL, `NOT (user_type = 'student')` evaluates to `NULL` (and is therefore excluded) when `user_type IS NULL`, which would wrongly keep ordinary lecturers. Review feedback caught that a bare `role: 'Lecturer'` filter still deleted `role='Lecturer', user_type='student'` rows, which `authHandler` recognises as students.
 
 #### ℹ️ Note — `uploadUserExcel` unique-dedup still works
 
@@ -250,7 +253,7 @@ If the team wants seed coverage for the new student-user path, add a seed user l
 | # | Handler | Severity | Issue | Fix status |
 |---|---|---|---|---|
 | 1 | `authHandler.login` | 🔴 Critical | Student row with `NULL student_id` → `nim` becomes `binusian_id` or `""`, not a NIM; student class/group queries return no matches | ✅ applied |
-| 2 | `adminUserHandler.removeUserExcel` | 🔴 Critical | Deletes `role='Student'` user rows alongside lecturers | ✅ applied |
+| 2 | `adminUserHandler.removeUserExcel` | 🔴 Critical | Deletes `role='Student'` rows — and `role='Lecturer', user_type='student'` rows — alongside ordinary lecturers | ✅ applied |
 | 3 | `adminUserHandler.getUser` | ⚠️ Minor | Search `OR` omits `binusian_id` / `student_id` | ✅ applied |
 | 4 | (seed) `seed.ts` | ℹ️ Info | No seed exercises the new student-user columns | 📝 documented |
 
