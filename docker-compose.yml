@@ -1,0 +1,76 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: gitbee-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-admin}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-gitbee}"
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-padmin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+      # Dev target: full source + devDependencies, so the override command
+      # below (`prisma ...`, `pnpm dev`) works. A plain `docker build`
+      # (no target) yields the minimal production runner instead.
+      target: build
+    container_name: gitbee-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-5001}:${BACKEND_CONTAINER_PORT:-5000}"
+    # ponytail: seed is destructive (deleteMany + AUTO_INCREMENT reset), so it
+    # runs only when SEED_ON_BOOT=true. First boot: SEED_ON_BOOT=true docker compose up backend
+    command: >
+      sh -c "cd /repo/apps/backend/api
+      && pnpm exec prisma migrate deploy
+      && pnpm exec prisma generate
+      && if [ \"$$SEED_ON_BOOT\" = \"true\" ]; then pnpm exec prisma db seed; fi
+      && pnpm --filter gitbee_backend dev"
+    environment:
+      DATABASE_URL: "${DATABASE_URL_DOCKER:-mysql://root:admin@mysql:3306/gitbee}"
+      WEB_URL: "${WEB_URL:-http://localhost:8000}"
+      JWT_SECRET: "${JWT_SECRET:-change-me}"
+      COOKIE_NAME: "${COOKIE_NAME:-gitbee_token}"
+      BLUEJACK_API: "${BLUEJACK_API:-}"
+      ATLANTIS_API: "${ATLANTIS_API:-}"
+      PORT: "${BACKEND_CONTAINER_PORT:-5000}"
+      SEED_ON_BOOT: "${SEED_ON_BOOT:-false}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      # Live-reload: host source overlays the image copy, so edits to
+      # apps/backend apply without rebuilding (tsx watch picks them up).
+      # The anonymous volume keeps the container-built (linux) node_modules,
+      # which the bind would otherwise hide and the host's macOS
+      # node_modules cannot replace (native binaries differ).
+      # After changing dependencies, rebuild instead: docker compose build backend
+      - ./apps/backend:/repo/apps/backend
+      - /repo/apps/backend/node_modules
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_BACKEND_API: "${NEXT_PUBLIC_BACKEND_API:-http://localhost:5001/api/}"
+    container_name: gitbee-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8000}:8000"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:

@@ -1,0 +1,76 @@
+"use client";
+
+import * as React from "react";
+
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+type DDMenuProps = {
+  filter: string;
+  options: { id: number; name: string }[];
+  setSelectedValue: (value: string) => void;
+  icon: React.ReactElement<{ className?: string }>;
+  className?: string;
+};
+
+const DDMenu: React.FC<DDMenuProps> = ({
+  filter,
+  options,
+  icon,
+  className,
+  setSelectedValue,
+}) => {
+  const [position, setPosition] = React.useState("");
+
+  const handleValueChange = (value: string) => {
+    setPosition(value);
+    setSelectedValue(value.toString());
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          className={`h-fit sm:h-full w-full sm:w-44 max-w-full min-w-0 shrink-0 flex justify-between text-xs sm:text-base items-center gap-3 py-3 group ${
+            className == null ? null : className
+          }`}
+        >
+          <div className="pr-2 border-r h-full flex justify-center items-center">
+            <span aria-hidden="true" className="[&>svg]:w-4 [&>svg]:h-4 group-hover:[&>svg]:stroke-primary-orange group-hover:[&>svg]:fill-primary-orange group-hover:[&>svg]:border-primary-orange">
+              {icon}
+            </span>
+          </div>
+          <div className="truncate min-w-0 flex-1 text-left text-primary-binus group-hover:text-primary-orange font-poppins font-normal text-xs sm:text-base">
+            {options.find((option) => option.id === Number(position))?.name ||
+              filter}
+          </div>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-44">
+        <DropdownMenuRadioGroup
+          value={position}
+          onValueChange={handleValueChange}
+        >
+          <DropdownMenuRadioItem key={0} value="">
+            {filter}
+          </DropdownMenuRadioItem>
+          {options.map((option) => (
+            <DropdownMenuRadioItem key={option.id} value={option.id.toString()}>
+              {option.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+export default DDMenu;

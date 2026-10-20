@@ -1,0 +1,12 @@
+node_modules/
+apps/backend/dist/
+apps/backend/tsconfig.tsbuildinfo
+apps/frontend/.next/
+apps/frontend/out/
+.env
+.env*.local
+*.log
+.DS_Store
+.turbo/
+.agents/
+skills-lock.json
