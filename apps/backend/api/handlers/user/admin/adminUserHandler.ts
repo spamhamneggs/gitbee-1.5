@@ -13,6 +13,10 @@ import {
   parseAndValidateCsvBuffer,
   type CsvUploadType,
 } from "../../../utils/csv/csvParser.js";
+import {
+  CsvImportAbortedError,
+  importCsvUsers,
+} from "../../../utils/csv/csvUserImport.js";
 
 interface AtlantisSemester {
   Description: string;
@@ -245,35 +249,35 @@ export default class AdminUserHandler {
       return sendErrorResponse(res, "No file uploaded", 400);
     }
 
+    let validation;
     try {
-      const result = await parseAndValidateCsvBuffer(file.buffer, uploadType);
-      if (result.validRows.length === 0) {
-        return sendErrorResponse(
-          res,
-          {
-            message: "No valid rows found in the CSV file.",
-            totalParsed: result.totalParsed,
-            validCount: 0,
-            errorCount: result.errors.length,
-            validRows: result.validRows,
-            errors: result.errors,
-          },
-          400
-        );
-      }
-
-      return sendSuccessResponse(res, {
-        totalParsed: result.totalParsed,
-        validCount: result.validRows.length,
-        errorCount: result.errors.length,
-        validRows: result.validRows,
-        errors: result.errors,
-      });
+      validation = await parseAndValidateCsvBuffer(file.buffer, uploadType);
     } catch (error) {
       return sendErrorResponse(
         res,
         getErrorMessage(error, "Failed to parse CSV file."),
         400
+      );
+    }
+    if (validation.totalRows === 0) {
+      return sendErrorResponse(res, "CSV file has no data rows.", 400);
+    }
+
+    // Bad rows are reported in failed_rows; the rest of the file is still imported.
+    try {
+      return sendSuccessResponse(res, await importCsvUsers(validation));
+    } catch (error) {
+      if (error instanceof CsvImportAbortedError) {
+        return sendErrorResponse(
+          res,
+          { message: error.message, ...error.report },
+          500
+        );
+      }
+      return sendErrorResponse(
+        res,
+        getErrorMessage(error, "Failed to import CSV file."),
+        500
       );
     }
   }

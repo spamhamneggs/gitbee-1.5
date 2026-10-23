@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, describe, it } from "node:test";
+import { after, afterEach, beforeEach, describe, it, mock } from "node:test";
 import cookieParser from "cookie-parser";
 import express from "express";
 import jwt from "jsonwebtoken";
@@ -13,6 +13,17 @@ const { createToken } = await import("../api/utils/auth/auth.js");
 const { default: adminUserRoutes } = await import(
   "../api/routes/user/admin/adminUserRoutes.js"
 );
+const { prismaUserStore } = await import("../api/utils/csv/csvUserImport.js");
+const { createFakeUserStore } = await import("./fakeUserStore.js");
+
+// Uploads insert users; point the Prisma-backed store at an in-memory table.
+let fakeStore = createFakeUserStore();
+beforeEach(() => {
+  fakeStore = createFakeUserStore();
+  mock.method(prismaUserStore, "emailExists", fakeStore.emailExists);
+  mock.method(prismaUserStore, "createUser", fakeStore.createUser);
+});
+afterEach(() => mock.restoreAll());
 
 const authToken = createToken(
   "test-user",
@@ -72,7 +83,7 @@ after(async () => {
 });
 
 describe("Admin CSV uploads", () => {
-  it("returns the validation summary for a valid CSV file", async () => {
+  it("inserts a valid CSV file and returns the import report", async () => {
     const csvBuffer = Buffer.from(validStudentCsv);
     const response = await request(app)
       .post(studentCsvPath)
@@ -82,23 +93,14 @@ describe("Admin CSV uploads", () => {
       })
       .set("Cookie", authCookie);
     assert.equal(response.status, 200);
-    assert.equal(response.status, 200);
     assert.deepEqual(response.body.data, {
-      totalParsed: 1,
-      validCount: 1,
-      errorCount: 0,
-      validRows: [
-        {
-          nim: "2501959296",
-          name: "Ada",
-          email: "ada@example.com",
-          binusian_id: "B123",
-          major_code: "COMP",
-          password: "secret",
-        },
-      ],
-      errors: [],
+      total_rows: 1,
+      successful_inserts: 1,
+      failed_rows: [],
     });
+    assert.equal(fakeStore.users[0]?.student_id, "2501959296");
+    assert.match(fakeStore.users[0]?.password ?? "", /^scrypt\$/);
+    assert.ok(!JSON.stringify(response.body).includes("secret"));
   });
 
   it("accepts standard CSV MIME types when the filename ends in .csv", async () => {
@@ -140,7 +142,8 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", authCookie);
 
     assert.equal(response.status, 200);
-    assert.equal(response.body.data.validRows[0].name, "Ada");
+    assert.equal(response.body.data.successful_inserts, 1);
+    assert.equal(fakeStore.users[0]?.name, "Ada");
   });
 
   it("accepts a staff CSV upload", async () => {
@@ -153,8 +156,9 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", authCookie);
 
     assert.equal(response.status, 200);
-    assert.equal(response.body.data.validCount, 1);
-    assert.equal(response.body.data.validRows[0].lecturer_code, "TY23-1");
+    assert.equal(response.body.data.successful_inserts, 1);
+    assert.equal(fakeStore.users[0]?.lecturer_code, "TY23-1");
+    assert.equal(fakeStore.users[0]?.role, "Lecturer");
   });
 
   it("rejects student headers on the staff endpoint", async () => {
@@ -193,16 +197,14 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", authCookie);
 
     assert.equal(response.status, 400);
-    assert.equal(response.body.errors.totalParsed, 0);
-    assert.equal(response.body.errors.validCount, 0);
-    assert.equal(response.body.errors.errorCount, 0);
+    assert.equal(response.body.errors, "CSV file has no data rows.");
   });
 
-  it("returns valid rows and line-specific validation errors", async () => {
+  it("inserts the valid rows and reports the failed ones by row number", async () => {
     const csv = [
       studentHeaders,
       "2501959296,Ada,ada@example.com,B123,COMP,secret",
-      "invalid,Bob,invalid,B123,COMP,secret",
+      "2501959297,Bob,invalid,B124,COMP,secret",
     ].join("\n");
     const response = await request(app)
       .post(studentCsvPath)
@@ -213,14 +215,81 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", authCookie);
 
     assert.equal(response.status, 200);
-    assert.equal(response.body.data.totalParsed, 2);
-    assert.equal(response.body.data.validCount, 1);
-    assert.equal(response.body.data.errorCount, 1);
-    assert.equal(response.body.data.errors[0].line, 3);
-    assert.match(response.body.data.errors[0].errors[0], /^email:/);
+    assert.deepEqual(response.body.data, {
+      total_rows: 2,
+      successful_inserts: 1,
+      failed_rows: [
+        {
+          row_number: 3,
+          identifier: "2501959297",
+          error: "email: must be a valid email address",
+        },
+      ],
+    });
   });
 
-  it("returns 400 when every data row fails validation", async () => {
+  it("reports duplicates against the database as failed rows", async () => {
+    fakeStore = createFakeUserStore([{ email: "old@example.com", lecturer_code: "TY23-1" }]);
+    mock.method(prismaUserStore, "emailExists", fakeStore.emailExists);
+    mock.method(prismaUserStore, "createUser", fakeStore.createUser);
+    const csv = [
+      staffHeaders,
+      "TY23-1,Ada,ada@example.com,B1,Lecturer,COMP,secret",
+      "TY23-2,Bob,old@example.com,B2,Lecturer,COMP,secret",
+      "TY23-3,Cy,cy@example.com,B3,SCC,COMP,secret",
+    ].join("\n");
+    const response = await request(app)
+      .post(staffCsvPath)
+      .attach("file", Buffer.from(csv), {
+        filename: "staff.csv",
+        contentType: "text/csv",
+      })
+      .set("Cookie", authCookie);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.data, {
+      total_rows: 3,
+      successful_inserts: 1,
+      failed_rows: [
+        { row_number: 2, identifier: "TY23-1", error: 'lecturer_code "TY23-1" is already in use' },
+        { row_number: 3, identifier: "TY23-2", error: 'email "old@example.com" is already in use' },
+      ],
+    });
+  });
+
+  it("returns 500 with the partial report when the database fails mid-import", async () => {
+    let calls = 0;
+    mock.method(prismaUserStore, "createUser", async (user: Parameters<typeof fakeStore.createUser>[0]) => {
+      calls += 1;
+      if (calls === 2) {
+        throw new Error("connect ECONNREFUSED");
+      }
+      return fakeStore.createUser(user);
+    });
+    const csv = [
+      studentHeaders,
+      "2501959296,Ada,ada@example.com,B1,COMP,secret",
+      "2501959297,Bob,bob@example.com,B2,COMP,secret",
+      "2501959298,Cy,cy@example.com,B3,COMP,secret",
+    ].join("\n");
+    const response = await request(app)
+      .post(studentCsvPath)
+      .attach("file", Buffer.from(csv), {
+        filename: "students.csv",
+        contentType: "text/csv",
+      })
+      .set("Cookie", authCookie);
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(response.body.errors, {
+      message: "Import stopped at row 3: connect ECONNREFUSED",
+      total_rows: 3,
+      successful_inserts: 1,
+      failed_rows: [],
+    });
+  });
+
+  it("reports every row as failed instead of rejecting the file", async () => {
     const csv =
       `${staffHeaders}\nTY23-1,Ada,invalid-email,B123,Lecturer,COMP;MATH,secret\n`;
     const response = await request(app)
@@ -231,10 +300,18 @@ describe("Admin CSV uploads", () => {
       })
       .set("Cookie", authCookie);
 
-    assert.equal(response.status, 400);
-    assert.equal(response.body.errors.totalParsed, 1);
-    assert.equal(response.body.errors.errorCount, 1);
-    assert.equal(response.body.errors.errors[0].line, 2);
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.data, {
+      total_rows: 1,
+      successful_inserts: 0,
+      failed_rows: [
+        {
+          row_number: 2,
+          identifier: "TY23-1",
+          error: "email: must be a valid email address",
+        },
+      ],
+    });
   });
 
   it("returns 400 when no file is attached", async () => {

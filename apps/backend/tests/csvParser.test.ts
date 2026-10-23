@@ -29,31 +29,39 @@ describe("CSV parsing and row validation", () => {
 
     const result = await parseAndValidateCsvBuffer(contents, "student");
 
-    assert.equal(result.totalParsed, 1);
+    assert.equal(result.totalRows, 1);
     assert.deepEqual(result.validRows[0], {
-      nim: "2501959296",
-      name: "Ada",
-      email: "ada@example.com",
-      binusian_id: "B123",
-      major_code: "COMP",
-      password: "secret",
+      row_number: 2,
+      identifier: "2501959296",
+      data: {
+        nim: "2501959296",
+        name: "Ada",
+        email: "ada@example.com",
+        binusian_id: "B123",
+        major_code: "COMP",
+        password: "secret",
+      },
     });
-    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.failedRows, []);
   });
 
-  it("reports invalid rows using data-row line numbers", async () => {
+  it("reports invalid rows as {row_number, identifier, error}", async () => {
     const result = await parseAndValidateCsvBuffer(
       Buffer.from(
-        `${studentHeaders}\n2501959296,Ada,ada@example.com,B123,COMP,secret\ninvalid,Bob,invalid,B123,COMP,secret\n`
+        `${studentHeaders}\n2501959296,Ada,ada@example.com,B123,COMP,secret\n2501959297,Bob,invalid,B123,COMP,secret\n`
       ),
       "student"
     );
 
-    assert.equal(result.totalParsed, 2);
+    assert.equal(result.totalRows, 2);
     assert.equal(result.validRows.length, 1);
-    assert.equal(result.errors.length, 1);
-    assert.equal(result.errors[0]?.line, 3);
-    assert.match(result.errors[0]?.errors[0] ?? "", /^email:/);
+    assert.deepEqual(result.failedRows, [
+      {
+        row_number: 3,
+        identifier: "2501959297",
+        error: "email: must be a valid email address",
+      },
+    ]);
   });
 
   it("rejects CSV files missing required columns", async () => {
@@ -86,15 +94,19 @@ describe("CSV parsing and row validation", () => {
       "staff"
     );
 
-    assert.equal(result.totalParsed, 1);
+    assert.equal(result.totalRows, 1);
     assert.deepEqual(result.validRows[0], {
-      lecturer_code: "TY23-1",
-      name: "Ada",
-      email: "ada@example.com",
-      binusian_id: "B123",
-      role: "Lecturer",
-      major_codes: "COMP;MATH",
-      password: "secret",
+      row_number: 2,
+      identifier: "TY23-1",
+      data: {
+        lecturer_code: "TY23-1",
+        name: "Ada",
+        email: "ada@example.com",
+        binusian_id: "B123",
+        role: "Lecturer",
+        major_codes: "COMP;MATH",
+        password: "secret",
+      },
     });
   });
 
@@ -106,7 +118,7 @@ describe("CSV parsing and row validation", () => {
       "student"
     );
 
-    assert.equal(result.validRows[0]?.name, "Ada");
+    assert.equal(result.validRows[0]?.data.name, "Ada");
   });
 
   it("returns zero parsed rows when the file contains only a valid header", async () => {
@@ -116,9 +128,9 @@ describe("CSV parsing and row validation", () => {
     );
 
     assert.deepEqual(result, {
-      totalParsed: 0,
+      totalRows: 0,
       validRows: [],
-      errors: [],
+      failedRows: [],
     });
   });
 
@@ -130,9 +142,10 @@ describe("CSV parsing and row validation", () => {
       "student"
     );
 
-    assert.equal(result.totalParsed, 1);
+    assert.equal(result.totalRows, 1);
     assert.equal(result.validRows.length, 1);
-    assert.deepEqual(result.errors, []);
+    assert.equal(result.validRows[0]?.row_number, 3);
+    assert.deepEqual(result.failedRows, []);
   });
 
   it("parses quoted delimiters and embedded newlines in values", async () => {
@@ -143,9 +156,9 @@ describe("CSV parsing and row validation", () => {
       "student"
     );
 
-    assert.equal(result.totalParsed, 1);
-    assert.equal(result.validRows[0]?.name, "Ada, A.\nLovelace");
-    assert.deepEqual(result.errors, []);
+    assert.equal(result.totalRows, 1);
+    assert.equal(result.validRows[0]?.data.name, "Ada, A.\nLovelace");
+    assert.deepEqual(result.failedRows, []);
   });
 
   it("reports physical line numbers after rows with embedded newlines", async () => {
@@ -156,7 +169,7 @@ describe("CSV parsing and row validation", () => {
       "student"
     );
 
-    assert.equal(result.errors[0]?.line, 5);
+    assert.equal(result.failedRows[0]?.row_number, 5);
   });
 
   it("rejects duplicate headers instead of silently overwriting fields", async () => {
@@ -171,15 +184,36 @@ describe("CSV parsing and row validation", () => {
     );
   });
 
-  it("rejects rows with a different number of fields than the header", async () => {
-    await assert.rejects(
-      parseAndValidateCsvBuffer(
-        Buffer.from(
-          `${studentHeaders}\n2501959296,Ada,ada@example.com,B123,COMP\n`
-        ),
-        "student"
-      )
+  it("reports rows with a different number of fields than the header as failed rows", async () => {
+    const result = await parseAndValidateCsvBuffer(
+      Buffer.from(
+        [
+          studentHeaders,
+          "2501959296,Ada,ada@example.com,B123,COMP",
+          "2501959297,Bob,bob@example.com,B124,COMP,secret",
+          "2501959298,Cy,cy@example.com,B125,COMP,secret,extra",
+        ].join("\n")
+      ),
+      "student"
     );
+
+    assert.equal(result.totalRows, 3);
+    assert.deepEqual(
+      result.validRows.map((row) => row.identifier),
+      ["2501959297"]
+    );
+    assert.deepEqual(result.failedRows, [
+      {
+        row_number: 2,
+        identifier: "2501959296",
+        error: "row must have 6 fields to match the header",
+      },
+      {
+        row_number: 4,
+        identifier: "2501959298",
+        error: "row must have 6 fields to match the header",
+      },
+    ]);
   });
 
   it("rejects malformed quoted CSV data", async () => {
@@ -206,12 +240,60 @@ describe("CSV parsing and row validation", () => {
       "student"
     );
 
-    assert.equal(result.totalParsed, 1);
+    assert.equal(result.totalRows, 1);
     assert.equal(result.validRows.length, 0);
-    assert.equal(result.errors[0]?.line, 2);
+    assert.equal(result.failedRows[0]?.row_number, 2);
+    assert.equal(result.failedRows[0]?.identifier, null);
     assert.deepEqual(
-      result.errors[0]?.errors.map((message) => message.split(":")[0]),
+      result.failedRows[0]?.error
+        .split("; ")
+        .map((message) => message.split(":")[0]),
       ["nim", "name", "email", "major_code", "password"]
+    );
+  });
+
+  it("turns a blank binusian_id into null so it cannot collide on the unique index", async () => {
+    const result = await parseAndValidateCsvBuffer(
+      Buffer.from(`${studentHeaders}\n2501959296,Ada,ada@example.com,,COMP,secret\n`),
+      "student"
+    );
+
+    assert.equal(result.validRows[0]?.data.binusian_id, null);
+  });
+
+  it("accepts staff roles case-insensitively and rejects unknown roles", async () => {
+    const result = await parseAndValidateCsvBuffer(
+      Buffer.from(
+        [
+          staffHeaders,
+          "TY23-1,Ada,ada@example.com,B1,hop,COMP,secret",
+          "TY23-2,Bob,bob@example.com,B2,Student,COMP,secret",
+        ].join("\n")
+      ),
+      "staff"
+    );
+
+    assert.equal(result.validRows[0]?.data.role, "HoP");
+    assert.deepEqual(result.failedRows, [
+      {
+        row_number: 3,
+        identifier: "TY23-2",
+        error: "role: must be one of Lecturer, Admin, SCC, HoP",
+      },
+    ]);
+  });
+
+  it("rejects values longer than the matching user column", async () => {
+    const result = await parseAndValidateCsvBuffer(
+      Buffer.from(
+        `${studentHeaders}\n${"9".repeat(51)},${"a".repeat(151)},ada@example.com,B123,COMP,secret\n`
+      ),
+      "student"
+    );
+
+    assert.equal(
+      result.failedRows[0]?.error,
+      "nim: must be at most 50 characters; name: must be at most 150 characters"
     );
   });
 });
