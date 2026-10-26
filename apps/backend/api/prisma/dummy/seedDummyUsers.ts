@@ -45,14 +45,16 @@ export async function seedDummyUsers(
     const csv = buildDummyCsv(type, { ...generator, count, broken: false });
     const validation = await parseAndValidateCsvBuffer(Buffer.from(csv), type);
     const report = await importCsvUsers(validation, store);
-    console.log(`Dummy ${type} users: ${report.successful_inserts} of ${report.total_rows} inserted.`);
+    console.log(`Dummy ${type} users: ${report.createdCount} of ${report.totalParsed} inserted.`);
 
     // HoP rows are expected here: the importer can't link them to majors until
     // majors have codes. Group failures by reason instead of printing each row.
     const reasons = new Map<string, number>();
-    for (const { error } of report.failed_rows) {
-      const reason = error.replace(/"[^"]*"/g, "…");
-      reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+    for (const { errors } of report.errors) {
+      for (const error of errors) {
+        const reason = error.replace(/"[^"]*"/g, "…");
+        reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+      }
     }
     for (const [reason, failures] of reasons) {
       console.log(`  ${failures} skipped: ${reason}`);

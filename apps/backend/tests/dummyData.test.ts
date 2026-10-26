@@ -122,22 +122,33 @@ describe("sample CSV files", () => {
       // Row 1 is the header and no cell spans lines, so data row i is line i + 2.
       const expected = rows.flatMap((row, index) => {
         if (row.expectedError) {
-          return [{ row_number: index + 2, error: row.expectedError }];
+          const duplicate =
+            /^(nim|email|lecturer_code|binusian_id) ".+" is already in use$/.test(
+              row.expectedError
+            );
+          return [{
+            line: index + 2,
+            error: duplicate
+              ? "Duplicate record within the uploaded file"
+              : row.expectedError,
+          }];
         }
         // Well-formed HoP rows are rejected until majors have codes.
         if (type === "staff" && row.cells[roleIndex] === "HoP") {
-          return [{ row_number: index + 2, error: "can't be resolved" }];
+          return [{ line: index + 2, error: "can't be resolved" }];
         }
         return [];
       });
-      const actual = report.failed_rows.map(({ row_number, error }) => ({
-        row_number,
-        error: error.includes("can't be resolved") ? "can't be resolved" : error,
+      const actual = report.errors.map(({ line, errors }) => ({
+        line,
+        error: errors[0]?.includes("can't be resolved")
+          ? "can't be resolved"
+          : errors[0],
       }));
 
       assert.deepEqual(actual, expected);
-      assert.equal(report.total_rows, rows.length);
-      assert.equal(report.successful_inserts, rows.length - expected.length);
+      assert.equal(report.totalParsed, rows.length);
+      assert.equal(report.createdCount, rows.length - expected.length);
       assert.ok(
         rows.filter((row) => row.expectedError).length >= 7,
         "has a meaningful set of broken rows"
@@ -169,6 +180,22 @@ describe("dummy user seeding", () => {
       ["Admin", "Lecturer", "SCC", "Student"]
     );
     assert.equal(store.users.length, 6 + 6);
+    assert.ok(store.users.every((user) => user.password.startsWith("scrypt$")));
+  });
+
+  it("runs the documented 200-student / 40-staff volume through the import path", async () => {
+    const store = createFakeUserStore();
+    const log = console.log;
+    console.log = () => undefined;
+    try {
+      await seedDummyUsers({ students: 200, staff: 40 }, { store, seed: 35 });
+    } finally {
+      console.log = log;
+    }
+
+    assert.equal(store.users.length, 230);
+    assert.equal(store.users.filter((user) => user.role === "Student").length, 200);
+    assert.equal(store.users.filter((user) => user.role !== "Student").length, 30);
     assert.ok(store.users.every((user) => user.password.startsWith("scrypt$")));
   });
 });

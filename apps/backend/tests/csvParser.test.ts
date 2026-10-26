@@ -296,4 +296,19 @@ describe("CSV parsing and row validation", () => {
       "nim: must be at most 50 characters; name: must be at most 150 characters"
     );
   });
+
+  it("parses and validates a 10,000-row student file", async () => {
+    const rows = Array.from({ length: 10_000 }, (_, index) =>
+      `${2500000000 + index},Student ${index},student${index}@example.com,,COMP,secret`
+    );
+    const result = await parseAndValidateCsvBuffer(
+      Buffer.from(`${studentHeaders}\n${rows.join("\n")}`),
+      "student"
+    );
+
+    assert.equal(result.totalRows, 10_000);
+    assert.equal(result.validRows.length, 10_000);
+    assert.deepEqual(result.failedRows, []);
+    assert.equal(result.validRows[9_999]?.row_number, 10_001);
+  });
 });
