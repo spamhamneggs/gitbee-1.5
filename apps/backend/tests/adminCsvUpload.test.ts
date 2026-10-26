@@ -21,6 +21,8 @@ let fakeStore = createFakeUserStore();
 beforeEach(() => {
   fakeStore = createFakeUserStore();
   mock.method(prismaUserStore, "findExistingUsers", fakeStore.findExistingUsers);
+  // Stateless, so tests that swap in a new fake store don't need to re-mock it.
+  mock.method(prismaUserStore, "collationKeys", fakeStore.collationKeys);
   mock.method(prismaUserStore, "createMany", fakeStore.createMany);
 });
 afterEach(() => mock.restoreAll());

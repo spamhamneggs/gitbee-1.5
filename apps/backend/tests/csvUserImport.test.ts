@@ -280,6 +280,82 @@ describe("CSV user import", () => {
     ]);
   });
 
+  // Issue #21: MySQL rejected these as duplicates, but the report had no error.
+  it("treats IDs that differ only in accents as duplicates, like MySQL", async () => {
+    const store = createFakeUserStore([
+      { email: "ada@example.com", student_id: "STUDÉNT-1" },
+    ]);
+    const report = await importCsvUsers(
+      await parseAndValidateCsvBuffer(
+        csv(studentHeaders, "STUDENT-1,Bob,bob@example.com,,COMP,secret"),
+        "student"
+      ),
+      store
+    );
+
+    assert.deepEqual(report, {
+      totalParsed: 1,
+      createdCount: 0,
+      skippedCount: 1,
+      failedCount: 0,
+      errors: [
+        {
+          line: 2,
+          errors: ["User with email or ID already exists in the system"],
+        },
+      ],
+    });
+  });
+
+  it("rejects in-file duplicates that differ only in accents", async () => {
+    const store = createFakeUserStore();
+    const report = await importCsvUsers(
+      await parseAndValidateCsvBuffer(
+        csv(
+          studentHeaders,
+          "STUDÉNT-1,Ada,ada@example.com,,COMP,secret",
+          "STUDENT-1,Bob,bob@example.com,,COMP,secret"
+        ),
+        "student"
+      ),
+      store
+    );
+
+    assert.equal(report.createdCount, 1);
+    assert.deepEqual(report.errors, [
+      { line: 3, errors: ["Duplicate record within the uploaded file"] },
+    ]);
+  });
+
+  it("compares identities by the store's collation keys, not JavaScript case folding", async () => {
+    // MySQL's utf8mb4_unicode_ci equates ß and ss; no lowercasing does.
+    const store = createFakeUserStore();
+    store.findExistingUsers = async () => [
+      { email: "old@example.com", binusian_id: "Straße", student_id: null, lecturer_code: null },
+    ];
+    store.collationKeys = async (values) =>
+      new Map(values.map((value) => [value, value.toLowerCase().replace(/ß/g, "ss")]));
+
+    const report = await importCsvUsers(
+      await parseAndValidateCsvBuffer(
+        csv(
+          studentHeaders,
+          "2501959296,Ada,ada@example.com,STRASSE,COMP,secret",
+          "2501959297,Bob,bob@example.com,Fluß,COMP,secret",
+          "2501959298,Cy,cy@example.com,FLUSS,COMP,secret"
+        ),
+        "student"
+      ),
+      store
+    );
+
+    assert.deepEqual(report.errors, [
+      { line: 2, errors: ["User with email or ID already exists in the system"] },
+      { line: 4, errors: ["Duplicate record within the uploaded file"] },
+    ]);
+    assert.deepEqual(store.users.map((user) => user.binusian_id), ["Fluß"]);
+  });
+
   it("lets only one of two concurrent imports insert the same email", async () => {
     const store = createFakeUserStore();
     const upload = (nim: string) =>

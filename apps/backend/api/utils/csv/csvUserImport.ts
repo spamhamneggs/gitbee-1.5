@@ -43,8 +43,14 @@ export interface CsvUserStore {
   findExistingUsers(
     identities: CsvUserIdentity[]
   ): Promise<Partial<CsvUserIdentity>[]>;
+  // A comparison key for each value under the user table's collation: two
+  // values collide on a unique index exactly when their keys are equal.
+  collationKeys(values: string[]): Promise<Map<string, string>>;
   createMany(users: NewCsvUser[]): Promise<number>;
 }
+
+// Collation of the user table's identity columns (set by the 0_init migration).
+export const USER_TABLE_COLLATION = "utf8mb4_unicode_ci";
 
 const IDENTITY_COLUMNS = [
   "email",
@@ -77,6 +83,21 @@ export const prismaUserStore: CsvUserStore = {
         lecturer_code: true,
       },
     });
+  },
+  // utf8mb4_unicode_ci ignores case and accents and has rules JavaScript can't
+  // reproduce (ß = ss, full-width = ASCII, ignorable characters), so MySQL
+  // computes the keys. Trim trailing space weights for PAD SPACE equality,
+  // including Unicode spaces and spaces followed by ignorable characters.
+  async collationKeys(values) {
+    const distinct = [...new Set(values)];
+    if (distinct.length === 0) return new Map();
+
+    const rows = await prisma.$queryRaw<{ value: string; sort_key: string }[]>`
+      SELECT input.value,
+             HEX(TRIM(TRAILING WEIGHT_STRING(_utf8mb4' ' COLLATE ${Prisma.raw(USER_TABLE_COLLATION)})
+                      FROM WEIGHT_STRING(input.value COLLATE ${Prisma.raw(USER_TABLE_COLLATION)}))) AS sort_key
+      FROM JSON_TABLE(${JSON.stringify(distinct)}, '$[*]' COLUMNS (value VARCHAR(255) PATH '$')) AS input`;
+    return new Map(rows.map((row) => [row.value, row.sort_key]));
   },
   async createMany(users) {
     if (users.length === 0) return 0;
@@ -116,21 +137,6 @@ function toNewUser(
   };
 }
 
-function normalizedIdentityKeys(row: StudentCsvRow | StaffCsvRow): string[] {
-  const keys = [`email:${row.email.trim().toLowerCase()}`];
-  const binusianId = row.binusian_id?.trim().toLowerCase();
-  if (binusianId) keys.push(`binusian_id:${binusianId}`);
-
-  if ("nim" in row) {
-    const studentId = row.nim.trim().toLowerCase();
-    if (studentId) keys.push(`student_id:${studentId}`);
-  } else {
-    const lecturerCode = row.lecturer_code.trim().toLowerCase();
-    if (lecturerCode) keys.push(`lecturer_code:${lecturerCode}`);
-  }
-  return keys;
-}
-
 function identityFromRow(row: StudentCsvRow | StaffCsvRow): CsvUserIdentity {
   if ("nim" in row) {
     return {
@@ -148,22 +154,12 @@ function identityFromRow(row: StudentCsvRow | StaffCsvRow): CsvUserIdentity {
   };
 }
 
-function isDuplicate(
-  existing: Partial<CsvUserIdentity> | null,
-  identity: CsvUserIdentity
-): boolean {
-  return (
-    existing !== null &&
-    IDENTITY_COLUMNS.some((column) => {
-      const left = existing[column];
-      const right = identity[column];
-      return (
-        left != null &&
-        right != null &&
-        left.trim().toLowerCase() === right.trim().toLowerCase()
-      );
-    })
-  );
+// The unique-index values an identity occupies, e.g. { column: "email", value }.
+function identityEntries(identity: Partial<CsvUserIdentity>) {
+  return IDENTITY_COLUMNS.flatMap((column) => {
+    const value = identity[column];
+    return value ? [{ column, value }] : [];
+  });
 }
 
 function validationErrorMessage(error: string): string {
@@ -205,10 +201,21 @@ export async function importCsvUsers<T extends CsvUploadType>(
     importableRows.push(row);
   }
 
-  const identities = importableRows.map((row) => identityFromRow(row.data));
+  const rowsToCheck = importableRows.map((row) => ({
+    row,
+    identity: identityFromRow(row.data),
+  }));
   let existingUsers: Partial<CsvUserIdentity>[];
+  let collationKeys: Map<string, string>;
   try {
-    existingUsers = await store.findExistingUsers(identities);
+    existingUsers = await store.findExistingUsers(
+      rowsToCheck.map(({ identity }) => identity)
+    );
+    collationKeys = await store.collationKeys(
+      [...rowsToCheck.map(({ identity }) => identity), ...existingUsers].flatMap(
+        (identity) => identityEntries(identity).map(({ value }) => value)
+      )
+    );
   } catch (error) {
     for (const row of importableRows) {
       errors.push({
@@ -222,14 +229,18 @@ export async function importCsvUsers<T extends CsvUploadType>(
     return report();
   }
 
+  // Compare identities the way the unique indexes do (see collationKeys);
+  // JavaScript case folding misses accents, ß = ss and the like.
+  const indexKeys = (identity: Partial<CsvUserIdentity>) =>
+    identityEntries(identity).map(
+      ({ column, value }) => `${column}:${collationKeys.get(value) ?? value}`
+    );
+  const existingKeys = new Set(existingUsers.flatMap(indexKeys));
   const seenKeys = new Set<string>();
   const uniqueRows: typeof validation.validRows = [];
-  for (const [index, row] of importableRows.entries()) {
-    const identity = identities[index];
-    const databaseDuplicate =
-      identity !== undefined &&
-      existingUsers.some((existing) => isDuplicate(existing, identity));
-    if (databaseDuplicate) {
+  for (const { row, identity } of rowsToCheck) {
+    const keys = indexKeys(identity);
+    if (keys.some((key) => existingKeys.has(key))) {
       skippedCount += 1;
       errors.push({
         line: row.row_number,
@@ -238,7 +249,6 @@ export async function importCsvUsers<T extends CsvUploadType>(
       continue;
     }
 
-    const keys = normalizedIdentityKeys(row.data);
     if (keys.some((key) => seenKeys.has(key))) {
       skippedCount += 1;
       errors.push({

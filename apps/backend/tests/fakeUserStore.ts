@@ -7,8 +7,12 @@ import type {
 } from "../api/utils/csv/csvUserImport.js";
 
 const uniqueColumns = ["student_id", "lecturer_code", "binusian_id", "email"] as const;
-// MySQL's default collation compares these case-insensitively.
-const same = (a: string | null | undefined, b: string) => a?.toLowerCase() === b.toLowerCase();
+// The user table's utf8mb4_unicode_ci ignores case, accents and trailing spaces.
+// Close enough for unit tests; csvUserImport.mysql.test.ts checks the real one.
+const collationKey = (value: string) =>
+  value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/ +$/, "");
+const same = (a: string | null | undefined, b: string) =>
+  a != null && collationKey(a) === collationKey(b);
 
 // Same shape Prisma 7 + @prisma/adapter-mariadb throws for MySQL error 1062.
 export function uniqueViolation(index: string) {
@@ -50,6 +54,9 @@ export function createFakeUserStore(existing: Partial<NewCsvUser>[] = []) {
           student_id: candidate.student_id,
           lecturer_code: candidate.lecturer_code,
         }));
+    },
+    async collationKeys(values) {
+      return new Map(values.map((value) => [value, collationKey(value)]));
     },
     async createMany(newUsers) {
       let count = 0;

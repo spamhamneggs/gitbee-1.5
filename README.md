@@ -93,6 +93,17 @@ pnpm --filter gitbee_backend dummy:csv --students 500 --valid-only --out ./tmp-c
 SEED_ON_BOOT=true SEED_DUMMY_STUDENTS=200 SEED_DUMMY_STAFF=40 docker compose up --build
 ```
 
+## Tests
+
+`pnpm test` runs every test without a database. Tests that need real MySQL behaviour, such as how the `user` table's collation treats duplicate IDs, are skipped unless `TEST_DATABASE_URL` points at a migrated database. Use a separate database: the tests add and then delete their own rows, but never point them at real data.
+
+```bash
+docker compose up -d mysql
+docker exec gitbee-mysql mysql -uroot -padmin -e "CREATE DATABASE IF NOT EXISTS gitbee_test"
+DATABASE_URL=mysql://root:admin@localhost:3306/gitbee_test pnpm --filter gitbee_backend exec prisma migrate deploy --config ./api/prisma.config.ts
+TEST_DATABASE_URL=mysql://root:admin@localhost:3306/gitbee_test pnpm test
+```
+
 ## Env wiring
 
 Use the root `.env` as the shared source of truth for this monorepo.
