@@ -8,6 +8,7 @@ import { users } from "./seeds/user.js";
 import { deadlines } from "./seeds/deadline.js";
 import { roles } from "./seeds/role.js";
 import { students } from "./seeds/student.js";
+import { dummyCountsFromEnv, seedDummyUsers } from "./dummy/seedDummyUsers.js";
 
 const studentNamesById = Object.fromEntries(
     students.map(({ student_id, student_name }) => [student_id, student_name])
@@ -220,6 +221,11 @@ async function main() {
     }
     console.log('Project data seeded successfully.');
 
+    // Optional extra users, e.g. SEED_DUMMY_STUDENTS=200 SEED_DUMMY_STAFF=40
+    const dummyCounts = dummyCountsFromEnv();
+    if (dummyCounts.students > 0 || dummyCounts.staff > 0) {
+        await seedDummyUsers(dummyCounts);
+    }
 }
 
 main().catch(e => {

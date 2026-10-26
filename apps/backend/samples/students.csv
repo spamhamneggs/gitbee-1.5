@@ -1,0 +1,35 @@
+nim,name,email,binusian_id,major_code,password
+2702000001,Putri Santoso,putri.santoso1@binus.ac.id,BN100000001,CS,GitbeeDummy#2026
+2702000002,Made Purnomo,made.purnomo2@binus.ac.id,BN100000002,GAT,GitbeeDummy#2026
+,Broken Row,broken.student1@binus.ac.id,,CS,GitbeeDummy#2026
+2702000003,Rina Kusuma,rina.kusuma3@binus.ac.id,BN100000003,MAT,GitbeeDummy#2026
+2702000004,Oktavia Hartono,oktavia.hartono4@binus.ac.id,BN100000004,DS,GitbeeDummy#2026
+2702000005,Kartika Purnomo,kartika.purnomo5@binus.ac.id,BN100000005,CYBER,GitbeeDummy#2026
+2709000002,Broken Row,not-an-email,,CS,GitbeeDummy#2026
+2702000006,Kartika Gunawan,kartika.gunawan6@binus.ac.id,BN100000006,CS,GitbeeDummy#2026
+2702000007,Dewi Halim,dewi.halim7@binus.ac.id,BN100000007,GAT,GitbeeDummy#2026
+2709000003,Broken Row,broken.student3@binus.ac.id,,,GitbeeDummy#2026
+2702000008,Fajar Saputra,fajar.saputra8@binus.ac.id,BN100000008,MAT,GitbeeDummy#2026
+2702000009,Lestari Wijaya,lestari.wijaya9@binus.ac.id,BN100000009,DS,GitbeeDummy#2026
+2702000010,Joko Salim,joko.salim10@binus.ac.id,,CYBER,GitbeeDummy#2026
+2709000004,Broken Row,broken.student4@binus.ac.id,,CS,
+2702000011,Gita Saputra,gita.saputra11@binus.ac.id,BN100000011,CS,GitbeeDummy#2026
+2702000012,Budi Halim,budi.halim12@binus.ac.id,BN100000012,GAT,GitbeeDummy#2026
+2709000005,Exceedingly Long Exceedingly Long Exceedingly Long Exceedingly Long Exceedingly Long Exceedingly Long Exceedingly Long Exceedingly Long Exceedingly Long Name,broken.student5@binus.ac.id,,CS,GitbeeDummy#2026
+2702000013,Oktavia Salim,oktavia.salim13@binus.ac.id,BN100000013,MAT,GitbeeDummy#2026
+2702000014,Hendra Hidayat,hendra.hidayat14@binus.ac.id,BN100000014,DS,GitbeeDummy#2026
+2702000015,Putri Siregar,putri.siregar15@binus.ac.id,BN100000015,CYBER,GitbeeDummy#2026
+,Broken Row,also-not-an-email,,CS,GitbeeDummy#2026
+2702000016,Teguh Saputra,teguh.saputra16@binus.ac.id,BN100000016,CS,GitbeeDummy#2026
+2702000017,Sari Gunawan,sari.gunawan17@binus.ac.id,BN100000017,GAT,GitbeeDummy#2026
+2709000007,Broken Row,broken.student7@binus.ac.id,,CS
+2702000018,Teguh Purnomo,teguh.purnomo18@binus.ac.id,BN100000018,MAT,GitbeeDummy#2026
+2702000019,Fajar Salim,fajar.salim19@binus.ac.id,BN100000019,DS,GitbeeDummy#2026
+2702000020,Dewi Nugroho,dewi.nugroho20@binus.ac.id,,CYBER,GitbeeDummy#2026
+2702000001,Broken Row,broken.student8@binus.ac.id,,CS,GitbeeDummy#2026
+2702000021,Joko Hidayat,joko.hidayat21@binus.ac.id,BN100000021,CS,GitbeeDummy#2026
+2702000022,Dewi Hartono,dewi.hartono22@binus.ac.id,BN100000022,GAT,GitbeeDummy#2026
+2709000009,Broken Row,putri.santoso1@binus.ac.id,,CS,GitbeeDummy#2026
+2702000023,Nanda Pratama,nanda.pratama23@binus.ac.id,BN100000023,MAT,GitbeeDummy#2026
+2702000024,Gita Santoso,gita.santoso24@binus.ac.id,BN100000024,DS,GitbeeDummy#2026
+2702000025,Oktavia Putra,oktavia.putra25@binus.ac.id,BN100000025,CYBER,GitbeeDummy#2026

@@ -74,6 +74,12 @@ export type CsvRow<T extends CsvUploadType> = z.output<
 export type StudentCsvRow = CsvRow<"student">;
 export type StaffCsvRow = CsvRow<"staff">;
 
+// Header row for each file type, in schema order (used to write sample files).
+export const csvHeaders = {
+  student: Object.keys(studentCsvRowSchema.shape),
+  staff: Object.keys(staffCsvRowSchema.shape),
+} satisfies Record<CsvUploadType, string[]>;
+
 export interface CsvFailedRow {
   row_number: number;
   identifier: string | null;

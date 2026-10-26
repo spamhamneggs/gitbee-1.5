@@ -1,0 +1,21 @@
+lecturer_code,name,email,binusian_id,role,major_codes,password
+D5001,Eka Nugroho,eka.nugroho1@binus.edu,BN200000001,Lecturer,CS,GitbeeDummy#2026
+X9001,Broken Row,broken.staff1@binus.edu,,Dean,CS,GitbeeDummy#2026
+D5002,Teguh Siregar,teguh.siregar2@binus.edu,BN200000002,Admin,GAT,GitbeeDummy#2026
+,Broken Row,broken.staff2@binus.edu,,Lecturer,CS,GitbeeDummy#2026
+D5003,Teguh Susanto,teguh.susanto3@binus.edu,BN200000003,SCC,MAT;CYBER,GitbeeDummy#2026
+D5004,Yudi Susanto,yudi.susanto4@binus.edu,BN200000004,HoP,DS,GitbeeDummy#2026
+X9003,Broken Row,lecturer@,,Lecturer,CS,GitbeeDummy#2026
+D5005,Joko Setiawan,joko.setiawan5@binus.edu,,Lecturer,CYBER,GitbeeDummy#2026
+X9004,Broken Row,broken.staff4@binus.edu,,Lecturer,,GitbeeDummy#2026
+D5006,Oktavia Lubis,oktavia.lubis6@binus.edu,BN200000006,Admin,CS;MAT,GitbeeDummy#2026
+X9005,Broken Row,broken.staff5@binus.edu,,Lecturer,CS,
+D5007,Nanda Kusuma,nanda.kusuma7@binus.edu,BN200000007,SCC,GAT,GitbeeDummy#2026
+D5008,Budi Halim,budi.halim8@binus.edu,BN200000008,HoP,MAT,GitbeeDummy#2026
+X9006,Broken Row,broken.staff6@binus.edu,,Lecturer,CS,GitbeeDummy#2026,extra
+D5009,Rina Nugroho,rina.nugroho9@binus.edu,BN200000009,Lecturer,DS;CS,GitbeeDummy#2026
+D5001,Broken Row,broken.staff7@binus.edu,,Lecturer,CS,GitbeeDummy#2026
+D5010,Indah Lubis,indah.lubis10@binus.edu,,Admin,CYBER,GitbeeDummy#2026
+X9008,Broken Row,broken.staff8@binus.edu,BN200000001,Lecturer,CS,GitbeeDummy#2026
+D5011,Dewi Wibowo,dewi.wibowo11@binus.edu,BN200000011,SCC,CS,GitbeeDummy#2026
+D5012,Dewi Setiawan,dewi.setiawan12@binus.edu,BN200000012,HoP,GAT;DS,GitbeeDummy#2026

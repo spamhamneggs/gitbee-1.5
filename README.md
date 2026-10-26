@@ -69,6 +69,30 @@ For future schema changes, create a migration with
 `pnpm --filter gitbee_backend exec prisma migrate dev --name <name> --config ./api/prisma.config.ts`
 against a development database. Commit its SQL and deploy with `prisma migrate deploy`.
 
+## Dummy data
+
+Generators in `apps/backend/api/prisma/dummy/` produce any number of students and staff, with no network access. Students rotate through the majors CS, GAT, MAT, DS and CYBER. Staff rotate through the roles Lecturer, Admin, SCC and HoP, so together the files cover all five roles. Output is reproducible for a given `--seed`, and every generated user has the password `GitbeeDummy#2026`.
+
+**Sample CSVs.** `apps/backend/samples/students.csv` (25 students) and `staff.csv` (12 staff) are ready to upload to `POST /api/user/admin/upload-student-csv` and `upload-staff-csv`. Each file also has deliberately broken rows mixed in, which the error report should flag:
+
+- missing required fields, invalid emails, an over-long name, an unknown role, and a row with several problems at once
+- rows with too few or too many fields
+- duplicates of an earlier row's NIM, email, lecturer code or Binusian ID (rejected at import)
+
+The staff file's HoP rows are valid but are also rejected for now, because majors have no codes yet. Regenerate the samples, or write bigger files, with:
+
+```bash
+pnpm --filter gitbee_backend dummy:csv                                    # rewrite apps/backend/samples
+pnpm --filter gitbee_backend dummy:csv --students 500 --staff 50 --out ./tmp-csv
+pnpm --filter gitbee_backend dummy:csv --students 500 --valid-only --out ./tmp-csv
+```
+
+**Seeding the database.** Set `SEED_DUMMY_STUDENTS` and/or `SEED_DUMMY_STAFF` and the seed adds that many generated users after the fixed seed data, through the same validation and import as a CSV upload. HoPs are skipped, for the same reason as above.
+
+```bash
+SEED_ON_BOOT=true SEED_DUMMY_STUDENTS=200 SEED_DUMMY_STAFF=40 docker compose up --build
+```
+
 ## Env wiring
 
 Use the root `.env` as the shared source of truth for this monorepo.
@@ -87,6 +111,7 @@ The root `.env.example` includes the shared settings for the full stack:
 - backend: `BACKEND_PORT`, `BACKEND_CONTAINER_PORT`, `DATABASE_URL`, `DATABASE_URL_DOCKER`, `WEB_URL`, `JWT_SECRET`, `COOKIE_NAME`, `BLUEJACK_API`, `ATLANTIS_API`
 - frontend: `FRONTEND_PORT`, `NEXT_PUBLIC_BACKEND_API`, `NEXT_PUBLIC_CLIENT_ID`, `NEXT_PUBLIC_TENANT_ID`, `NEXT_PUBLIC_REDIRECT_URI`, `NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI`, `NEXT_PUBLIC_STORE_AUTH_STATE_IN_COOKIE`, `NEXT_PUBLIC_CACHE_LOCATION`
 - docker behavior: `SEED_ON_BOOT`
+- seed: `SEED_DUMMY_STUDENTS`, `SEED_DUMMY_STAFF` (extra generated users, default 0)
 
 ### Notes on app-specific env files
 
