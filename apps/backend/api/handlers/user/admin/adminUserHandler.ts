@@ -14,7 +14,6 @@ import {
   type CsvUploadType,
 } from "../../../utils/csv/csvParser.js";
 import {
-  CsvImportAbortedError,
   importCsvUsers,
 } from "../../../utils/csv/csvUserImport.js";
 
@@ -263,17 +262,9 @@ export default class AdminUserHandler {
       return sendErrorResponse(res, "CSV file has no data rows.", 400);
     }
 
-    // Bad rows are reported in failed_rows; the rest of the file is still imported.
     try {
       return sendSuccessResponse(res, await importCsvUsers(validation));
     } catch (error) {
-      if (error instanceof CsvImportAbortedError) {
-        return sendErrorResponse(
-          res,
-          { message: error.message, ...error.report },
-          500
-        );
-      }
       return sendErrorResponse(
         res,
         getErrorMessage(error, "Failed to import CSV file."),

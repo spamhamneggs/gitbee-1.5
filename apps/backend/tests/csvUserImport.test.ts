@@ -4,10 +4,8 @@ import { after, describe, it } from "node:test";
 process.env.DATABASE_URL ??= "mysql://test:test@127.0.0.1:3306/test";
 
 const { parseAndValidateCsvBuffer } = await import("../api/utils/csv/csvParser.js");
-const { CsvImportAbortedError, importCsvUsers } = await import(
-  "../api/utils/csv/csvUserImport.js"
-);
-const { createFakeUserStore, uniqueViolation } = await import("./fakeUserStore.js");
+const { importCsvUsers } = await import("../api/utils/csv/csvUserImport.js");
+const { createFakeUserStore } = await import("./fakeUserStore.js");
 const { verifyPassword } = await import("../api/utils/auth/password.js");
 
 const studentHeaders = "nim,name,email,binusian_id,major_code,password";
@@ -35,7 +33,13 @@ describe("CSV user import", () => {
 
     const report = await importCsvUsers(validation, store);
 
-    assert.deepEqual(report, { total_rows: 2, successful_inserts: 2, failed_rows: [] });
+    assert.deepEqual(report, {
+      totalParsed: 2,
+      createdCount: 2,
+      skippedCount: 0,
+      failedCount: 0,
+      errors: [],
+    });
     assert.equal(store.users.length, 2);
   });
 
@@ -81,6 +85,30 @@ describe("CSV user import", () => {
     assert.equal(user?.user_type, null);
   });
 
+  it("rejects in-file duplicates using the normalized composite key", async () => {
+    const store = createFakeUserStore();
+    const report = await importCsvUsers(
+      await parseAndValidateCsvBuffer(
+        csv(
+          studentHeaders,
+          "2501959296,Ada,ada@example.com,B123,COMP,secret",
+          "2501959297,Ada Again,ADA@example.com,B123,COMP,secret"
+        ),
+        "student"
+      ),
+      store
+    );
+
+    assert.equal(report.createdCount, 1);
+    assert.equal(report.skippedCount, 1);
+    assert.deepEqual(report.errors, [
+      {
+        line: 3,
+        errors: ["Duplicate record within the uploaded file"],
+      },
+    ]);
+  });
+
   it("collects database conflicts per row instead of rejecting the file", async () => {
     const store = createFakeUserStore([
       { email: "taken@example.com", student_id: "2500000000", binusian_id: "B999" },
@@ -99,13 +127,14 @@ describe("CSV user import", () => {
 
     const report = await importCsvUsers(validation, store);
 
-    assert.equal(report.total_rows, 5);
-    assert.equal(report.successful_inserts, 1);
-    assert.deepEqual(report.failed_rows, [
-      { row_number: 3, identifier: "2500000000", error: 'nim "2500000000" is already in use' },
-      { row_number: 4, identifier: "2501959297", error: 'email "taken@example.com" is already in use' },
-      { row_number: 5, identifier: "2501959298", error: 'binusian_id "B999" is already in use' },
-      { row_number: 6, identifier: "2501959296", error: 'nim "2501959296" is already in use' },
+    assert.equal(report.totalParsed, 5);
+    assert.equal(report.createdCount, 1);
+    assert.equal(report.skippedCount, 4);
+    assert.equal(report.failedCount, 3);
+    assert.deepEqual(report.errors, [
+      { line: 3, errors: ["User with email or ID already exists in the system"] },
+      { line: 4, errors: ["User with email or ID already exists in the system"] },
+      { line: 5, errors: ["User with email or ID already exists in the system"] },
     ]);
   });
 
@@ -123,18 +152,19 @@ describe("CSV user import", () => {
 
     const report = await importCsvUsers(validation, store);
 
-    assert.equal(report.successful_inserts, 1);
-    assert.deepEqual(
-      report.failed_rows.map((row) => [row.row_number, row.identifier]),
-      [[2, "TY23-1"], [3, "TY23-2"]]
-    );
+    assert.equal(report.createdCount, 1);
+    assert.deepEqual(report.errors, [
+      {
+        line: 2,
+        errors: ["User with email or ID already exists in the system"],
+      },
+      { line: 3, errors: ["email: must be a valid email address"] },
+    ]);
   });
 
-  it("reports a constraint it cannot attribute to a column generically", async () => {
+  it("uses createMany's duplicate backstop count for race-time conflicts", async () => {
     const store = createFakeUserStore();
-    store.createUser = async () => {
-      throw uniqueViolation("some_other_key");
-    };
+    store.createMany = async () => 0;
 
     const report = await importCsvUsers(
       await parseAndValidateCsvBuffer(
@@ -144,13 +174,9 @@ describe("CSV user import", () => {
       store
     );
 
-    assert.deepEqual(report.failed_rows, [
-      {
-        row_number: 2,
-        identifier: "2501959296",
-        error: "a user with the same email, NIM, lecturer code or Binusian ID already exists",
-      },
-    ]);
+    assert.equal(report.skippedCount, 1);
+    assert.equal(report.failedCount, 0);
+    assert.deepEqual(report.errors, []);
   });
 
   it("reports HoP rows as failed instead of creating a HoP without majors", async () => {
@@ -168,12 +194,13 @@ describe("CSV user import", () => {
       store
     );
 
-    assert.equal(report.successful_inserts, 2);
-    assert.deepEqual(report.failed_rows, [
+    assert.equal(report.createdCount, 2);
+    assert.deepEqual(report.errors, [
       {
-        row_number: 3,
-        identifier: "RA23-1",
-        error: `major_codes "COMP;MATH" can't be resolved: majors have no codes yet, so HoP accounts can't be imported`,
+        line: 3,
+        errors: [
+          `major_codes "COMP;MATH" can't be resolved: majors have no codes yet, so HoP accounts can't be imported`,
+        ],
       },
     ]);
     assert.deepEqual(store.users.map((user) => user.role), ["Lecturer", "SCC"]);
@@ -189,8 +216,12 @@ describe("CSV user import", () => {
       store
     );
 
-    assert.deepEqual(report.failed_rows.map((row) => row.error), [
-      'email "ada@example.com" is already in use',
+    assert.equal(report.skippedCount, 1);
+    assert.deepEqual(report.errors, [
+      {
+        line: 2,
+        errors: ["User with email or ID already exists in the system"],
+      },
     ]);
   });
 
@@ -206,19 +237,19 @@ describe("CSV user import", () => {
 
     assert.equal(store.users.length, 1);
     assert.deepEqual(
-      reports.map((report) => report.successful_inserts).sort(),
+      reports.map((report) => report.createdCount).sort(),
       [0, 1]
     );
   });
 
-  it("stops on an unexpected database error and keeps the partial report", async () => {
+  it("reports insertion failures by line and continues processing later rows", async () => {
     const store = createFakeUserStore();
-    const createUser = store.createUser;
-    store.createUser = async (user) => {
-      if (user.student_id === "2501959297") {
+    const findExistingUser = store.findExistingUser;
+    store.findExistingUser = async (identity) => {
+      if (identity.student_id === "2501959297") {
         throw new Error("connect ECONNREFUSED");
       }
-      return createUser(user);
+      return findExistingUser(identity);
     };
     const validation = await parseAndValidateCsvBuffer(
       csv(
@@ -231,14 +262,11 @@ describe("CSV user import", () => {
       "student"
     );
 
-    await assert.rejects(importCsvUsers(validation, store), (error: unknown) => {
-      assert.ok(error instanceof CsvImportAbortedError);
-      assert.equal(error.message, "Import stopped at row 4: connect ECONNREFUSED");
-      assert.equal(error.report.total_rows, 4);
-      assert.equal(error.report.successful_inserts, 1);
-      assert.deepEqual(error.report.failed_rows.map((row) => row.row_number), [3]);
-      return true;
-    });
-    assert.equal(store.users.length, 1);
+    const report = await importCsvUsers(validation, store);
+    assert.equal(report.totalParsed, 4);
+    assert.equal(report.createdCount, 2);
+    assert.equal(report.failedCount, 2);
+    assert.deepEqual(report.errors.map((row) => row.line), [3, 4]);
+    assert.equal(store.users.length, 2);
   });
 });

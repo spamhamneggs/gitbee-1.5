@@ -1,4 +1,5 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
+import bcrypt from "bcryptjs";
 
 // Stored as scrypt$N$r$p$salt$hash (base64), so the cost can be raised later
 // without breaking hashes that are already in the database.
@@ -22,6 +23,9 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+    if (stored.startsWith("$2")) {
+        return bcrypt.compare(password, stored);
+    }
     const [scheme, N, r, p, salt, hash] = stored.split("$");
     if (scheme !== "scrypt" || !salt || !hash) {
         return false;

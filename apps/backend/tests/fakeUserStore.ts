@@ -1,7 +1,10 @@
 // In-memory stand-in for the user table, enforcing the same unique indexes so
 // CSV import tests run without MySQL.
 import { Prisma } from "../api/prisma/generated/prisma/client.js";
-import type { CsvUserStore, NewCsvUser } from "../api/utils/csv/csvUserImport.js";
+import type {
+  CsvUserStore,
+  NewCsvUser,
+} from "../api/utils/csv/csvUserImport.js";
 
 const uniqueColumns = ["student_id", "lecturer_code", "binusian_id", "email"] as const;
 // MySQL's default collation compares these case-insensitively.
@@ -31,14 +34,36 @@ export function createFakeUserStore(existing: Partial<NewCsvUser>[] = []) {
 
   const store: CsvUserStore & { users: NewCsvUser[] } = {
     users,
-    async createUser(user) {
-      for (const column of uniqueColumns) {
-        const value = user[column];
-        if (value != null && all().some((other) => same(other[column], value))) {
-          throw uniqueViolation(`user_${column}_key`);
+    async findExistingUser(identity) {
+      const candidate = all().find((user) =>
+        uniqueColumns.some((column) => {
+          const value = identity[column];
+          return value != null && same(user[column], value);
+        })
+      );
+      return candidate
+        ? {
+          email: candidate.email,
+          binusian_id: candidate.binusian_id,
+          student_id: candidate.student_id,
+          lecturer_code: candidate.lecturer_code,
         }
+        : null;
+    },
+    async createMany(newUsers) {
+      let count = 0;
+      for (const user of newUsers) {
+        const duplicate = uniqueColumns.some((column) => {
+          const value = user[column];
+          return value !== null && all().some((other) => same(other[column], value));
+        });
+        if (duplicate) {
+          continue;
+        }
+        users.push(user);
+        count += 1;
       }
-      users.push(user);
+      return count;
     },
   };
   return store;

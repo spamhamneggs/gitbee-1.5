@@ -20,7 +20,8 @@ const { createFakeUserStore } = await import("./fakeUserStore.js");
 let fakeStore = createFakeUserStore();
 beforeEach(() => {
   fakeStore = createFakeUserStore();
-  mock.method(prismaUserStore, "createUser", fakeStore.createUser);
+  mock.method(prismaUserStore, "findExistingUser", fakeStore.findExistingUser);
+  mock.method(prismaUserStore, "createMany", fakeStore.createMany);
 });
 afterEach(() => mock.restoreAll());
 
@@ -93,12 +94,14 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", authCookie);
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.data, {
-      total_rows: 1,
-      successful_inserts: 1,
-      failed_rows: [],
+      totalParsed: 1,
+      createdCount: 1,
+      skippedCount: 0,
+      failedCount: 0,
+      errors: [],
     });
     assert.equal(fakeStore.users[0]?.student_id, "2501959296");
-    assert.match(fakeStore.users[0]?.password ?? "", /^scrypt\$/);
+    assert.match(fakeStore.users[0]?.password ?? "", /^\$2[aby]\$/);
     assert.ok(!JSON.stringify(response.body).includes("secret"));
   });
 
@@ -141,7 +144,7 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", authCookie);
 
     assert.equal(response.status, 200);
-    assert.equal(response.body.data.successful_inserts, 1);
+    assert.equal(response.body.data.createdCount, 1);
     assert.equal(fakeStore.users[0]?.name, "Ada");
   });
 
@@ -155,7 +158,7 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", authCookie);
 
     assert.equal(response.status, 200);
-    assert.equal(response.body.data.successful_inserts, 1);
+    assert.equal(response.body.data.createdCount, 1);
     assert.equal(fakeStore.users[0]?.lecturer_code, "TY23-1");
     assert.equal(fakeStore.users[0]?.role, "Lecturer");
   });
@@ -215,21 +218,23 @@ describe("Admin CSV uploads", () => {
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.data, {
-      total_rows: 2,
-      successful_inserts: 1,
-      failed_rows: [
+      totalParsed: 2,
+      createdCount: 1,
+      skippedCount: 0,
+      failedCount: 1,
+      errors: [
         {
-          row_number: 3,
-          identifier: "2501959297",
-          error: "email: must be a valid email address",
+          line: 3,
+          errors: ["email: must be a valid email address"],
         },
       ],
     });
   });
 
-  it("reports duplicates against the database as failed rows", async () => {
+  it("reports rows with database identity conflicts", async () => {
     fakeStore = createFakeUserStore([{ email: "old@example.com", lecturer_code: "TY23-1" }]);
-    mock.method(prismaUserStore, "createUser", fakeStore.createUser);
+    mock.method(prismaUserStore, "findExistingUser", fakeStore.findExistingUser);
+    mock.method(prismaUserStore, "createMany", fakeStore.createMany);
     const csv = [
       staffHeaders,
       "TY23-1,Ada,ada@example.com,B1,Lecturer,COMP,secret",
@@ -246,11 +251,19 @@ describe("Admin CSV uploads", () => {
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.data, {
-      total_rows: 3,
-      successful_inserts: 1,
-      failed_rows: [
-        { row_number: 2, identifier: "TY23-1", error: 'lecturer_code "TY23-1" is already in use' },
-        { row_number: 3, identifier: "TY23-2", error: 'email "old@example.com" is already in use' },
+      totalParsed: 3,
+      createdCount: 1,
+      skippedCount: 2,
+      failedCount: 2,
+      errors: [
+        {
+          line: 2,
+          errors: ["User with email or ID already exists in the system"],
+        },
+        {
+          line: 3,
+          errors: ["User with email or ID already exists in the system"],
+        },
       ],
     });
   });
@@ -270,20 +283,18 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", authCookie);
 
     assert.equal(response.status, 200);
-    assert.equal(response.body.data.successful_inserts, 1);
-    assert.equal(response.body.data.failed_rows[0].identifier, "RA23-1");
-    assert.match(response.body.data.failed_rows[0].error, /HoP accounts can't be imported/);
+    assert.equal(response.body.data.createdCount, 1);
+    assert.equal(response.body.data.errors[0].line, 2);
+    assert.match(response.body.data.errors[0].errors[0], /HoP accounts can't be imported/);
     assert.deepEqual(fakeStore.users.map((user) => user.lecturer_code), ["TY23-1"]);
   });
 
-  it("returns 500 with the partial report when the database fails mid-import", async () => {
-    let calls = 0;
-    mock.method(prismaUserStore, "createUser", async (user: Parameters<typeof fakeStore.createUser>[0]) => {
-      calls += 1;
-      if (calls === 2) {
+  it("returns a summary with line-numbered insertion failures", async () => {
+    mock.method(prismaUserStore, "findExistingUser", async (identity) => {
+      if (identity.student_id === "2501959297") {
         throw new Error("connect ECONNREFUSED");
       }
-      return fakeStore.createUser(user);
+      return fakeStore.findExistingUser(identity);
     });
     const csv = [
       studentHeaders,
@@ -299,12 +310,18 @@ describe("Admin CSV uploads", () => {
       })
       .set("Cookie", authCookie);
 
-    assert.equal(response.status, 500);
-    assert.deepEqual(response.body.errors, {
-      message: "Import stopped at row 3: connect ECONNREFUSED",
-      total_rows: 3,
-      successful_inserts: 1,
-      failed_rows: [],
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.data, {
+      totalParsed: 3,
+      createdCount: 2,
+      skippedCount: 0,
+      failedCount: 1,
+      errors: [
+        {
+          line: 3,
+          errors: ["connect ECONNREFUSED"],
+        },
+      ],
     });
   });
 
@@ -321,13 +338,14 @@ describe("Admin CSV uploads", () => {
 
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.data, {
-      total_rows: 1,
-      successful_inserts: 0,
-      failed_rows: [
+      totalParsed: 1,
+      createdCount: 0,
+      skippedCount: 0,
+      failedCount: 1,
+      errors: [
         {
-          row_number: 2,
-          identifier: "TY23-1",
-          error: "email: must be a valid email address",
+          line: 2,
+          errors: ["email: must be a valid email address"],
         },
       ],
     });
