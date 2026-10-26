@@ -1,6 +1,6 @@
 import { Prisma } from "../../prisma/generated/prisma/client.js";
 import { prisma } from "../../prisma/client.js";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../auth/password.js";
 import { getErrorMessage } from "../response/response.js";
 import type {
   CsvRow,
@@ -52,6 +52,7 @@ const IDENTITY_COLUMNS = [
   "student_id",
   "lecturer_code",
 ] as const satisfies readonly (keyof CsvUserIdentity)[];
+const HASH_CONCURRENCY = 4;
 
 export const prismaUserStore: CsvUserStore = {
   async findExistingUsers(identities) {
@@ -188,8 +189,7 @@ export async function importCsvUsers<T extends CsvUploadType>(
     errors: [...errors].sort((left, right) => left.line - right.line),
   });
 
-  const seenKeys = new Set<string>();
-  const uniqueRows: typeof validation.validRows = [];
+  const importableRows: typeof validation.validRows = [];
   for (const row of validation.validRows) {
     const data: StudentCsvRow | StaffCsvRow = row.data;
     if ("role" in data && data.role === "HoP") {
@@ -202,8 +202,43 @@ export async function importCsvUsers<T extends CsvUploadType>(
       failedCount += 1;
       continue;
     }
+    importableRows.push(row);
+  }
 
-    const keys = normalizedIdentityKeys(data);
+  const identities = importableRows.map((row) => identityFromRow(row.data));
+  let existingUsers: Partial<CsvUserIdentity>[];
+  try {
+    existingUsers = await store.findExistingUsers(identities);
+  } catch (error) {
+    for (const row of importableRows) {
+      errors.push({
+        line: row.row_number,
+        errors: [
+          getErrorMessage(error, "database error while checking for duplicate users"),
+        ],
+      });
+      failedCount += 1;
+    }
+    return report();
+  }
+
+  const seenKeys = new Set<string>();
+  const uniqueRows: typeof validation.validRows = [];
+  for (const [index, row] of importableRows.entries()) {
+    const identity = identities[index];
+    const databaseDuplicate =
+      identity !== undefined &&
+      existingUsers.some((existing) => isDuplicate(existing, identity));
+    if (databaseDuplicate) {
+      skippedCount += 1;
+      errors.push({
+        line: row.row_number,
+        errors: ["User with email or ID already exists in the system"],
+      });
+      continue;
+    }
+
+    const keys = normalizedIdentityKeys(row.data);
     if (keys.some((key) => seenKeys.has(key))) {
       skippedCount += 1;
       errors.push({
@@ -216,61 +251,35 @@ export async function importCsvUsers<T extends CsvUploadType>(
     uniqueRows.push(row);
   }
 
-  const identities = uniqueRows.map((row) => identityFromRow(row.data));
-  let existingUsers: Partial<CsvUserIdentity>[];
-  try {
-    existingUsers = await store.findExistingUsers(identities);
-  } catch (error) {
-    for (const row of uniqueRows) {
-      errors.push({
-        line: row.row_number,
-        errors: [
-          getErrorMessage(error, "database error while checking for duplicate users"),
-        ],
-      });
-      failedCount += 1;
-    }
-    return report();
-  }
-
   const candidates: { line: number; user: NewCsvUser }[] = [];
-  const eligibleRows = uniqueRows.filter((row, index) => {
-    const identity = identities[index];
-    const duplicate =
-      identity !== undefined &&
-      existingUsers.some((existing) => isDuplicate(existing, identity));
-    if (duplicate) {
-      skippedCount += 1;
-      errors.push({
-        line: row.row_number,
-        errors: ["User with email or ID already exists in the system"],
+  for (
+    let start = 0;
+    start < uniqueRows.length;
+    start += HASH_CONCURRENCY
+  ) {
+    const batch = uniqueRows.slice(start, start + HASH_CONCURRENCY);
+    const hashedRows = await Promise.all(
+      batch.map(async (row) => {
+        try {
+          const password = await hashPassword(row.data.password);
+          return { row, password };
+        } catch (error) {
+          errors.push({
+            line: row.row_number,
+            errors: [getErrorMessage(error, "failed to hash initial password")],
+          });
+          failedCount += 1;
+          return null;
+        }
+      })
+    );
+    for (const hashed of hashedRows) {
+      if (!hashed) continue;
+      candidates.push({
+        line: hashed.row.row_number,
+        user: toNewUser(hashed.row.data, hashed.password),
       });
-      return false;
     }
-    return true;
-  });
-
-  const hashedRows = await Promise.all(
-    eligibleRows.map(async (row) => {
-      try {
-        const password = await bcrypt.hash(row.data.password, 10);
-        return { row, password };
-      } catch (error) {
-        errors.push({
-          line: row.row_number,
-          errors: [getErrorMessage(error, "failed to hash initial password")],
-        });
-        failedCount += 1;
-        return null;
-      }
-    })
-  );
-  for (const hashed of hashedRows) {
-    if (!hashed) continue;
-    candidates.push({
-      line: hashed.row.row_number,
-      user: toNewUser(hashed.row.data, hashed.password),
-    });
   }
 
   if (candidates.length === 0) return report();

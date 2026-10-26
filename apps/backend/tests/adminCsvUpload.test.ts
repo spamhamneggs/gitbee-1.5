@@ -101,7 +101,7 @@ describe("Admin CSV uploads", () => {
       errors: [],
     });
     assert.equal(fakeStore.users[0]?.student_id, "2501959296");
-    assert.match(fakeStore.users[0]?.password ?? "", /^\$2[aby]\$/);
+    assert.match(fakeStore.users[0]?.password ?? "", /^scrypt\$/);
     assert.ok(!JSON.stringify(response.body).includes("secret"));
   });
 
@@ -357,6 +357,36 @@ describe("Admin CSV uploads", () => {
     ]);
   });
 
+  it("does not reserve identities from database-conflicting rows", async () => {
+    fakeStore = createFakeUserStore([{ email: "existing@example.com" }]);
+    mock.method(prismaUserStore, "findExistingUsers", fakeStore.findExistingUsers);
+    mock.method(prismaUserStore, "createMany", fakeStore.createMany);
+    const csv = [
+      studentHeaders,
+      "2501959296,Conflicting Row,existing@example.com,B101,COMP,secret",
+      "2501959296,Importable Row,new@example.com,B102,COMP,secret",
+    ].join("\n");
+    const response = await request(app)
+      .post(studentCsvPath)
+      .attach("file", Buffer.from(csv), {
+        filename: "students.csv",
+        contentType: "text/csv",
+      })
+      .set("Cookie", authCookie);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.data.createdCount, 1);
+    assert.equal(response.body.data.skippedCount, 1);
+    assert.equal(response.body.data.failedCount, 0);
+    assert.deepEqual(response.body.data.errors, [
+      {
+        line: 2,
+        errors: ["User with email or ID already exists in the system"],
+      },
+    ]);
+    assert.equal(fakeStore.users[0]?.email, "new@example.com");
+  });
+
   it("handles all-invalid or duplicate rows without attempting an empty insert", async () => {
     fakeStore = createFakeUserStore([{ email: "existing@example.com" }]);
     mock.method(prismaUserStore, "findExistingUsers", fakeStore.findExistingUsers);
@@ -389,7 +419,10 @@ describe("Admin CSV uploads", () => {
         line: 3,
         errors: ["User with email or ID already exists in the system"],
       },
-      { line: 4, errors: ["Duplicate record within the uploaded file"] },
+      {
+        line: 4,
+        errors: ["User with email or ID already exists in the system"],
+      },
     ]);
     assert.equal(createMany.mock.callCount(), 0);
     assert.equal(
@@ -441,7 +474,7 @@ describe("Admin CSV uploads", () => {
         errors: ["User with email or ID already exists in the system"],
       },
     ]);
-    assert.deepEqual(lookups, [4]);
+    assert.deepEqual(lookups, [5]);
     assert.equal(
       response.body.data.totalParsed,
       response.body.data.createdCount +

@@ -68,6 +68,60 @@ describe("CSV user import", () => {
     assert.equal(await verifyPassword("secret", user.password), true);
   });
 
+  it("preserves password suffixes beyond bcrypt's 72-byte limit", async () => {
+    const store = createFakeUserStore();
+    const password = `${"a".repeat(72)}first`;
+    const report = await importCsvUsers(
+      await parseAndValidateCsvBuffer(
+        csv(
+          studentHeaders,
+          `2501959296,Ada,ada@example.com,,COMP,${password}`
+        ),
+        "student"
+      ),
+      store
+    );
+
+    assert.equal(report.createdCount, 1);
+    const importedPassword = store.users[0]?.password;
+    assert.ok(importedPassword);
+    assert.equal(await verifyPassword(password, importedPassword), true);
+    assert.equal(
+      await verifyPassword(`${"a".repeat(72)}other`, importedPassword),
+      false
+    );
+  });
+
+  it("yields to the event loop while hashing passwords", async () => {
+    const store = createFakeUserStore();
+    let timerFired = false;
+    const timer = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        timerFired = true;
+        resolve();
+      }, 0);
+    });
+    const createMany = store.createMany;
+    store.createMany = async (users) => {
+      assert.equal(timerFired, true);
+      return createMany(users);
+    };
+    const validation = await parseAndValidateCsvBuffer(
+      csv(
+        studentHeaders,
+        "2501959296,Ada,ada@example.com,B1,COMP,secret",
+        "2501959297,Bob,bob@example.com,B2,COMP,secret",
+        "2501959298,Cy,cy@example.com,B3,COMP,secret",
+        "2501959299,Di,di@example.com,B4,COMP,secret"
+      ),
+      "student"
+    );
+
+    const report = await importCsvUsers(validation, store);
+    await timer;
+    assert.equal(report.createdCount, 4);
+  });
+
   it("maps staff rows to users with their role and lecturer code", async () => {
     const store = createFakeUserStore();
     await importCsvUsers(
