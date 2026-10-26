@@ -40,9 +40,9 @@ export type CsvUserIdentity = Pick<
 >;
 
 export interface CsvUserStore {
-  findExistingUser(
-    identity: CsvUserIdentity
-  ): Promise<Partial<CsvUserIdentity> | null>;
+  findExistingUsers(
+    identities: CsvUserIdentity[]
+  ): Promise<Partial<CsvUserIdentity>[]>;
   createMany(users: NewCsvUser[]): Promise<number>;
 }
 
@@ -54,14 +54,20 @@ const IDENTITY_COLUMNS = [
 ] as const satisfies readonly (keyof CsvUserIdentity)[];
 
 export const prismaUserStore: CsvUserStore = {
-  async findExistingUser(identity) {
+  async findExistingUsers(identities) {
     const conditions = IDENTITY_COLUMNS.flatMap((column) => {
-      const value = identity[column];
-      return value === null ? [] : [{ [column]: value }];
+      const values = [
+        ...new Set(
+          identities
+            .map((identity) => identity[column]?.trim())
+            .filter((value): value is string => !!value)
+        ),
+      ];
+      return values.length > 0 ? [{ [column]: { in: values } }] : [];
     });
-    if (conditions.length === 0) return null;
+    if (conditions.length === 0) return [];
 
-    return prisma.user.findFirst({
+    return prisma.user.findMany({
       where: { OR: conditions },
       select: {
         email: true,
@@ -109,10 +115,19 @@ function toNewUser(
   };
 }
 
-function compositeKey(row: StudentCsvRow | StaffCsvRow): string {
-  const identity =
-    row.binusian_id || ("nim" in row ? row.nim : row.lecturer_code);
-  return JSON.stringify([row.email.toLocaleLowerCase(), identity.toLocaleLowerCase()]);
+function normalizedIdentityKeys(row: StudentCsvRow | StaffCsvRow): string[] {
+  const keys = [`email:${row.email.trim().toLowerCase()}`];
+  const binusianId = row.binusian_id?.trim().toLowerCase();
+  if (binusianId) keys.push(`binusian_id:${binusianId}`);
+
+  if ("nim" in row) {
+    const studentId = row.nim.trim().toLowerCase();
+    if (studentId) keys.push(`student_id:${studentId}`);
+  } else {
+    const lecturerCode = row.lecturer_code.trim().toLowerCase();
+    if (lecturerCode) keys.push(`lecturer_code:${lecturerCode}`);
+  }
+  return keys;
 }
 
 function identityFromRow(row: StudentCsvRow | StaffCsvRow): CsvUserIdentity {
@@ -144,7 +159,7 @@ function isDuplicate(
       return (
         left != null &&
         right != null &&
-        left.toLocaleLowerCase() === right.toLocaleLowerCase()
+        left.trim().toLowerCase() === right.trim().toLowerCase()
       );
     })
   );
@@ -162,13 +177,14 @@ export async function importCsvUsers<T extends CsvUploadType>(
     line: row.row_number,
     errors: [validationErrorMessage(row.error)],
   }));
+  let failedCount = validation.failedRows.length;
   let skippedCount = 0;
   let createdCount = 0;
   const report = (): CsvImportReport => ({
     totalParsed: validation.totalRows,
     createdCount,
     skippedCount,
-    failedCount: errors.length,
+    failedCount,
     errors: [...errors].sort((left, right) => left.line - right.line),
   });
 
@@ -183,11 +199,12 @@ export async function importCsvUsers<T extends CsvUploadType>(
           `major_codes "${data.major_codes}" can't be resolved: majors have no codes yet, so HoP accounts can't be imported`,
         ],
       });
+      failedCount += 1;
       continue;
     }
 
-    const key = compositeKey(data);
-    if (seenKeys.has(key)) {
+    const keys = normalizedIdentityKeys(data);
+    if (keys.some((key) => seenKeys.has(key))) {
       skippedCount += 1;
       errors.push({
         line: row.row_number,
@@ -195,37 +212,68 @@ export async function importCsvUsers<T extends CsvUploadType>(
       });
       continue;
     }
-    seenKeys.add(key);
+    keys.forEach((key) => seenKeys.add(key));
     uniqueRows.push(row);
   }
 
-  const candidates: { line: number; user: NewCsvUser }[] = [];
-  for (const row of uniqueRows) {
-    const identity = identityFromRow(row.data);
-    try {
-      const existing = await store.findExistingUser(identity);
-      if (isDuplicate(existing, identity)) {
-        skippedCount += 1;
-        errors.push({
-          line: row.row_number,
-          errors: ["User with email or ID already exists in the system"],
-        });
-        continue;
-      }
-      const hashedPassword = await bcrypt.hash(row.data.password, 10);
-      candidates.push({
-        line: row.row_number,
-        user: toNewUser(row.data, hashedPassword),
-      });
-    } catch (error) {
+  const identities = uniqueRows.map((row) => identityFromRow(row.data));
+  let existingUsers: Partial<CsvUserIdentity>[];
+  try {
+    existingUsers = await store.findExistingUsers(identities);
+  } catch (error) {
+    for (const row of uniqueRows) {
       errors.push({
         line: row.row_number,
         errors: [
-          getErrorMessage(error, "database error while checking or preparing user"),
+          getErrorMessage(error, "database error while checking for duplicate users"),
         ],
       });
+      failedCount += 1;
     }
+    return report();
   }
+
+  const candidates: { line: number; user: NewCsvUser }[] = [];
+  const eligibleRows = uniqueRows.filter((row, index) => {
+    const identity = identities[index];
+    const duplicate =
+      identity !== undefined &&
+      existingUsers.some((existing) => isDuplicate(existing, identity));
+    if (duplicate) {
+      skippedCount += 1;
+      errors.push({
+        line: row.row_number,
+        errors: ["User with email or ID already exists in the system"],
+      });
+      return false;
+    }
+    return true;
+  });
+
+  const hashedRows = await Promise.all(
+    eligibleRows.map(async (row) => {
+      try {
+        const password = await bcrypt.hash(row.data.password, 10);
+        return { row, password };
+      } catch (error) {
+        errors.push({
+          line: row.row_number,
+          errors: [getErrorMessage(error, "failed to hash initial password")],
+        });
+        failedCount += 1;
+        return null;
+      }
+    })
+  );
+  for (const hashed of hashedRows) {
+    if (!hashed) continue;
+    candidates.push({
+      line: hashed.row.row_number,
+      user: toNewUser(hashed.row.data, hashed.password),
+    });
+  }
+
+  if (candidates.length === 0) return report();
 
   try {
     createdCount = await store.createMany(candidates.map(({ user }) => user));
@@ -241,6 +289,7 @@ export async function importCsvUsers<T extends CsvUploadType>(
         errors: [message],
       }))
     );
+    failedCount += candidates.length;
   }
 
   return report();

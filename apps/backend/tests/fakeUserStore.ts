@@ -34,21 +34,22 @@ export function createFakeUserStore(existing: Partial<NewCsvUser>[] = []) {
 
   const store: CsvUserStore & { users: NewCsvUser[] } = {
     users,
-    async findExistingUser(identity) {
-      const candidate = all().find((user) =>
-        uniqueColumns.some((column) => {
-          const value = identity[column];
-          return value != null && same(user[column], value);
-        })
-      );
-      return candidate
-        ? {
+    async findExistingUsers(identities) {
+      return all()
+        .filter((user) =>
+          identities.some((identity) =>
+            uniqueColumns.some((column) => {
+              const value = identity[column];
+              return value != null && same(user[column], value);
+            })
+          )
+        )
+        .map((candidate) => ({
           email: candidate.email,
           binusian_id: candidate.binusian_id,
           student_id: candidate.student_id,
           lecturer_code: candidate.lecturer_code,
-        }
-        : null;
+        }));
     },
     async createMany(newUsers) {
       let count = 0;

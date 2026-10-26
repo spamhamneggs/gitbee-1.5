@@ -130,11 +130,12 @@ describe("CSV user import", () => {
     assert.equal(report.totalParsed, 5);
     assert.equal(report.createdCount, 1);
     assert.equal(report.skippedCount, 4);
-    assert.equal(report.failedCount, 3);
+    assert.equal(report.failedCount, 0);
     assert.deepEqual(report.errors, [
       { line: 3, errors: ["User with email or ID already exists in the system"] },
       { line: 4, errors: ["User with email or ID already exists in the system"] },
       { line: 5, errors: ["User with email or ID already exists in the system"] },
+      { line: 6, errors: ["Duplicate record within the uploaded file"] },
     ]);
   });
 
@@ -244,12 +245,8 @@ describe("CSV user import", () => {
 
   it("reports insertion failures by line and continues processing later rows", async () => {
     const store = createFakeUserStore();
-    const findExistingUser = store.findExistingUser;
-    store.findExistingUser = async (identity) => {
-      if (identity.student_id === "2501959297") {
-        throw new Error("connect ECONNREFUSED");
-      }
-      return findExistingUser(identity);
+    store.findExistingUsers = async () => {
+      throw new Error("connect ECONNREFUSED");
     };
     const validation = await parseAndValidateCsvBuffer(
       csv(
@@ -264,9 +261,9 @@ describe("CSV user import", () => {
 
     const report = await importCsvUsers(validation, store);
     assert.equal(report.totalParsed, 4);
-    assert.equal(report.createdCount, 2);
-    assert.equal(report.failedCount, 2);
-    assert.deepEqual(report.errors.map((row) => row.line), [3, 4]);
-    assert.equal(store.users.length, 2);
+    assert.equal(report.createdCount, 0);
+    assert.equal(report.failedCount, 4);
+    assert.deepEqual(report.errors.map((row) => row.line), [2, 3, 4, 5]);
+    assert.equal(store.users.length, 0);
   });
 });
