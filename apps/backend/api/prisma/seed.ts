@@ -15,6 +15,10 @@ const studentNamesById = Object.fromEntries(
 );
 
 async function main() {
+    // Optional extra users, e.g. SEED_DUMMY_STUDENTS=200 SEED_DUMMY_STAFF=40.
+    // Read before anything is deleted, so a bad value fails without touching the database.
+    const dummyCounts = dummyCountsFromEnv();
+
     // Projects first: project_detail restricts deleting the status/category/major it points at
     await prisma.project.deleteMany({});
     await prisma.projectDetail.deleteMany({});
@@ -221,8 +225,6 @@ async function main() {
     }
     console.log('Project data seeded successfully.');
 
-    // Optional extra users, e.g. SEED_DUMMY_STUDENTS=200 SEED_DUMMY_STAFF=40
-    const dummyCounts = dummyCountsFromEnv();
     if (dummyCounts.students > 0 || dummyCounts.staff > 0) {
         await seedDummyUsers(dummyCounts);
     }
