@@ -44,10 +44,28 @@ export const getLocalRoles = (user: {
     role: string;
     user_type: string | null;
 }): string[] => {
-    if (user.role === "Student" || user.user_type === "student") {
+    if (isLocalStudent(user)) {
         return ["Student"];
     }
-    return user.role === "Lecturer" ? ["Lecturer"] : [user.role, "Lecturer"];
+    if (user.role === "Lecturer" || user.role === "Student") {
+        return ["Lecturer"];
+    }
+    return [user.role, "Lecturer"];
+}
+
+function isLocalStudent(user: { role: string; user_type: string | null }): boolean {
+    return user.user_type !== null
+        ? user.user_type.trim().toLowerCase() === "student"
+        : user.role === "Student";
+}
+
+export const getLocalNim = (user: {
+    role: string;
+    user_type: string | null;
+    student_id: string | null;
+    lecturer_code: string | null;
+}): string => {
+    return isLocalStudent(user) ? user.student_id ?? "" : user.lecturer_code ?? "";
 }
 
 export const createLocalToken = (user: {
@@ -66,7 +84,7 @@ export const createLocalToken = (user: {
         token: jwt.sign({
             exp: expire,
             userId: user.id,
-            nim: user.student_id ?? user.lecturer_code ?? "",
+            nim: getLocalNim(user),
             binusianId: user.binusian_id ?? "",
             name: user.name.toUpperCase(),
             email: user.email.toLowerCase(),
