@@ -21,7 +21,12 @@ adminUserRoutes.post(
   RoleMiddleware("Admin"),
   AdminUserHandler.setPassword
 );
-adminUserRoutes.patch("/update-role", AdminUserHandler.updateRole);
+adminUserRoutes.patch(
+  "/update-role",
+  AuthMiddleware(),
+  RoleMiddleware("Admin"),
+  AdminUserHandler.updateRole
+);
 adminUserRoutes.post(
   "/upload-student-csv",
   AuthMiddleware(),
