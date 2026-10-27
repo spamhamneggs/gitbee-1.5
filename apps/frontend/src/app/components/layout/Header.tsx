@@ -87,42 +87,76 @@ const Header = () => {
   };
 
   const logoutMircosoft = async () => {
-    instance.logoutRedirect();
-    Cookies.remove("token");
+    Cookies.remove("gitbee_token", { path: "/" });
+    Cookies.remove("token", { path: "/" });
+    setUserData(null);
+    await instance.logoutRedirect().catch((error: unknown) => {
+      console.error("Logout failed:", error);
+    });
   };
 
   const changeRole = async (role: string) => {
-    if (userData) {
-      setLoading(true);
-      Cookies.remove("token");
-      console.log(userData?.microsoftToken);
-      const result = await login(userData.microsoftToken, role);
-      console.log(result);
-      if (result?.success) {
+    if (!userData) return;
+    setLoading(true);
+    try {
+      let data:
+        | {
+            nim: string;
+            Name: string;
+            Email: string;
+            ActiveRole: string;
+            Role: string[];
+            MicrosoftToken: string;
+          }
+        | undefined;
+
+      if (userData.microsoftToken) {
+        const result = await login(userData.microsoftToken, role);
+        if (result?.success) data = result.data;
+      } else {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_API}auth/login-local/role`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ role }),
+          }
+        );
+        const result = (await response.json()) as {
+          status?: boolean;
+          data?: typeof data;
+        };
+        if (response.ok && result.status) data = result.data;
+      }
+
+      if (data) {
         setUserData({
-          nim: result.data.nim,
-          name: result.data.Name,
-          email: result.data.Email,
-          role: result.data.ActiveRole,
-          listRole: result.data.Role,
-          microsoftToken: result.data.MicrosoftToken,
+          nim: data.nim,
+          name: data.Name,
+          email: data.Email,
+          role: data.ActiveRole,
+          listRole: data.Role,
+          microsoftToken: data.MicrosoftToken,
         });
 
-        console.log(result.data);
-        if (result.data.ActiveRole?.toLowerCase() == "student")
+        if (data.ActiveRole.toLowerCase() === "student")
           router.push("/dashboard");
-        if (result.data.ActiveRole?.toLowerCase() == "lecturer")
+        if (data.ActiveRole.toLowerCase() === "lecturer")
           router.push("/dashboard-lecturer");
-        if (result.data.ActiveRole?.toLowerCase() == "scc")
+        if (data.ActiveRole.toLowerCase() === "scc")
           router.push("/dashboard-scc");
-        if (result.data.ActiveRole?.toLowerCase() == "hop")
+        if (data.ActiveRole.toLowerCase() === "hop")
           router.push("/dashboard-hop");
-        if (result.data.ActiveRole?.toLowerCase() == "admin")
+        if (data.ActiveRole.toLowerCase() === "admin")
           router.push("/dashboard-admin");
-        setLoading(false);
       } else {
-        router.push("/");
+        console.error("Role switch failed");
       }
+    } catch (error) {
+      console.error("Role switch failed:", error);
+    } finally {
+      setLoading(false);
     }
   };
 

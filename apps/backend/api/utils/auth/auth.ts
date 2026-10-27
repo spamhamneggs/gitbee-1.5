@@ -40,6 +40,16 @@ export const createToken = (
     }
 }
 
+export const getLocalRoles = (user: {
+    role: string;
+    user_type: string | null;
+}): string[] => {
+    if (user.role === "Student" || user.user_type === "student") {
+        return ["Student"];
+    }
+    return user.role === "Lecturer" ? ["Lecturer"] : [user.role, "Lecturer"];
+}
+
 export const createLocalToken = (user: {
     id: number;
     email: string;
@@ -48,24 +58,20 @@ export const createLocalToken = (user: {
     user_type: string | null;
     student_id: string | null;
     binusian_id: string | null;
-}): { token: string; expires: Date } => {
+    lecturer_code: string | null;
+}, activeRole?: string): { token: string; expires: Date } => {
     const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
-    const isStudent = user.role === "Student" || user.user_type === "student";
-    const roles = isStudent
-        ? ["Student"]
-        : user.role === "Lecturer"
-            ? ["Lecturer"]
-            : [user.role, "Lecturer"];
+    const roles = getLocalRoles(user);
     return {
         token: jwt.sign({
             exp: expire,
             userId: user.id,
-            nim: user.student_id ?? "",
+            nim: user.student_id ?? user.lecturer_code ?? "",
             binusianId: user.binusian_id ?? "",
             name: user.name.toUpperCase(),
             email: user.email.toLowerCase(),
             role: roles,
-            activeRole: isStudent ? "Student" : user.role,
+            activeRole: activeRole ?? roles[0],
             microsoftToken: "",
             user_type: user.user_type,
         }, secret),
