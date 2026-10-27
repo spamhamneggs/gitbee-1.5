@@ -4,6 +4,14 @@ import { sendErrorResponse } from "../utils/response/response.js";
 
 export const RoleMiddleware = (requiredRole: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
+
+    const isDev= process.env.NODE_ENV === "development";
+    const isBypassActive = process.env.BYPASS_SSO === "true";
+
+    if(isDev && isBypassActive){
+        return next();
+    }
+
     const cookieName = process.env.COOKIE_NAME;
     const cookieToken = cookieName ? req.cookies?.[cookieName] : undefined;
     const authorization = req.get("authorization");

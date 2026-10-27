@@ -12,6 +12,40 @@ const Page = () => {
 
   useEffect(() => {
     const handleRedirect = async () => {
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("⚠️ [FRONTEND BYPASS] Initiating local dummy login...");
+        try {
+          // Tembak token dummy langsung ke backend (yang sudah di-bypass di Tugas 4.3)
+          const result = await login("bypass-test");
+          if (result?.success) {
+            setUserData({
+              nim: result.data.nim,
+              name: result.data.Name,
+              email: result.data.Email,
+              role: result.data.ActiveRole,
+              listRole: result.data.Role,
+              microsoftToken: result.data.MicrosoftToken,
+            });
+
+            console.log("Bypass Success:", result.data);
+            const role = result.data.ActiveRole?.toLowerCase();
+            
+            // Redirect sesuai role dari backend
+            if (role === "student") router.push("/dashboard");
+            else if (role === "lecturer") router.push("/dashboard-lecturer");
+            else if (role === "scc") router.push("/dashboard-scc");
+            else if (role === "hop") router.push("/dashboard-hop");
+            else if (role === "admin") router.push("/(admin)/dashboard"); // Sesuaikan jika path admin berbeda
+            else router.push("/");
+            
+            return; // Hentikan eksekusi agar tidak lanjut ke logika MSAL Microsoft
+          }
+        } catch (error) {
+          console.error("Frontend bypass failed:", error);
+        }
+      }
+
       if (inProgress === "none" && accounts.length > 0) {
         try {
           const account = accounts[0];

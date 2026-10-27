@@ -41,7 +41,7 @@ const getUserDataFromCookie = (): UserData | null => {
   if (typeof document === "undefined") {
     return null;
   }
-  const token = Cookies.get("token");
+  const token = Cookies.get(process.env.NEXT_PUBLIC_COOKIE_NAME || "gitbee_token");
   if (!token) {
     return null;
   }
