@@ -20,9 +20,10 @@ const originalHash = await hashPassword(originalPassword);
 const staff = {
   id: 1, email: "staff@example.com", name: "Staff", role: "Admin",
   user_type: null as string | null, student_id: "2702000001",
-  lecturer_code: "D5001", binusian_id: "BN1",
+  lecturer_code: "D5001", binusian_id: "BN1", credential_version: 0,
 };
 let user = { ...staff };
+let credentialVersion = 0;
 let passwordHash = originalHash;
 let credentialReads = 0;
 let passwordWrites = 0;
@@ -34,7 +35,7 @@ app.use(cookieParser());
 app.use("/auth", authRoutes);
 app.get("/lecturer", RoleMiddleware("Lecturer"), (_req, res) => res.sendStatus(200));
 
-const session = () => `gitbee_token=${createLocalToken(user).token}`;
+const session = () => `gitbee_token=${createLocalToken({ ...user, credential_version: credentialVersion }).token}`;
 const change = (currentPassword: string, ip = "192.0.2.1", cookie = session()) =>
   request(app).post("/auth/change-password").set("Cookie", cookie)
     .set("X-Forwarded-For", ip)
@@ -50,16 +51,18 @@ function stub<T extends object>(target: T, key: keyof T, value: unknown) {
 
 beforeEach(() => {
   user = { ...staff };
+  credentialVersion = 0;
   passwordHash = originalHash;
   credentialReads = 0;
   passwordWrites = 0;
-  stub(prisma.user, "findUnique", async () => user);
+  stub(prisma.user, "findUnique", async () => ({ ...user, credential_version: credentialVersion }));
   stub(prisma, "$queryRaw", async () => {
     credentialReads += 1;
     return [{ password: passwordHash }];
   });
-  stub(prisma.user, "update", async ({ data }: { data: { password: string } }) => {
+  stub(prisma.user, "update", async ({ data }: { data: { password: string; credential_version: { increment: number } } }) => {
     passwordHash = data.password;
+    credentialVersion += data.credential_version.increment;
     passwordWrites += 1;
     return user;
   });
@@ -123,16 +126,44 @@ describe("local authentication routes", () => {
 
   it("changes a password with a verified bearer session and does not count successes as failures", async () => {
     user.id = 30;
+    let updatedCookie: string | undefined;
     for (let index = 0; index < 6; index += 1) {
-      const response = await request(app).post("/auth/change-password")
-        .set("Authorization", `Bearer ${createLocalToken(user).token}`)
-        .set("X-Forwarded-For", "203.0.113.1")
+      const call = request(app).post("/auth/change-password")
+        .set("X-Forwarded-For", "203.0.113.1");
+      if (updatedCookie) {
+        call.set("Cookie", updatedCookie);
+      } else {
+        call.set("Authorization", `Bearer ${createLocalToken({ ...user, credential_version: credentialVersion }).token}`);
+      }
+      const response = await call
         .send({ currentPassword: index === 0 ? originalPassword : "replacement-password", newPassword: "replacement-password" });
       assert.equal(response.status, 200);
+      assert.ok(response.headers["set-cookie"]?.length);
+      updatedCookie = response.headers["set-cookie"]![0]!.split(";")[0]!;
     }
     assert.equal(passwordWrites, 6);
     assert.equal(await verifyPassword("replacement-password", passwordHash), true);
     assert.equal(await verifyPassword(originalPassword, passwordHash), false);
+  });
+
+  it("invalidates local sessions after changing the password", async () => {
+    const staleCookie = session();
+    const response = await change(originalPassword, "192.0.2.77", staleCookie);
+    assert.equal(response.status, 200);
+    assert.equal(credentialVersion, 1);
+
+    const refresh = await request(app)
+      .post("/auth/login-local/role")
+      .set("Cookie", staleCookie)
+      .send({ role: "Lecturer" });
+    assert.equal(refresh.status, 401);
+
+    const refreshedCookie = response.headers["set-cookie"]![0]!.split(";")[0]!;
+    const renewedSession = await request(app)
+      .post("/auth/login-local/role")
+      .set("Cookie", refreshedCookie)
+      .send({ role: "Lecturer" });
+    assert.equal(renewedSession.status, 200);
   });
 
   it("rejects missing, forged, and non-local sessions before reading credentials", async () => {

@@ -18,7 +18,8 @@ export const getAllMajor = async () => {
 export const getAllUsers = async (search?: string, roleFilter?: string) => {
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/get-user?search=${search}`
+      `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/get-user?search=${search}`,
+      { credentials: "include" }
     );
     const result = await response.json();
 
@@ -42,6 +43,7 @@ export const updateUserRole = async (
       `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/update-role`,
       {
         method: "PATCH",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },

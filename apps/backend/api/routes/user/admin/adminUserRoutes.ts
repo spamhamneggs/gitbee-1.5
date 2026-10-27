@@ -2,15 +2,29 @@ import express from "express";
 import AdminUserHandler from "../../../handlers/user/admin/adminUserHandler.js";
 import { AuthMiddleware } from "../../../middlewares/authMiddleware.js";
 import { RoleMiddleware } from "../../../middlewares/roleMiddleware.js";
+import { currentAdminMiddleware } from "../../../middlewares/currentAdminMiddleware.js";
 import { uploadCsv } from "../../../middlewares/uploadMiddleware.js";
 import multer from "multer";
 const upload = multer({ storage: multer.memoryStorage() });
 
 const adminUserRoutes = express.Router();
 
-adminUserRoutes.get("/get-user", AdminUserHandler.getUser);
-adminUserRoutes.post("/insert-user", AdminUserHandler.insertUser);
-adminUserRoutes.patch("/update-role", AdminUserHandler.updateRole);
+adminUserRoutes.get("/get-user", currentAdminMiddleware, AdminUserHandler.getUser);
+adminUserRoutes.post(
+  "/insert-user",
+  currentAdminMiddleware,
+  AdminUserHandler.insertUser
+);
+adminUserRoutes.post(
+  "/set-password",
+  currentAdminMiddleware,
+  AdminUserHandler.setPassword
+);
+adminUserRoutes.patch(
+  "/update-role",
+  currentAdminMiddleware,
+  AdminUserHandler.updateRole
+);
 adminUserRoutes.post(
   "/upload-student-csv",
   AuthMiddleware(),

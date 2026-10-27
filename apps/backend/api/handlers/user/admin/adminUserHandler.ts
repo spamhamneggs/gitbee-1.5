@@ -16,12 +16,25 @@ import {
 import {
   importCsvUsers,
 } from "../../../utils/csv/csvUserImport.js";
+import { hashPassword } from "../../../utils/auth/password.js";
+import { Prisma } from "../../../prisma/generated/prisma/client.js";
 
 interface AtlantisSemester {
   Description: string;
   SemesterID: string;
 }
 
+const userListSelect = {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  user_type: true,
+  binusian_id: true,
+  student_id: true,
+  lecturer_code: true,
+  created_at: true,
+} as const;
 
 export default class AdminUserHandler {
   static async getUser(req: Request, res: Response) {
@@ -63,6 +76,7 @@ export default class AdminUserHandler {
             role: "SCC",
             ...searchCondition,
           },
+          select: userListSelect,
         });
       }
 
@@ -72,7 +86,8 @@ export default class AdminUserHandler {
             role: "HoP",
             ...searchCondition,
           },
-          include: {
+          select: {
+            ...userListSelect,
             hopMajors: {
               select: {
                 major: {
@@ -85,22 +100,13 @@ export default class AdminUserHandler {
             },
           },
         });
-        type HopDataItem = (typeof hopData)[number];
-        hop = hopData.map(
-          (
-            h
-          ): Omit<HopDataItem, "hopMajors"> & {
-            hopMajors?: HopDataItem["hopMajors"];
-            hop_major: { id: number; name: string }[];
-          } => ({
-            ...h,
-          hop_major: h.hopMajors.map((hm) => ({
+        hop = hopData.map(({ hopMajors, ...user }) => ({
+          ...user,
+          hop_major: hopMajors.map((hm) => ({
             id: hm.major.id,
             name: hm.major.name,
           })),
-          })
-        );
-        hop.forEach((h) => delete h.hopMajors);
+        }));
       }
 
       if (params.roleFilter === "Lecturer" || !params.roleFilter) {
@@ -109,6 +115,7 @@ export default class AdminUserHandler {
             role: "Lecturer",
             ...searchCondition,
           },
+          select: userListSelect,
         });
       }
 
@@ -118,6 +125,7 @@ export default class AdminUserHandler {
             role: "Admin",
             ...searchCondition,
           },
+          select: userListSelect,
         });
       }
 
@@ -137,11 +145,19 @@ export default class AdminUserHandler {
   static async insertUser(req: Request, res: Response) {
     try {
       const schema = z.object({
-        lecturer_code: z.string(),
-        email: z.string(),
-        name: z.string(),
-        role: z.string(),
-        major_ids: z.array(z.string()).optional(),
+        lecturer_code: z.string().trim().min(1).max(50),
+        email: z.string().trim().email().max(150),
+        name: z.string().trim().min(1).max(150),
+        role: z.enum(["Lecturer", "Admin", "SCC", "HoP"]),
+        password: z.string().min(8).max(1024),
+        major_ids: z.array(
+          z.string()
+            .regex(/^\d+$/)
+            .transform(Number)
+            .refine((id) => Number.isSafeInteger(id) && id > 0)
+        ).refine((ids) => new Set(ids).size === ids.length, {
+          message: "Major IDs must be unique",
+        }).optional(),
       });
 
       const validationResult = validateSchema(schema, req.body);
@@ -154,25 +170,76 @@ export default class AdminUserHandler {
       const newUser = await prisma.user.create({
         data: {
           lecturer_code: params.lecturer_code,
-          email: params.email,
+          email: params.email.toLowerCase(),
           name: params.name,
           role: params.role,
+          password: await hashPassword(params.password),
+          ...(params.role === "HoP" && params.major_ids
+            ? {
+                hopMajors: {
+                  create: params.major_ids.map((major_id) => ({
+                    major: { connect: { id: major_id } },
+                  })),
+                },
+              }
+            : {}),
+        },
+        select: {
+          id: true,
+          lecturer_code: true,
+          email: true,
+          name: true,
+          role: true,
         },
       });
 
-      if (params.role == "HoP" && params.major_ids) {
-        const newHoPMajors = params.major_ids.map((major_id) => ({
-          user_id: Number(newUser.id),
-          major_id: Number(major_id),
-        }));
-        await prisma.hoPMajor.createMany({
-          data: newHoPMajors,
-        });
-      }
-
       sendSuccessResponse(res, newUser);
     } catch (error) {
-      sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === "P2002") {
+          return sendErrorResponse(res, "A user with this email or lecturer code already exists.", 409);
+        }
+        if (error.code === "P2025") {
+          return sendErrorResponse(res, "One or more major IDs are invalid.", 400);
+        }
+      }
+      sendErrorResponse(res, "Insert Failed", 500);
+    }
+  }
+
+  static async setPassword(req: Request, res: Response) {
+    try {
+      const schema = z.object({
+        id: z.number().int().positive(),
+        password: z.string().min(8).max(1024),
+      });
+      const valid = schema.safeParse(req.body);
+      if (!valid.success) {
+        return sendErrorResponse(
+          res,
+          valid.error.issues[0]?.message ?? "Invalid request body",
+          400
+        );
+      }
+
+      const user = await prisma.user.update({
+        where: { id: valid.data.id },
+        data: {
+          password: await hashPassword(valid.data.password),
+          credential_version: { increment: 1 },
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      });
+      return sendSuccessResponse(res, user);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        return sendErrorResponse(res, "User not found.", 404);
+      }
+      sendErrorResponse(res, getErrorMessage(error, "Password update failed"));
     }
   }
 
