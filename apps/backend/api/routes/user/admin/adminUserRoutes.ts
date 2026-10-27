@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const adminUserRoutes = express.Router();
 
-adminUserRoutes.get("/get-user", AdminUserHandler.getUser);
+adminUserRoutes.get("/get-user", currentAdminMiddleware, AdminUserHandler.getUser);
 adminUserRoutes.post(
   "/insert-user",
   currentAdminMiddleware,

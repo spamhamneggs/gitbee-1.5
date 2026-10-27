@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import { prisma } from "../prisma/client.js";
+import { resolveCurrentSession } from "../utils/auth/currentSession.js";
 import { verifyToken } from "../utils/auth/auth.js";
 import { sendErrorResponse } from "../utils/response/response.js";
 
@@ -13,22 +13,16 @@ export const localSessionMiddleware: RequestHandler = async (req, res, next) => 
         !Number.isSafeInteger(payload.userId) || payload.userId <= 0) {
         return sendErrorResponse(res, "Unauthorized", 401);
     }
-    const tokenVersion = "credentialVersion" in payload
-        ? payload.credentialVersion
-        : 0;
-    if (typeof tokenVersion !== "number" || !Number.isSafeInteger(tokenVersion) || tokenVersion < 0) {
-        return sendErrorResponse(res, "Unauthorized", 401);
-    }
-
     try {
-        const user = await prisma.user.findUnique({
-            where: { id: payload.userId },
-            select: { id: true, credential_version: true },
-        });
-        if (!user || user.credential_version !== tokenVersion) {
+        const currentSession = await resolveCurrentSession(payload);
+        if (currentSession.status !== "current") {
             return sendErrorResponse(res, "Unauthorized", 401);
         }
-        res.locals.localUserId = user.id;
+        res.locals.localUserId = currentSession.user.id;
+        res.locals.localActiveRole =
+            "activeRole" in payload && typeof payload.activeRole === "string"
+                ? payload.activeRole
+                : undefined;
         next();
     } catch (error) {
         next(error);

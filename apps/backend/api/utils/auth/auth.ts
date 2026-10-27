@@ -21,6 +21,8 @@ export const createToken = (
     microsoftToken: string,
     messier_id?: string,
     activeRole?: string,
+    userId?: number,
+    credentialVersion = 0,
     ) => {
     const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
     const token = jwt.sign({
@@ -32,6 +34,7 @@ export const createToken = (
         email: email.toLowerCase(),
         messier_id: messier_id,
         activeRole: activeRole,
+        ...(userId !== undefined ? { userId, credentialVersion } : {}),
         microsoftToken: microsoftToken
     }, secret);
     return {

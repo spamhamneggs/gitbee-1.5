@@ -1,9 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
+import { resolveCurrentSession } from "../utils/auth/currentSession.js";
 import { verifyToken } from "../utils/auth/auth.js";
 import { sendErrorResponse } from "../utils/response/response.js";
 
 export const AuthMiddleware = () => {
-    return (req: Request, res: Response, next: NextFunction) => {
+    return async (req: Request, res: Response, next: NextFunction) => {
         const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
         const cookieToken = cookieName ? req.cookies?.[cookieName] : undefined;
         const authorization = req.get("authorization");
@@ -19,6 +20,14 @@ export const AuthMiddleware = () => {
             return sendErrorResponse(res, "Forbidden", 401);
         }
 
-        next();
+        try {
+            const currentSession = await resolveCurrentSession(verify.data);
+            if (currentSession.status === "invalid") {
+                return sendErrorResponse(res, "Unauthorized", 401);
+            }
+            next();
+        } catch (error) {
+            next(error);
+        }
     }
 }

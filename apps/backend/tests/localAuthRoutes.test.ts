@@ -126,12 +126,20 @@ describe("local authentication routes", () => {
 
   it("changes a password with a verified bearer session and does not count successes as failures", async () => {
     user.id = 30;
+    let updatedCookie: string | undefined;
     for (let index = 0; index < 6; index += 1) {
-      const response = await request(app).post("/auth/change-password")
-        .set("Authorization", `Bearer ${createLocalToken({ ...user, credential_version: credentialVersion }).token}`)
-        .set("X-Forwarded-For", "203.0.113.1")
+      const call = request(app).post("/auth/change-password")
+        .set("X-Forwarded-For", "203.0.113.1");
+      if (updatedCookie) {
+        call.set("Cookie", updatedCookie);
+      } else {
+        call.set("Authorization", `Bearer ${createLocalToken({ ...user, credential_version: credentialVersion }).token}`);
+      }
+      const response = await call
         .send({ currentPassword: index === 0 ? originalPassword : "replacement-password", newPassword: "replacement-password" });
       assert.equal(response.status, 200);
+      assert.ok(response.headers["set-cookie"]?.length);
+      updatedCookie = response.headers["set-cookie"]![0]!.split(";")[0]!;
     }
     assert.equal(passwordWrites, 6);
     assert.equal(await verifyPassword("replacement-password", passwordHash), true);
@@ -149,6 +157,13 @@ describe("local authentication routes", () => {
       .set("Cookie", staleCookie)
       .send({ role: "Lecturer" });
     assert.equal(refresh.status, 401);
+
+    const refreshedCookie = response.headers["set-cookie"]![0]!.split(";")[0]!;
+    const renewedSession = await request(app)
+      .post("/auth/login-local/role")
+      .set("Cookie", refreshedCookie)
+      .send({ role: "Lecturer" });
+    assert.equal(renewedSession.status, 200);
   });
 
   it("rejects missing, forged, and non-local sessions before reading credentials", async () => {

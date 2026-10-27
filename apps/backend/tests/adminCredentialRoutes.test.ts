@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { after, afterEach, beforeEach, describe, it } from "node:test";
 import cookieParser from "cookie-parser";
 import express from "express";
 import request from "supertest";
 
 process.env.DATABASE_URL ??= "******127.0.0.1:3306/test";
+process.env.DATABASE_URL = "mysql://test:test@127.0.0.1:3306/test";
 process.env.JWT_SECRET = "admin-credential-route-test-secret";
 process.env.COOKIE_NAME = "test_auth";
 
@@ -14,6 +16,8 @@ const { default: adminUserRoutes } = await import(
 );
 const { default: authRoutes } = await import("../api/routes/auth/authRoutes.js");
 const { createLocalToken } = await import("../api/utils/auth/auth.js");
+const { createToken } = await import("../api/utils/auth/auth.js");
+const { AuthMiddleware } = await import("../api/middlewares/authMiddleware.js");
 const { verifyPassword } = await import("../api/utils/auth/password.js");
 const { Prisma } = await import("../api/prisma/generated/prisma/client.js");
 
@@ -22,6 +26,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use("/api/user/admin", adminUserRoutes);
 app.use("/api/auth", authRoutes);
+app.get("/api/auth-checked", AuthMiddleware(), (_req, res) => res.sendStatus(200));
 
 const adminAccount = {
   id: 1,
@@ -50,9 +55,14 @@ const victimAdmin = {
   lecturer_code: "D5002",
 };
 const adminToken = createLocalToken(adminAccount).token;
+const microsoftAdminToken = createToken(
+  "D5000", "B5000", "Admin", "admin@example.com", ["Admin"], "microsoft-token",
+  "", "Admin", adminAccount.id, adminAccount.credential_version
+).token;
 const lecturerToken = createLocalToken(lecturerAccount).token;
 const victimToken = createLocalToken(victimAdmin).token;
 let currentAdmin: typeof adminAccount | null = adminAccount;
+let adminCredentialVersion = 0;
 let victimCredentialVersion = 0;
 
 const restores: (() => void)[] = [];
@@ -65,11 +75,16 @@ function stub<T extends object>(target: T, key: keyof T, value: unknown) {
 
 beforeEach(() => {
   currentAdmin = adminAccount;
+  adminCredentialVersion = 0;
   victimCredentialVersion = 0;
-  stub(prisma.user, "findUnique", async ({ where }: { where: { id: number } }) => {
-    if (where.id === adminAccount.id) return currentAdmin;
-    if (where.id === lecturerAccount.id) return lecturerAccount;
-    if (where.id === victimAdmin.id) {
+  stub(prisma.user, "findUnique", async ({ where }: { where: { id?: number; email?: string } }) => {
+    if ((where.id === adminAccount.id || where.email === adminAccount.email) && currentAdmin) {
+      return { ...currentAdmin, credential_version: adminCredentialVersion };
+    }
+    if (where.id === lecturerAccount.id || where.email === lecturerAccount.email) {
+      return lecturerAccount;
+    }
+    if (where.id === victimAdmin.id || where.email === victimAdmin.email) {
       return { ...victimAdmin, credential_version: victimCredentialVersion };
     }
     return null;
@@ -144,6 +159,96 @@ describe("admin local credentials", () => {
       email: "lecturer@example.com",
       name: "Lecturer",
     });
+  });
+
+  it("allows Microsoft-authenticated administrators with a local account to manage credentials", async () => {
+    let updatedUserId = 0;
+    stub(prisma.user, "update", async ({ where }: { where: { id: number } }) => {
+      updatedUserId = where.id;
+      return { id: where.id, email: adminAccount.email, name: adminAccount.name };
+    });
+
+    const response = await request(app)
+      .post("/api/user/admin/set-password")
+      .set("Authorization", `Bearer ${microsoftAdminToken}`)
+      .send({ id: victimAdmin.id, password: "recovery-password" });
+
+    assert.equal(response.status, 200);
+    assert.equal(updatedUserId, victimAdmin.id);
+  });
+
+  it("rejects stale Microsoft tokens after credential changes on AuthMiddleware routes", async () => {
+    assert.equal(
+      (await request(app).get("/api/auth-checked").set("Authorization", `Bearer ${microsoftAdminToken}`)).status,
+      200
+    );
+    adminCredentialVersion += 1;
+    assert.equal(
+      (await request(app).get("/api/auth-checked").set("Authorization", `Bearer ${microsoftAdminToken}`)).status,
+      401
+    );
+  });
+
+  it("revokes administrator access to credential actions after resetting their own password", async () => {
+    stub(prisma.user, "update", async ({ where }: { where: { id: number } }) => {
+      if (where.id === adminAccount.id) adminCredentialVersion += 1;
+      return { id: where.id, email: adminAccount.email, name: adminAccount.name };
+    });
+
+    const reset = await request(app)
+      .post("/api/user/admin/set-password")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ id: adminAccount.id, password: "recovery-password" });
+    const retry = await request(app)
+      .post("/api/user/admin/insert-user")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        lecturer_code: "D501",
+        email: "new@example.com",
+        name: "New User",
+        role: "Lecturer",
+        password: "initial-password",
+      });
+
+    assert.equal(reset.status, 200);
+    assert.equal(retry.status, 401);
+  });
+
+  it("protects the user listing and excludes credential version from returned fields", async () => {
+    const unauthenticated = await request(app).get("/api/user/admin/get-user");
+    assert.equal(unauthenticated.status, 401);
+
+    const queries: { select?: Record<string, unknown> }[] = [];
+    stub(prisma.user, "findMany", async (args: { select?: Record<string, unknown> }) => {
+      queries.push(args);
+      return [];
+    });
+    const response = await request(app)
+      .get("/api/user/admin/get-user")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    assert.equal(response.status, 200);
+    assert.equal(queries.length, 4);
+    assert.ok(queries.every(({ select }) => select && !("credential_version" in select)));
+    assert.equal(JSON.stringify(response.body).includes("credential_version"), false);
+  });
+
+  it("sends cookies with the cross-origin Manage Users requests", async () => {
+    const actions = await readFile(
+      new URL("../../frontend/src/app/(pages)/(admin)/manage-users/actions.tsx", import.meta.url),
+      "utf8"
+    );
+    const updateRoleAction = actions.slice(
+      actions.indexOf("export const updateUserRole"),
+      actions.indexOf("export const uploadExcelUsers")
+    );
+    const getUsersAction = actions.slice(
+      actions.indexOf("export const getAllUsers"),
+      actions.indexOf("export const updateUserRole")
+    );
+
+    assert.ok(updateRoleAction.includes('credentials: "include"'));
+    assert.ok(getUsersAction.includes('credentials: "include"'));
   });
 
   it("accepts only positive integer JSON numbers for the target user ID", async () => {

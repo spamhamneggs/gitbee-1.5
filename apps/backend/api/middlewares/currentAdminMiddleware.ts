@@ -1,6 +1,6 @@
 import type { RequestHandler } from "express";
-import { prisma } from "../prisma/client.js";
 import { getLocalRoles, verifyToken } from "../utils/auth/auth.js";
+import { resolveCurrentSession } from "../utils/auth/currentSession.js";
 import { sendErrorResponse } from "../utils/response/response.js";
 
 export const currentAdminMiddleware: RequestHandler = async (req, res, next) => {
@@ -8,26 +8,15 @@ export const currentAdminMiddleware: RequestHandler = async (req, res, next) => 
   const bearerToken = req.get("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
   const verified = verifyToken(cookieToken || bearerToken || "");
   const payload = verified.data;
-  if (
-    !verified.status ||
-    typeof payload !== "object" ||
-    payload === null ||
-    !("userId" in payload) ||
-    typeof payload.userId !== "number" ||
-    !Number.isSafeInteger(payload.userId) ||
-    payload.userId <= 0
-  ) {
+  if (!verified.status) {
     return sendErrorResponse(res, "Unauthorized", 401);
   }
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: { id: true, role: true, user_type: true },
-    });
-    if (!user) {
+    const currentSession = await resolveCurrentSession(payload);
+    if (currentSession.status !== "current") {
       return sendErrorResponse(res, "Unauthorized", 401);
     }
-    if (!getLocalRoles(user).includes("Admin")) {
+    if (!getLocalRoles(currentSession.user).includes("Admin")) {
       return sendErrorResponse(res, "Forbidden", 403);
     }
     next();

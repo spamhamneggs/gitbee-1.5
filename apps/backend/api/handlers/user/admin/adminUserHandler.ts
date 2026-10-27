@@ -24,6 +24,17 @@ interface AtlantisSemester {
   SemesterID: string;
 }
 
+const userListSelect = {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  user_type: true,
+  binusian_id: true,
+  student_id: true,
+  lecturer_code: true,
+  created_at: true,
+} as const;
 
 export default class AdminUserHandler {
   static async getUser(req: Request, res: Response) {
@@ -65,6 +76,7 @@ export default class AdminUserHandler {
             role: "SCC",
             ...searchCondition,
           },
+          select: userListSelect,
         });
       }
 
@@ -74,7 +86,8 @@ export default class AdminUserHandler {
             role: "HoP",
             ...searchCondition,
           },
-          include: {
+          select: {
+            ...userListSelect,
             hopMajors: {
               select: {
                 major: {
@@ -87,22 +100,13 @@ export default class AdminUserHandler {
             },
           },
         });
-        type HopDataItem = (typeof hopData)[number];
-        hop = hopData.map(
-          (
-            h
-          ): Omit<HopDataItem, "hopMajors"> & {
-            hopMajors?: HopDataItem["hopMajors"];
-            hop_major: { id: number; name: string }[];
-          } => ({
-            ...h,
-          hop_major: h.hopMajors.map((hm) => ({
+        hop = hopData.map(({ hopMajors, ...user }) => ({
+          ...user,
+          hop_major: hopMajors.map((hm) => ({
             id: hm.major.id,
             name: hm.major.name,
           })),
-          })
-        );
-        hop.forEach((h) => delete h.hopMajors);
+        }));
       }
 
       if (params.roleFilter === "Lecturer" || !params.roleFilter) {
@@ -111,6 +115,7 @@ export default class AdminUserHandler {
             role: "Lecturer",
             ...searchCondition,
           },
+          select: userListSelect,
         });
       }
 
@@ -120,6 +125,7 @@ export default class AdminUserHandler {
             role: "Admin",
             ...searchCondition,
           },
+          select: userListSelect,
         });
       }
 
