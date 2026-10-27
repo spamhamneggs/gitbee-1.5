@@ -4,6 +4,7 @@ import { sendErrorResponse } from "../utils/response/response.js";
 
 export const AuthMiddleware = () => {
     return (req: Request, res: Response, next: NextFunction) => {
+
         const isDev= process.env.NODE_ENV === "development";
         const isBypassActive = process.env.BYPASS_SSO === "true";
 
@@ -11,7 +12,7 @@ export const AuthMiddleware = () => {
             return next();
         }
 
-        const cookieName = process.env.COOKIE_NAME;
+        const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
         const cookieToken = cookieName ? req.cookies?.[cookieName] : undefined;
         const authorization = req.get("authorization");
         const bearerToken = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];

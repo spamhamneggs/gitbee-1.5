@@ -11,8 +11,8 @@ export const RoleMiddleware = (requiredRole: string) => {
     if(isDev && isBypassActive){
         return next();
     }
-
-    const cookieName = process.env.COOKIE_NAME;
+    
+    const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
     const cookieToken = cookieName ? req.cookies?.[cookieName] : undefined;
     const authorization = req.get("authorization");
     const bearerToken = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];

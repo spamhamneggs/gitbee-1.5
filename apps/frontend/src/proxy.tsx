@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
 
 export function proxy(req: NextRequest) {
-  const token = req.cookies.get("token")?.value;
+  const token = req.cookies.get("gitbee_token")?.value;
   const pathname = req.nextUrl.pathname;
 
   if (!token) {
@@ -11,8 +11,13 @@ export function proxy(req: NextRequest) {
   }
 
   try {
-    const decoded = jwt.decode(token) as { role?: string[] };
-    if (!decoded?.role || !Array.isArray(decoded.role)) {
+    const decoded = jwt.decode(token);
+    if (
+      !decoded ||
+      typeof decoded === "string" ||
+      !Array.isArray(decoded.role) ||
+      !decoded.role.every((role): role is string => typeof role === "string")
+    ) {
       return NextResponse.redirect(new URL("/login/microsoft", req.url));
     }
 

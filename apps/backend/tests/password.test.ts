@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import bcrypt from "bcryptjs";
 import { hashPassword, verifyPassword } from "../api/utils/auth/password.js";
 
 describe("password hashing", () => {
@@ -22,8 +23,17 @@ describe("password hashing", () => {
     assert.equal(await verifyPassword("Secret", hash), false);
   });
 
+  it("verifies existing bcrypt hashes", async () => {
+    const hash = await bcrypt.hash("secret", 4);
+
+    assert.equal(await verifyPassword("secret", hash), true);
+    assert.equal(await verifyPassword("wrong", hash), false);
+  });
+
   it("rejects values that are not scrypt hashes", async () => {
     assert.equal(await verifyPassword("secret", "secret"), false);
     assert.equal(await verifyPassword("secret", "bcrypt$x$y"), false);
+    assert.equal(await verifyPassword("secret", "scrypt$invalid$8$1$c2FsdA==$aGFzaA=="), false);
+    assert.equal(await verifyPassword("secret", "scrypt$16384$8$1$c2FsdA==$aGFzaA=="), false);
   });
 });
