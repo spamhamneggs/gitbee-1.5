@@ -47,16 +47,18 @@ export const getLocalRoles = (user: {
     if (isLocalStudent(user)) {
         return ["Student"];
     }
-    if (user.role === "Lecturer" || user.role === "Student") {
+    if ((user.user_type !== null && user.user_type.trim().toLowerCase() !== "staff") ||
+        !["Lecturer", "Admin", "SCC", "HoP"].includes(user.role)) {
+        return [];
+    }
+    if (user.role === "Lecturer") {
         return ["Lecturer"];
     }
     return [user.role, "Lecturer"];
 }
 
 function isLocalStudent(user: { role: string; user_type: string | null }): boolean {
-    return user.user_type !== null
-        ? user.user_type.trim().toLowerCase() === "student"
-        : user.role === "Student";
+    return user.role === "Student" || user.user_type?.trim().toLowerCase() === "student";
 }
 
 export const getLocalNim = (user: {
@@ -80,6 +82,9 @@ export const createLocalToken = (user: {
 }, activeRole?: string): { token: string; expires: Date } => {
     const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
     const roles = getLocalRoles(user);
+    if (roles.length === 0 || (activeRole !== undefined && !roles.includes(activeRole))) {
+        throw new Error("Invalid local account role");
+    }
     return {
         token: jwt.sign({
             exp: expire,

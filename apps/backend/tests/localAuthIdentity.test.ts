@@ -34,7 +34,7 @@ describe("local authentication identity", () => {
     }), "2702999999");
   });
 
-  it("uses lecturer identity when user_type identifies staff even if role is Student", () => {
+  it("keeps an explicit Student role even when user_type says staff", () => {
     const user = {
       role: "Student",
       user_type: " Staff ",
@@ -42,8 +42,8 @@ describe("local authentication identity", () => {
       lecturer_code: "D5001",
     };
 
-    assert.equal(getLocalNim(user), "D5001");
-    assert.deepEqual(getLocalRoles(user), ["Lecturer"]);
+    assert.equal(getLocalNim(user), "2702999999");
+    assert.deepEqual(getLocalRoles(user), ["Student"]);
     const { token } = createLocalToken({
       id: 2,
       email: "staff@example.com",
@@ -52,8 +52,8 @@ describe("local authentication identity", () => {
       binusian_id: null,
     });
     const claims = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString());
-    assert.equal(claims.nim, "D5001");
-    assert.equal(claims.activeRole, "Lecturer");
+    assert.equal(claims.nim, "2702999999");
+    assert.equal(claims.activeRole, "Student");
   });
 
   it("uses student identity when user_type identifies a student with a lecturer code", () => {
@@ -66,5 +66,18 @@ describe("local authentication identity", () => {
 
     assert.equal(getLocalNim(user), "2702999999");
     assert.deepEqual(getLocalRoles(user), ["Student"]);
+  });
+
+  it("rejects blank or unrecognized staff classifications and unknown roles", () => {
+    const user = {
+      id: 3, email: "invalid@example.com", name: "Invalid", role: "Admin",
+      user_type: "", student_id: null, lecturer_code: "D5001", binusian_id: null,
+    };
+    for (const user_type of ["", " ", "unknown", "lecturer"]) {
+      assert.deepEqual(getLocalRoles({ ...user, user_type }), []);
+      assert.throws(() => createLocalToken({ ...user, user_type }), /Invalid local account role/);
+    }
+    assert.deepEqual(getLocalRoles({ ...user, role: "unknown", user_type: null }), []);
+    assert.throws(() => createLocalToken({ ...user, role: "Lecturer", user_type: "staff" }, "Admin"), /Invalid local account role/);
   });
 });

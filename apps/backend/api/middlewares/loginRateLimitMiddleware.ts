@@ -37,7 +37,8 @@ export function createLoginRateLimitMiddleware(options: {
     maxIpFailures?: number;
     maxAccountFailures?: number;
     maxEntries?: number;
-} = {}): LoginRateLimitMiddleware {
+    accountKey?: (req: Request, res: Response) => string;
+}, handler: RequestHandler): LoginRateLimitMiddleware {
     const windowMs = options.windowMs ?? WINDOW_MS;
     const maxIpFailures = options.maxIpFailures ?? MAX_IP_FAILURES;
     const maxAccountFailures = options.maxAccountFailures ?? MAX_ACCOUNT_FAILURES;
@@ -61,7 +62,7 @@ export function createLoginRateLimitMiddleware(options: {
         }
     };
 
-    const middleware: RequestHandler = (req: Request, res: Response, next) => {
+    const middleware: RequestHandler = async (req: Request, res: Response, next) => {
         const now = Date.now();
         pruneExpired(now, Math.min(attempts.size, 256));
 
@@ -75,13 +76,13 @@ export function createLoginRateLimitMiddleware(options: {
             if (ipEntry.failures + ipEntry.pending >= maxIpFailures) {
                 res.set(
                     "Retry-After",
-                    String(Math.ceil((ipEntry.windowStartedAt + windowMs - now) / 1000))
+                    String(Math.max(1, Math.ceil((ipEntry.windowStartedAt + windowMs - now) / 1000)))
                 );
                 return sendErrorResponse(res, "Too many login attempts. Please try again later.", 429);
             }
         }
 
-        const account = getAccountKey(req.body?.email);
+        const account = options.accountKey?.(req, res) ?? getAccountKey(req.body?.email);
         const accountKey = account ? `account:${account}` : "";
         let accountEntry = accountKey ? attempts.get(accountKey) : undefined;
         if (accountEntry && accountEntry.pending === 0 && now - accountEntry.windowStartedAt >= windowMs) {
@@ -92,7 +93,7 @@ export function createLoginRateLimitMiddleware(options: {
             if (accountEntry.failures + accountEntry.pending >= maxAccountFailures) {
                 res.set(
                     "Retry-After",
-                    String(Math.ceil((accountEntry.windowStartedAt + windowMs - now) / 1000))
+                    String(Math.max(1, Math.ceil((accountEntry.windowStartedAt + windowMs - now) / 1000)))
                 );
                 return sendErrorResponse(res, "Too many login attempts. Please try again later.", 429);
             }
@@ -106,7 +107,7 @@ export function createLoginRateLimitMiddleware(options: {
 
         return nextWithEntries();
 
-        function nextWithEntries() {
+        async function nextWithEntries() {
             const keys = [
                 { key: ipKey, entry: ipEntry },
                 ...(accountKey ? [{ key: accountKey, entry: accountEntry }] : []),
@@ -123,27 +124,40 @@ export function createLoginRateLimitMiddleware(options: {
 
             for (const { entry } of entries) entry.pending += 1;
             let completed = false;
-            const releasePending = (countFailure: boolean) => {
-                if (completed) return;
+            let handlerFinished = false;
+            let responseFinished = false;
+            let aborted = false;
+            const releasePending = () => {
+                if (completed || !handlerFinished || (!responseFinished && !aborted)) return;
                 completed = true;
                 for (const { entry } of entries) {
                     entry.pending = Math.max(0, entry.pending - 1);
-                    if (countFailure && res.statusCode >= 400 && res.statusCode !== 429) {
+                    if (aborted || (res.statusCode >= 400 && res.statusCode !== 429)) {
                         entry.failures += 1;
                     }
                 }
             };
             res.once("finish", () => {
-                releasePending(true);
+                responseFinished = true;
+                releasePending();
             });
-            res.once("close", () => releasePending(res.writableFinished));
+            res.once("close", () => {
+                aborted = !res.writableFinished;
+                releasePending();
+            });
 
-            next();
+            try {
+                await handler(req, res, next);
+            } catch (error) {
+                next(error);
+            } finally {
+                // Closing a socket does not cancel database queries or password hashing.
+                handlerFinished = true;
+                releasePending();
+            }
         }
     };
     return Object.assign(middleware, {
         getTrackedEntryCount: () => attempts.size,
     });
 }
-
-export const loginRateLimitMiddleware = createLoginRateLimitMiddleware();

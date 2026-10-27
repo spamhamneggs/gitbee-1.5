@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseJwt } from "../../utils/auth/auth.js";
 import type { NextFunction, Request, Response } from "express";
-import { createLocalToken, createToken, getLocalNim, getLocalRoles, verifyToken } from "../../utils/auth/auth.js";
+import { createLocalToken, createToken, getLocalNim, getLocalRoles } from "../../utils/auth/auth.js";
 import { getErrorMessage, sendSuccessResponse, sendErrorResponse } from "../../utils/response/response.js";
 import GenericService from "../../services/generic/genericService.js";
 import type { AtlantisAccountData } from "../../services/generic/genericService.js";
@@ -55,6 +55,9 @@ export default class AuthHandler {
             }
 
             const roles = getLocalRoles(user);
+            if (roles.length === 0) {
+                return sendErrorResponse(res, "Invalid local account role", 403);
+            }
             const activeRole = roles[0] ?? user.role;
             const token = createLocalToken(user);
             return sendSuccessResponse(res, {
@@ -91,23 +94,7 @@ export default class AuthHandler {
                 return sendErrorResponse(res, valid.error.issues[0]?.message ?? "Invalid request body", 400);
             }
 
-            const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
-            const cookieToken = req.cookies?.[cookieName];
-            const bearerToken = req.get("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
-            const verified = verifyToken(cookieToken || bearerToken || "");
-            const payload = verified.data;
-            const userId =
-                verified.status &&
-                typeof payload === "object" &&
-                payload !== null &&
-                "userId" in payload &&
-                typeof payload.userId === "number" &&
-                Number.isSafeInteger(payload.userId)
-                    ? payload.userId
-                    : null;
-            if (userId === null) {
-                return sendErrorResponse(res, "Unauthorized", 401);
-            }
+            const userId = res.locals.localUserId as number;
 
             const credentials = await prisma.$queryRaw<Array<{ password: string | null }>>`
                 SELECT password FROM user WHERE id = ${userId} LIMIT 1
@@ -122,6 +109,42 @@ export default class AuthHandler {
                 data: { password: await hashPassword(valid.data.newPassword) },
             });
             return sendSuccessResponse(res, { message: "Password updated successfully" });
+        } catch (error) {
+            return next(error);
+        }
+    }
+
+    static async changeLocalRole(req: Request, res: Response, next: NextFunction) {
+        try {
+            const valid = z.object({ role: z.string().min(1) }).safeParse(req.body);
+            if (!valid.success) {
+                return sendErrorResponse(res, "Invalid role", 400);
+            }
+            const user = await prisma.user.findUnique({
+                where: { id: res.locals.localUserId as number },
+                select: {
+                    id: true, email: true, name: true, role: true, user_type: true,
+                    student_id: true, binusian_id: true, lecturer_code: true,
+                },
+            });
+            if (!user) return sendErrorResponse(res, "Unauthorized", 401);
+            const roles = getLocalRoles(user);
+            if (!roles.includes(valid.data.role)) {
+                return sendErrorResponse(res, "Forbidden", 403);
+            }
+            const token = createLocalToken(user, valid.data.role);
+            return sendSuccessResponse(res, {
+                nim: getLocalNim(user),
+                Name: user.name.toUpperCase(),
+                Email: user.email,
+                Role: roles,
+                ActiveRole: valid.data.role,
+                MicrosoftToken: "",
+            }, {
+                name: process.env.COOKIE_NAME ?? "gitbee_token",
+                value: token.token,
+                expires: token.expires,
+            });
         } catch (error) {
             return next(error);
         }

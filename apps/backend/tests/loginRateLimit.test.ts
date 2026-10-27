@@ -11,11 +11,10 @@ describe("local login rate limiting", () => {
     app.use(express.json());
     app.post(
       "/login",
-      createLoginRateLimitMiddleware({ maxAccountFailures: 2, maxIpFailures: 10 }),
-      (_req, res) => {
+      createLoginRateLimitMiddleware({ maxAccountFailures: 2, maxIpFailures: 10 }, (_req, res) => {
         handlerCalls += 1;
         res.sendStatus(401);
-      }
+      })
     );
 
     assert.equal((await request(app).post("/login").send({ email: "User@example.com" })).status, 401);
@@ -30,11 +29,10 @@ describe("local login rate limiting", () => {
     app.use(express.json());
     app.post(
       "/login",
-      createLoginRateLimitMiddleware({ maxAccountFailures: 10, maxIpFailures: 2 }),
-      (_req, res) => {
+      createLoginRateLimitMiddleware({ maxAccountFailures: 10, maxIpFailures: 2 }, (_req, res) => {
         handlerCalls += 1;
         res.sendStatus(401);
-      }
+      })
     );
 
     assert.equal((await request(app).post("/login").send({ email: "one@example.com" })).status, 401);
@@ -49,11 +47,10 @@ describe("local login rate limiting", () => {
     app.use(express.json());
     app.post(
       "/login",
-      createLoginRateLimitMiddleware({ maxAccountFailures: 2, maxIpFailures: 10 }),
-      (_req, res) => {
+      createLoginRateLimitMiddleware({ maxAccountFailures: 2, maxIpFailures: 10 }, (_req, res) => {
         handlerCalls += 1;
         res.sendStatus(401);
-      }
+      })
     );
 
     assert.equal((await request(app).post("/login").send({ email: "user@example.com" })).status, 401);
@@ -74,15 +71,11 @@ describe("local login rate limiting", () => {
       maxAccountFailures: 10,
       maxIpFailures: 1,
       maxEntries: 3,
+    }, (_req, res) => {
+      handlerCalls += 1;
+      res.sendStatus(401);
     });
-    app.post(
-      "/login",
-      limiter,
-      (_req, res) => {
-        handlerCalls += 1;
-        res.sendStatus(401);
-      }
-    );
+    app.post("/login", limiter);
 
     assert.equal(
       (await request(app).post("/login").set("X-Forwarded-For", "192.0.2.1").send({ email: "first@example.com" })).status,
@@ -130,8 +123,8 @@ describe("local login rate limiting", () => {
     app.use(express.json());
     app.post(
       "/login",
-      createLoginRateLimitMiddleware({ maxAccountFailures: 2, maxIpFailures: 10 }),
-      (_req, res) => res.sendStatus(401)
+      createLoginRateLimitMiddleware({ maxAccountFailures: 2, maxIpFailures: 10 },
+        (_req, res) => res.sendStatus(401))
     );
 
     assert.equal((await request(app).post("/login").send({ email: "user@example.com" })).status, 401);
@@ -147,12 +140,8 @@ describe("local login rate limiting", () => {
       maxAccountFailures: 10,
       maxIpFailures: 10,
       maxEntries: 2,
-    });
-    app.post(
-      "/login",
-      limiter,
-      (_req, res) => res.sendStatus(401)
-    );
+    }, (_req, res) => res.sendStatus(401));
+    app.post("/login", limiter);
 
     assert.equal((await request(app).post("/login").send({ email: "first@example.com" })).status, 401);
     await new Promise((resolve) => setTimeout(resolve, 30));
