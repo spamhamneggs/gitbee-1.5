@@ -17,6 +17,7 @@ import {
   importCsvUsers,
 } from "../../../utils/csv/csvUserImport.js";
 import { hashPassword } from "../../../utils/auth/password.js";
+import { Prisma } from "../../../prisma/generated/prisma/client.js";
 
 interface AtlantisSemester {
   Description: string;
@@ -143,7 +144,14 @@ export default class AdminUserHandler {
         name: z.string().trim().min(1).max(150),
         role: z.enum(["Lecturer", "Admin", "SCC", "HoP"]),
         password: z.string().min(8).max(1024),
-        major_ids: z.array(z.string()).optional(),
+        major_ids: z.array(
+          z.string()
+            .regex(/^\d+$/)
+            .transform(Number)
+            .refine((id) => Number.isSafeInteger(id) && id > 0)
+        ).refine((ids) => new Set(ids).size === ids.length, {
+          message: "Major IDs must be unique",
+        }).optional(),
       });
 
       const validationResult = validateSchema(schema, req.body);
@@ -160,6 +168,15 @@ export default class AdminUserHandler {
           name: params.name,
           role: params.role,
           password: await hashPassword(params.password),
+          ...(params.role === "HoP" && params.major_ids
+            ? {
+                hopMajors: {
+                  create: params.major_ids.map((major_id) => ({
+                    major: { connect: { id: major_id } },
+                  })),
+                },
+              }
+            : {}),
         },
         select: {
           id: true,
@@ -170,26 +187,24 @@ export default class AdminUserHandler {
         },
       });
 
-      if (params.role == "HoP" && params.major_ids) {
-        const newHoPMajors = params.major_ids.map((major_id) => ({
-          user_id: Number(newUser.id),
-          major_id: Number(major_id),
-        }));
-        await prisma.hoPMajor.createMany({
-          data: newHoPMajors,
-        });
-      }
-
       sendSuccessResponse(res, newUser);
     } catch (error) {
-      sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === "P2002") {
+          return sendErrorResponse(res, "A user with this email or lecturer code already exists.", 409);
+        }
+        if (error.code === "P2025") {
+          return sendErrorResponse(res, "One or more major IDs are invalid.", 400);
+        }
+      }
+      sendErrorResponse(res, "Insert Failed", 500);
     }
   }
 
   static async setPassword(req: Request, res: Response) {
     try {
       const schema = z.object({
-        id: z.coerce.number().int().positive(),
+        id: z.number().int().positive(),
         password: z.string().min(8).max(1024),
       });
       const valid = schema.safeParse(req.body);
@@ -203,7 +218,10 @@ export default class AdminUserHandler {
 
       const user = await prisma.user.update({
         where: { id: valid.data.id },
-        data: { password: await hashPassword(valid.data.password) },
+        data: {
+          password: await hashPassword(valid.data.password),
+          credential_version: { increment: 1 },
+        },
         select: {
           id: true,
           email: true,
@@ -212,6 +230,9 @@ export default class AdminUserHandler {
       });
       return sendSuccessResponse(res, user);
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        return sendErrorResponse(res, "User not found.", 404);
+      }
       sendErrorResponse(res, getErrorMessage(error, "Password update failed"));
     }
   }

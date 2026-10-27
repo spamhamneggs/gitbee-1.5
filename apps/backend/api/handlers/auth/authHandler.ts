@@ -34,6 +34,7 @@ export default class AuthHandler {
                     student_id: true,
                     binusian_id: true,
                     lecturer_code: true,
+                    credential_version: true,
                 },
             });
             if (!user) {
@@ -106,7 +107,10 @@ export default class AuthHandler {
 
             await prisma.user.update({
                 where: { id: userId },
-                data: { password: await hashPassword(valid.data.newPassword) },
+                data: {
+                    password: await hashPassword(valid.data.newPassword),
+                    credential_version: { increment: 1 },
+                },
             });
             return sendSuccessResponse(res, { message: "Password updated successfully" });
         } catch (error) {
@@ -125,6 +129,7 @@ export default class AuthHandler {
                 select: {
                     id: true, email: true, name: true, role: true, user_type: true,
                     student_id: true, binusian_id: true, lecturer_code: true,
+                    credential_version: true,
                 },
             });
             if (!user) return sendErrorResponse(res, "Unauthorized", 401);

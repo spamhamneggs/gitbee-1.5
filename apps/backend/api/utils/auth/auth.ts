@@ -79,6 +79,7 @@ export const createLocalToken = (user: {
     student_id: string | null;
     binusian_id: string | null;
     lecturer_code: string | null;
+    credential_version?: number;
 }, activeRole?: string): { token: string; expires: Date } => {
     const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
     const roles = getLocalRoles(user);
@@ -95,6 +96,7 @@ export const createLocalToken = (user: {
             email: user.email.toLowerCase(),
             role: roles,
             activeRole: activeRole ?? roles[0],
+            credentialVersion: user.credential_version ?? 0,
             microsoftToken: "",
             user_type: user.user_type,
         }, secret),
