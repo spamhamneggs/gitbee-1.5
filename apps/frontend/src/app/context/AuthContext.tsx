@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 
 import Cookies from "js-cookie";
 import jwt from "jsonwebtoken";
-import type { JwtPayload } from "jsonwebtoken";
 
 interface UserData {
   nim: string;
@@ -41,21 +40,26 @@ const getUserDataFromCookie = (): UserData | null => {
   if (typeof document === "undefined") {
     return null;
   }
-  const token = Cookies.get("token");
+  const token = Cookies.get("gitbee_token");
   if (!token) {
     return null;
   }
 
-  console.log(token);
-  const decoded = jwt.decode(token) as JwtPayload;
-  console.log(decoded);
+  const decoded = jwt.decode(token);
+  if (!decoded || typeof decoded === "string") {
+    return null;
+  }
+  const roles = Array.isArray(decoded.role)
+    ? decoded.role.filter((role): role is string => typeof role === "string")
+    : [];
   return {
-    nim: decoded?.nim ? decoded.nim : "",
-    name: decoded?.name ? decoded.name : "",
-    email: decoded?.email ? decoded.email : "",
-    role: decoded?.activeRole ? decoded.activeRole : "",
-    listRole: decoded?.role ? decoded.role : "",
-    microsoftToken: decoded?.microsoftToken ? decoded.microsoftToken : "",
+    nim: typeof decoded.nim === "string" ? decoded.nim : "",
+    name: typeof decoded.name === "string" ? decoded.name : "",
+    email: typeof decoded.email === "string" ? decoded.email : "",
+    role: typeof decoded.activeRole === "string" ? decoded.activeRole : "",
+    listRole: roles,
+    microsoftToken:
+      typeof decoded.microsoftToken === "string" ? decoded.microsoftToken : "",
   };
 };
 

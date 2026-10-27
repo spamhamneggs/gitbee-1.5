@@ -40,6 +40,68 @@ export const createToken = (
     }
 }
 
+export const getLocalRoles = (user: {
+    role: string;
+    user_type: string | null;
+}): string[] => {
+    if (isLocalStudent(user)) {
+        return ["Student"];
+    }
+    if ((user.user_type !== null && user.user_type.trim().toLowerCase() !== "staff") ||
+        !["Lecturer", "Admin", "SCC", "HoP"].includes(user.role)) {
+        return [];
+    }
+    if (user.role === "Lecturer") {
+        return ["Lecturer"];
+    }
+    return [user.role, "Lecturer"];
+}
+
+function isLocalStudent(user: { role: string; user_type: string | null }): boolean {
+    return user.role === "Student" || user.user_type?.trim().toLowerCase() === "student";
+}
+
+export const getLocalNim = (user: {
+    role: string;
+    user_type: string | null;
+    student_id: string | null;
+    lecturer_code: string | null;
+}): string => {
+    return isLocalStudent(user) ? user.student_id ?? "" : user.lecturer_code ?? "";
+}
+
+export const createLocalToken = (user: {
+    id: number;
+    email: string;
+    name: string;
+    role: string;
+    user_type: string | null;
+    student_id: string | null;
+    binusian_id: string | null;
+    lecturer_code: string | null;
+}, activeRole?: string): { token: string; expires: Date } => {
+    const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
+    const roles = getLocalRoles(user);
+    if (roles.length === 0 || (activeRole !== undefined && !roles.includes(activeRole))) {
+        throw new Error("Invalid local account role");
+    }
+    return {
+        token: jwt.sign({
+            exp: expire,
+            userId: user.id,
+            nim: getLocalNim(user),
+            binusianId: user.binusian_id ?? "",
+            name: user.name.toUpperCase(),
+            email: user.email.toLowerCase(),
+            role: roles,
+            activeRole: activeRole ?? roles[0],
+            microsoftToken: "",
+            user_type: user.user_type,
+        }, secret),
+        expires: addHour(168),
+    };
+}
+
 export const verifyToken = (token: string) : {
     status: boolean,
     data: unknown,
