@@ -8,13 +8,14 @@ import type { AtlantisAccountData } from "../../services/generic/genericService.
 import { prisma } from "../../prisma/client.js";
 import { verifyPassword } from "../../utils/auth/password.js";
 
+const DUMMY_PASSWORD_HASH = "scrypt$16384$8$1$Z2l0YmVlLWxvY2FsLWxvZ2luLWR1bW15LXNhbHQ=$wFAFffXSmSnjf95eUXNLQGx6IOgpXcbt/0yauPvSta/wt3Y85e6A9x17lhMJV8LyAqARq+3zt0t6doSwyqIfeA==";
 
 export default class AuthHandler {
     static async loginLocal(req: Request, res: Response, next: NextFunction) {
         try {
             const schema = z.object({
                 email: z.string().trim().email(),
-                password: z.string().min(1),
+                password: z.string().min(1).max(1024),
             });
             const valid = schema.safeParse(req.body);
             if (!valid.success) {
@@ -30,9 +31,12 @@ export default class AuthHandler {
                     name: true,
                     role: true,
                     user_type: true,
+                    student_id: true,
+                    binusian_id: true,
                 },
             });
             if (!user) {
+                await verifyPassword(valid.data.password, DUMMY_PASSWORD_HASH);
                 return sendErrorResponse(res, "Invalid email or password", 401);
             }
 
@@ -41,13 +45,24 @@ export default class AuthHandler {
                 SELECT password FROM user WHERE email = ${user.email} LIMIT 1
             `;
             const passwordHash = credentials[0]?.password;
-            if (!passwordHash || !(await verifyPassword(valid.data.password, passwordHash))) {
+            if (!passwordHash) {
+                await verifyPassword(valid.data.password, DUMMY_PASSWORD_HASH);
+                return sendErrorResponse(res, "Invalid email or password", 401);
+            }
+            if (!(await verifyPassword(valid.data.password, passwordHash))) {
                 return sendErrorResponse(res, "Invalid email or password", 401);
             }
 
+            const isStudent = user.role === "Student" || user.user_type === "student";
+            const roles = isStudent
+                ? ["Student"]
+                : user.role === "Lecturer"
+                    ? ["Lecturer"]
+                    : [user.role, "Lecturer"];
+            const activeRole = isStudent ? "Student" : user.role;
             const token = createLocalToken(user);
             return sendSuccessResponse(res, {
-                token,
+                token: token.token,
                 user: {
                     id: user.id,
                     email: user.email,
@@ -55,6 +70,14 @@ export default class AuthHandler {
                     role: user.role,
                     user_type: user.user_type,
                 },
+                Name: user.name.toUpperCase(),
+                Email: user.email,
+                Role: roles,
+                ActiveRole: activeRole,
+            }, {
+                name: process.env.COOKIE_NAME ?? "gitbee_token",
+                value: token.token,
+                expires: token.expires,
             });
         } catch (error) {
             return next(error);

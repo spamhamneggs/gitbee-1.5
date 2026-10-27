@@ -43,17 +43,34 @@ export const createToken = (
 export const createLocalToken = (user: {
     id: number;
     email: string;
+    name: string;
     role: string;
     user_type: string | null;
-}): string => {
+    student_id: string | null;
+    binusian_id: string | null;
+}): { token: string; expires: Date } => {
     const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
-    return jwt.sign({
-        exp: expire,
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        user_type: user.user_type,
-    }, secret);
+    const isStudent = user.role === "Student" || user.user_type === "student";
+    const roles = isStudent
+        ? ["Student"]
+        : user.role === "Lecturer"
+            ? ["Lecturer"]
+            : [user.role, "Lecturer"];
+    return {
+        token: jwt.sign({
+            exp: expire,
+            userId: user.id,
+            nim: user.student_id ?? "",
+            binusianId: user.binusian_id ?? "",
+            name: user.name.toUpperCase(),
+            email: user.email.toLowerCase(),
+            role: roles,
+            activeRole: isStudent ? "Student" : user.role,
+            microsoftToken: "",
+            user_type: user.user_type,
+        }, secret),
+        expires: addHour(168),
+    };
 }
 
 export const verifyToken = (token: string) : {
