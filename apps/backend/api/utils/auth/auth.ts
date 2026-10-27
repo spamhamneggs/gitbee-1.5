@@ -40,6 +40,22 @@ export const createToken = (
     }
 }
 
+export const createLocalToken = (user: {
+    id: number;
+    email: string;
+    role: string;
+    user_type: string | null;
+}): string => {
+    const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
+    return jwt.sign({
+        exp: expire,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        user_type: user.user_type,
+    }, secret);
+}
+
 export const verifyToken = (token: string) : {
     status: boolean,
     data: unknown,

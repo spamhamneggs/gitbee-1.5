@@ -1,14 +1,66 @@
 import { z } from "zod";
 import { parseJwt } from "../../utils/auth/auth.js";
-import type { Request, Response } from "express";
-import { createToken } from "../../utils/auth/auth.js";
+import type { NextFunction, Request, Response } from "express";
+import { createLocalToken, createToken } from "../../utils/auth/auth.js";
 import { getErrorMessage, sendSuccessResponse, sendErrorResponse } from "../../utils/response/response.js";
 import GenericService from "../../services/generic/genericService.js";
 import type { AtlantisAccountData } from "../../services/generic/genericService.js";
 import { prisma } from "../../prisma/client.js";
+import { verifyPassword } from "../../utils/auth/password.js";
 
 
 export default class AuthHandler {
+    static async loginLocal(req: Request, res: Response, next: NextFunction) {
+        try {
+            const schema = z.object({
+                email: z.string().trim().email(),
+                password: z.string().min(1),
+            });
+            const valid = schema.safeParse(req.body);
+            if (!valid.success) {
+                return sendErrorResponse(res, valid.error.issues[0]?.message ?? "Invalid request body", 400);
+            }
+
+            const email = valid.data.email.toLowerCase();
+            const user = await prisma.user.findUnique({
+                where: { email },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    role: true,
+                    user_type: true,
+                },
+            });
+            if (!user) {
+                return sendErrorResponse(res, "Invalid email or password", 401);
+            }
+
+            // The shared Prisma client masks User.password in query results.
+            const credentials = await prisma.$queryRaw<Array<{ password: string | null }>>`
+                SELECT password FROM user WHERE email = ${user.email} LIMIT 1
+            `;
+            const passwordHash = credentials[0]?.password;
+            if (!passwordHash || !(await verifyPassword(valid.data.password, passwordHash))) {
+                return sendErrorResponse(res, "Invalid email or password", 401);
+            }
+
+            const token = createLocalToken(user);
+            return sendSuccessResponse(res, {
+                token,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    role: user.role,
+                    user_type: user.user_type,
+                },
+            });
+        } catch (error) {
+            return next(error);
+        }
+    }
+
     static async login(req: Request, res: Response) {
         const schema = z.object({
             microsoft_token: z.string(),
