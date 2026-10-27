@@ -34,6 +34,7 @@ export default class AuthHandler {
                     student_id: true,
                     binusian_id: true,
                     lecturer_code: true,
+                    credential_version: true,
                 },
             });
             if (!user) {
@@ -96,6 +97,24 @@ export default class AuthHandler {
 
             const userId = res.locals.localUserId as number;
 
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    role: true,
+                    user_type: true,
+                    student_id: true,
+                    binusian_id: true,
+                    lecturer_code: true,
+                    credential_version: true,
+                },
+            });
+            if (!user) {
+                return sendErrorResponse(res, "Unauthorized", 401);
+            }
+
             const credentials = await prisma.$queryRaw<Array<{ password: string | null }>>`
                 SELECT password FROM user WHERE id = ${userId} LIMIT 1
             `;
@@ -104,11 +123,34 @@ export default class AuthHandler {
                 return sendErrorResponse(res, "Invalid current password", 401);
             }
 
+            const updatedVersion = user.credential_version + 1;
             await prisma.user.update({
                 where: { id: userId },
-                data: { password: await hashPassword(valid.data.newPassword) },
+                data: {
+                    password: await hashPassword(valid.data.newPassword),
+                    credential_version: { increment: 1 },
+                },
             });
-            return sendSuccessResponse(res, { message: "Password updated successfully" });
+            const roles = getLocalRoles(user);
+            if (roles.length === 0) {
+                return sendErrorResponse(res, "Invalid local account role", 403);
+            }
+            const activeRole = roles.includes(res.locals.localActiveRole)
+                ? res.locals.localActiveRole
+                : roles[0];
+            const token = createLocalToken(
+                { ...user, credential_version: updatedVersion },
+                activeRole
+            );
+            return sendSuccessResponse(
+                res,
+                { message: "Password updated successfully" },
+                {
+                    name: process.env.COOKIE_NAME ?? "gitbee_token",
+                    value: token.token,
+                    expires: token.expires,
+                }
+            );
         } catch (error) {
             return next(error);
         }
@@ -125,6 +167,7 @@ export default class AuthHandler {
                 select: {
                     id: true, email: true, name: true, role: true, user_type: true,
                     student_id: true, binusian_id: true, lecturer_code: true,
+                    credential_version: true,
                 },
             });
             if (!user) return sendErrorResponse(res, "Unauthorized", 401);
@@ -220,12 +263,14 @@ export default class AuthHandler {
                     OR: userLookupConditions,
                 },
                 select: {
+                    id: true,
                     lecturer_code: true,
                     student_id: true,
                     binusian_id: true,
                     email: true,
                     role: true,
-                    user_type: true
+                    user_type: true,
+                    credential_version: true,
                 },
             });
 
@@ -276,6 +321,8 @@ export default class AuthHandler {
                 microsoftToken,
                 "",
                 activeRole,
+                user?.id,
+                user?.credential_version ?? 0,
             );
 
             const cookieName = process.env.COOKIE_NAME;

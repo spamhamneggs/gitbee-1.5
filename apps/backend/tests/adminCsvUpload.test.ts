@@ -14,18 +14,26 @@ const { default: adminUserRoutes } = await import(
   "../api/routes/user/admin/adminUserRoutes.js"
 );
 const { prismaUserStore } = await import("../api/utils/csv/csvUserImport.js");
+const { prisma } = await import("../api/prisma/client.js");
 const { createFakeUserStore } = await import("./fakeUserStore.js");
+const userDelegate = prisma.user as Record<"findUnique", unknown>;
+let originalFindUnique: unknown;
 
 // Uploads insert users; point the Prisma-backed store at an in-memory table.
 let fakeStore = createFakeUserStore();
 beforeEach(() => {
   fakeStore = createFakeUserStore();
+  originalFindUnique = userDelegate.findUnique;
+  userDelegate.findUnique = async () => null;
   mock.method(prismaUserStore, "findExistingUsers", fakeStore.findExistingUsers);
   // Stateless, so tests that swap in a new fake store don't need to re-mock it.
   mock.method(prismaUserStore, "collationKeys", fakeStore.collationKeys);
   mock.method(prismaUserStore, "createMany", fakeStore.createMany);
 });
-afterEach(() => mock.restoreAll());
+afterEach(() => {
+  mock.restoreAll();
+  userDelegate.findUnique = originalFindUnique;
+});
 
 const authToken = createToken(
   "test-user",

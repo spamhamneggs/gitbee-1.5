@@ -19,6 +19,7 @@ model User {
   name          String   @db.VarChar(150)
   role          String   @db.VarChar(50)
   password      String?  @db.VarChar(255)
+  credential_version Int @default(0)
   user_type     String?  @db.VarChar(50)
   binusian_id   String?  @unique @db.VarChar(150)
   student_id    String?  @unique @db.VarChar(50)

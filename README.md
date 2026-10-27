@@ -69,6 +69,24 @@ For future schema changes, create a migration with
 `pnpm --filter gitbee_backend exec prisma migrate dev --name <name> --config ./api/prisma.config.ts`
 against a development database. Commit its SQL and deploy with `prisma migrate deploy`.
 
+## Local account credentials
+
+Administrators can create staff accounts with an initial local password using `POST /api/user/admin/insert-user`:
+
+```json
+{
+  "lecturer_code": "D5001",
+  "email": "lecturer@example.com",
+  "name": "Lecturer Name",
+  "role": "Lecturer",
+  "password": "initial-password"
+}
+```
+
+The same administrator role can set or reset an existing account's password with `POST /api/user/admin/set-password`, using `{ "id": 123, "password": "new-password" }`. Both operations require an admin session and passwords must contain at least eight characters.
+
+An authenticated local user can change their own password with `POST /api/auth/change-password`, using `{ "currentPassword": "old-password", "newPassword": "new-password" }`. Passwords are hashed in the backend; credential hashes are never included in API responses.
+
 ## Dummy data
 
 Generators in `apps/backend/api/prisma/dummy/` produce any number of students and staff, with no network access. Students rotate through the majors CS, GAT, MAT, DS and CYBER. Staff rotate through the roles Lecturer, Admin, SCC and HoP, so together the files cover all five roles. Output is reproducible for a given `--seed`, and every generated user has the password `GitbeeDummy#2026`.
