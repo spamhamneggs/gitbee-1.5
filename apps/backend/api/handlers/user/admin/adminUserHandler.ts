@@ -16,6 +16,7 @@ import {
 import {
   importCsvUsers,
 } from "../../../utils/csv/csvUserImport.js";
+import { hashPassword } from "../../../utils/auth/password.js";
 
 interface AtlantisSemester {
   Description: string;
@@ -137,10 +138,11 @@ export default class AdminUserHandler {
   static async insertUser(req: Request, res: Response) {
     try {
       const schema = z.object({
-        lecturer_code: z.string(),
-        email: z.string(),
-        name: z.string(),
-        role: z.string(),
+        lecturer_code: z.string().trim().min(1).max(50),
+        email: z.string().trim().email().max(150),
+        name: z.string().trim().min(1).max(150),
+        role: z.enum(["Lecturer", "Admin", "SCC", "HoP"]),
+        password: z.string().min(8).max(1024),
         major_ids: z.array(z.string()).optional(),
       });
 
@@ -154,9 +156,17 @@ export default class AdminUserHandler {
       const newUser = await prisma.user.create({
         data: {
           lecturer_code: params.lecturer_code,
-          email: params.email,
+          email: params.email.toLowerCase(),
           name: params.name,
           role: params.role,
+          password: await hashPassword(params.password),
+        },
+        select: {
+          id: true,
+          lecturer_code: true,
+          email: true,
+          name: true,
+          role: true,
         },
       });
 
@@ -173,6 +183,36 @@ export default class AdminUserHandler {
       sendSuccessResponse(res, newUser);
     } catch (error) {
       sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
+    }
+  }
+
+  static async setPassword(req: Request, res: Response) {
+    try {
+      const schema = z.object({
+        id: z.coerce.number().int().positive(),
+        password: z.string().min(8).max(1024),
+      });
+      const valid = schema.safeParse(req.body);
+      if (!valid.success) {
+        return sendErrorResponse(
+          res,
+          valid.error.issues[0]?.message ?? "Invalid request body",
+          400
+        );
+      }
+
+      const user = await prisma.user.update({
+        where: { id: valid.data.id },
+        data: { password: await hashPassword(valid.data.password) },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      });
+      return sendSuccessResponse(res, user);
+    } catch (error) {
+      sendErrorResponse(res, getErrorMessage(error, "Password update failed"));
     }
   }
 

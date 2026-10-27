@@ -9,7 +9,18 @@ const upload = multer({ storage: multer.memoryStorage() });
 const adminUserRoutes = express.Router();
 
 adminUserRoutes.get("/get-user", AdminUserHandler.getUser);
-adminUserRoutes.post("/insert-user", AdminUserHandler.insertUser);
+adminUserRoutes.post(
+  "/insert-user",
+  AuthMiddleware(),
+  RoleMiddleware("Admin"),
+  AdminUserHandler.insertUser
+);
+adminUserRoutes.post(
+  "/set-password",
+  AuthMiddleware(),
+  RoleMiddleware("Admin"),
+  AdminUserHandler.setPassword
+);
 adminUserRoutes.patch("/update-role", AdminUserHandler.updateRole);
 adminUserRoutes.post(
   "/upload-student-csv",
