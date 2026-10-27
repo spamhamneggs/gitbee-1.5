@@ -2,6 +2,7 @@ import express from "express";
 import AdminUserHandler from "../../../handlers/user/admin/adminUserHandler.js";
 import { AuthMiddleware } from "../../../middlewares/authMiddleware.js";
 import { RoleMiddleware } from "../../../middlewares/roleMiddleware.js";
+import { currentAdminMiddleware } from "../../../middlewares/currentAdminMiddleware.js";
 import { uploadCsv } from "../../../middlewares/uploadMiddleware.js";
 import multer from "multer";
 const upload = multer({ storage: multer.memoryStorage() });
@@ -11,20 +12,17 @@ const adminUserRoutes = express.Router();
 adminUserRoutes.get("/get-user", AdminUserHandler.getUser);
 adminUserRoutes.post(
   "/insert-user",
-  AuthMiddleware(),
-  RoleMiddleware("Admin"),
+  currentAdminMiddleware,
   AdminUserHandler.insertUser
 );
 adminUserRoutes.post(
   "/set-password",
-  AuthMiddleware(),
-  RoleMiddleware("Admin"),
+  currentAdminMiddleware,
   AdminUserHandler.setPassword
 );
 adminUserRoutes.patch(
   "/update-role",
-  AuthMiddleware(),
-  RoleMiddleware("Admin"),
+  currentAdminMiddleware,
   AdminUserHandler.updateRole
 );
 adminUserRoutes.post(
