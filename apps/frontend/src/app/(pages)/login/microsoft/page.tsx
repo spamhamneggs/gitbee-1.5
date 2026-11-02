@@ -29,25 +29,25 @@ const Page = () => {
             });
 
             const role = result.data.ActiveRole?.toLowerCase() || "";
-            console.log("🔥 ROLE DETEKSI:", role); 
+            console.log("🔥 ROLE DETEKSI:", role);
 
             if (role === "student") router.push("/dashboard");
             else if (role === "lecturer") router.push("/dashboard-lecturer");
             else if (role === "scc") router.push("/dashboard-scc");
             else if (role === "hop") router.push("/dashboard-hop");
-            else if (role === "admin") router.push("/dashboard-admin"); 
+            else if (role === "admin") router.push("/dashboard-admin");
             else {
               console.log("⚠️ Role tidak cocok, kembali ke beranda.");
               router.push("/");
             }
             return;
           } else {
-             console.error("⚠️ Bypass ditolak oleh backend:", (result as any)?.message);
-             return; 
+             console.error("⚠️ Bypass ditolak oleh backend:", result?.message);
+             return;
           }
         } catch (error) {
           console.error("Frontend bypass failed:", error);
-          return; 
+          return;
         }
       }
     

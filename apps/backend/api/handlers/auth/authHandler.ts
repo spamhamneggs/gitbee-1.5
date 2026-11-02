@@ -194,33 +194,6 @@ export default class AuthHandler {
     }
 
     static async login(req: Request, res: Response) {
-
-        const isDev = process.env.NODE_ENV === "development";
-        const isBypassActive = process.env.BYPASS_SSO === "true";
-
-        if (isDev && isBypassActive) {
-            console.log("[SSO BYPASS] Active. Generating local dummy session...");
-            const dummyEmail = "admin@dummy.gitbee";
-            const dummyName = "LOCAL ADMIN BYPASS";
-            const dummyNim = "D9999";
-            const dummyRole = "Admin";
-            const cookieName = process.env.COOKIE_NAME || "gitbee_token";
-
-            return sendSuccessResponse(res, {
-                nim: dummyNim,
-                BinusianId: dummyNim,
-                Name: dummyName.toUpperCase(),
-                Email: dummyEmail,
-                Role: [dummyRole],
-                ActiveRole: dummyRole,
-                MicrosoftToken: "dummy-microsoft-token-bypass"
-            }, {
-                name: cookieName,
-                value: "dummy-jwt-token-bypass-local", // Nilai cookie di-hardcode
-                expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // Kadaluarsa 1 hari
-            });
-        }
-        
         const schema = z.object({
             microsoft_token: z.string(),
             role: z.string().optional()
@@ -243,7 +216,6 @@ export default class AuthHandler {
                 const dummyRoles = ["admin", "student"]; 
                 const activeRole = valid.data.role ? valid.data.role : "admin"; 
                 
-                // Buat token sesi menggunakan fungsi bawaan sistem agar API lain tidak error
                 const token = createToken(
                     dummyNim,
                     "dummy-binusian-id", // username
@@ -265,7 +237,7 @@ export default class AuthHandler {
                     Name: dummyName.toUpperCase(),
                     Email: dummyEmail.toLowerCase(),
                     Role: dummyRoles,
-                    ActiveRole: activeRole, // Akan dicek oleh if (role === "admin") di frontend
+                    ActiveRole: activeRole, 
                     MicrosoftToken: microsoftToken
                 }, {
                     name: cookieName,
