@@ -1,9 +1,12 @@
 # syntax=docker.io/docker/dockerfile:1
 
 # Official pnpm base image (Debian slim + standalone pnpm, no Node bundled).
-# It sets PNPM_HOME=/pnpm (on PATH) with the store at /pnpm/store,
-# which is what the BuildKit cache mounts below target.
-FROM ghcr.io/pnpm/pnpm:12 AS base
+# It sets PNPM_HOME=/pnpm (on PATH) with the store at /pnpm/store.
+# `pnpm runtime set` installs Node *into* /pnpm/store (the global `node` is a
+# symlink there), so the BuildKit install cache must NOT mount over
+# /pnpm/store or it hides Node and every lifecycle script fails with exit 127.
+# The installs below use a separate store at /pnpm/cache-store instead.
+FROM ghcr.io/pnpm/pnpm:12.16.1 AS base
 RUN pnpm runtime set node 24 -g
 WORKDIR /repo
 
@@ -11,14 +14,14 @@ WORKDIR /repo
 # it holds the source and devDependencies, so `prisma` and `pnpm dev` work here.
 FROM base AS build
 COPY . .
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/cache-store pnpm install --frozen-lockfile --store-dir /pnpm/cache-store
 RUN pnpm --filter gitbee_backend exec prisma generate --config ./api/prisma.config.ts
 RUN pnpm --filter gitbee_backend build
 
 # Production-only dependencies for the final image.
 FROM base AS prod-deps
 COPY . .
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/cache-store pnpm install --prod --frozen-lockfile --store-dir /pnpm/cache-store
 
 # Minimal production runtime: prod node_modules + compiled output + Prisma
 # schema and migration history. No source, no devDependencies.

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "GitBee monorepo — Next.js frontend (apps/frontend) + Express/Prisma backend (apps/backend)",
-  "packageManager": "pnpm@12.6.0",
+  "packageManager": "pnpm@12.16.1",
   "scripts": {
     "env:sync": "node ./scripts/sync-env.mjs",
     "dev": "turbo run dev",
