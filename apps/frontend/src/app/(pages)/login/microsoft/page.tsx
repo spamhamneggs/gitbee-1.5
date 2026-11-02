@@ -16,7 +16,7 @@ const Page = () => {
         console.log("⚠️ [FRONTEND BYPASS] Initiating local dummy login...");
         try {
           const result = await login("bypass-test");
-          console.log("🔥 RESPONS BACKEND:", result); 
+          console.log("🔥 RESPONS BACKEND:", result);
 
           if (result?.success) {
             setUserData({
@@ -40,9 +40,9 @@ const Page = () => {
               console.log("⚠️ Role tidak cocok, kembali ke beranda.");
               router.push("/");
             }
-            return; 
+            return;
           } else {
-             console.error("⚠️ Bypass ditolak oleh backend:", result?.message);
+             console.error("⚠️ Bypass ditolak oleh backend:", (result as any)?.message);
              return; 
           }
         } catch (error) {
