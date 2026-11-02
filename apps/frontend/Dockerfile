@@ -6,7 +6,7 @@
 # symlink there), so the BuildKit install cache must NOT mount over
 # /pnpm/store or it hides Node and every lifecycle script fails with exit 127.
 # The install below uses a separate store at /pnpm/cache-store instead.
-FROM ghcr.io/pnpm/pnpm:12.16.1 AS base
+FROM ghcr.io/pnpm/pnpm:12 AS base
 RUN pnpm runtime set node 24 -g
 WORKDIR /repo
 
