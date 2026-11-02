@@ -76,6 +76,12 @@ const Header = () => {
   }
 
   const loginMicrosoft = async () => {
+    if (process.env.NODE_ENV === "development") {
+      console.log("⚠️ [FRONTEND BYPASS] Routing to local bypass interceptor...");
+      router.push("/login/microsoft");
+      return;
+    }
+
     const loginRequest = {
       scopes: ["user.read"],
       prompt: "select_account",

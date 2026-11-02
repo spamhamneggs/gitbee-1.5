@@ -206,6 +206,47 @@ export default class AuthHandler {
 
         try {
             const microsoftToken = valid.data.microsoft_token;
+
+            if (process.env.NODE_ENV === "development" && microsoftToken === "bypass-test") {
+                console.log("⚠️ [BACKEND BYPASS] Menerima request bypass lokal");
+                
+                const dummyNim = "2500000000";
+                const dummyName = "Developer Admin";
+                const dummyEmail = "developer@binus.ac.id";
+                const dummyRoles = ["admin", "student"]; 
+                const activeRole = valid.data.role ? valid.data.role : "admin"; 
+                
+                // Buat token sesi menggunakan fungsi bawaan sistem agar API lain tidak error
+                const token = createToken(
+                    dummyNim,
+                    "dummy-binusian-id", // username
+                    dummyName.toLowerCase(), // name
+                    dummyEmail.toLowerCase(), // email
+                    dummyRoles, // role array
+                    microsoftToken, // microsoftToken
+                    "",
+                    activeRole, // activeRole
+                    1, // dummy user ID
+                    0  // credential version
+                );
+
+                const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
+
+                return sendSuccessResponse(res, {
+                    nim: dummyNim,
+                    BinusianId: "dummy-binusian-id",
+                    Name: dummyName.toUpperCase(),
+                    Email: dummyEmail.toLowerCase(),
+                    Role: dummyRoles,
+                    ActiveRole: activeRole, // Akan dicek oleh if (role === "admin") di frontend
+                    MicrosoftToken: microsoftToken
+                }, {
+                    name: cookieName,
+                    value: token.token,
+                    expires: token.expires,
+                });
+            }
+
             const decodedToken = parseJwt(microsoftToken);
 
             const email = decodedToken.preferred_username || decodedToken.unique_name;

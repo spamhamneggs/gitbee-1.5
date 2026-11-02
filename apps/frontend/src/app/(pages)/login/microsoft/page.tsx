@@ -12,6 +12,45 @@ const Page = () => {
 
   useEffect(() => {
     const handleRedirect = async () => {
+      if (process.env.NODE_ENV === "development" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+        console.log("⚠️ [FRONTEND BYPASS] Initiating local dummy login...");
+        try {
+          const result = await login("bypass-test");
+          console.log("🔥 RESPONS BACKEND:", result); 
+
+          if (result?.success) {
+            setUserData({
+              nim: result.data.nim,
+              name: result.data.Name,
+              email: result.data.Email,
+              role: result.data.ActiveRole,
+              listRole: result.data.Role,
+              microsoftToken: result.data.MicrosoftToken,
+            });
+
+            const role = result.data.ActiveRole?.toLowerCase() || "";
+            console.log("🔥 ROLE DETEKSI:", role); 
+
+            if (role === "student") router.push("/dashboard");
+            else if (role === "lecturer") router.push("/dashboard-lecturer");
+            else if (role === "scc") router.push("/dashboard-scc");
+            else if (role === "hop") router.push("/dashboard-hop");
+            else if (role === "admin") router.push("/dashboard-admin"); 
+            else {
+              console.log("⚠️ Role tidak cocok, kembali ke beranda.");
+              router.push("/");
+            }
+            return; 
+          } else {
+             console.error("⚠️ Bypass ditolak oleh backend:", result?.message);
+             return; 
+          }
+        } catch (error) {
+          console.error("Frontend bypass failed:", error);
+          return; 
+        }
+      }
+    
       if (inProgress === "none" && accounts.length > 0) {
         try {
           const account = accounts[0];

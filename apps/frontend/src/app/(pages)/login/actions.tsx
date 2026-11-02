@@ -13,7 +13,7 @@ export const login = async (microsoftToken: string, role?: string) => {
     );
 
     const resultlogin = await responselogin.json();
-    console.log(resultlogin);
+    console.log(resultlogin)
     if (resultlogin.status) {
       return { success: true, data: resultlogin.data };
     } else {
