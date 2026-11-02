@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
+import { SESSION_COOKIE_NAME } from "@/lib/auth";
 
 export function proxy(req: NextRequest) {
-  const token = req.cookies.get("gitbee_token")?.value;
+  const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   const pathname = req.nextUrl.pathname;
 
   if (!token) {

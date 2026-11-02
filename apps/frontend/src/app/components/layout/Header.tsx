@@ -16,6 +16,11 @@ import { IoLogOut } from "react-icons/io5";
 import { MdSupportAgent } from "react-icons/md";
 import { useRouter } from "next/navigation";
 import { login } from "@/app/(pages)/login/actions";
+import {
+  dashboardPathForRole,
+  SESSION_COOKIE_NAME,
+  SSO_BYPASS_ENABLED,
+} from "@/lib/auth";
 import Loading from "../Loading";
 
 const Header = () => {
@@ -76,8 +81,7 @@ const Header = () => {
   }
 
   const loginMicrosoft = async () => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("⚠️ [FRONTEND BYPASS] Routing to local bypass interceptor...");
+    if (SSO_BYPASS_ENABLED) {
       router.push("/login/microsoft");
       return;
     }
@@ -93,7 +97,7 @@ const Header = () => {
   };
 
   const logoutMircosoft = async () => {
-    Cookies.remove("gitbee_token", { path: "/" });
+    Cookies.remove(SESSION_COOKIE_NAME, { path: "/" });
     Cookies.remove("token", { path: "/" });
     setUserData(null);
     await instance.logoutRedirect().catch((error: unknown) => {
@@ -146,16 +150,8 @@ const Header = () => {
           microsoftToken: data.MicrosoftToken,
         });
 
-        if (data.ActiveRole.toLowerCase() === "student")
-          router.push("/dashboard");
-        if (data.ActiveRole.toLowerCase() === "lecturer")
-          router.push("/dashboard-lecturer");
-        if (data.ActiveRole.toLowerCase() === "scc")
-          router.push("/dashboard-scc");
-        if (data.ActiveRole.toLowerCase() === "hop")
-          router.push("/dashboard-hop");
-        if (data.ActiveRole.toLowerCase() === "admin")
-          router.push("/dashboard-admin");
+        const dashboard = dashboardPathForRole(data.ActiveRole);
+        if (dashboard) router.push(dashboard);
       } else {
         console.error("Role switch failed");
       }

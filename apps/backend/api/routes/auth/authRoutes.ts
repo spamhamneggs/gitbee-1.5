@@ -6,6 +6,7 @@ import { localSessionMiddleware } from "../../middlewares/localSessionMiddleware
 const authRoutes = express.Router();
 
 authRoutes.post("/login", AuthHandler.login);
+authRoutes.post("/login-dev", AuthHandler.loginDevBypass);
 authRoutes.post("/login-local", createLoginRateLimitMiddleware({}, AuthHandler.loginLocal));
 authRoutes.post("/login-local/role", localSessionMiddleware, AuthHandler.changeLocalRole);
 authRoutes.post("/change-password", localSessionMiddleware, createLoginRateLimitMiddleware({

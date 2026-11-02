@@ -14,6 +14,8 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 ARG NEXT_PUBLIC_BACKEND_API
 ENV NEXT_PUBLIC_BACKEND_API=$NEXT_PUBLIC_BACKEND_API
+ARG NEXT_PUBLIC_COOKIE_NAME
+ENV NEXT_PUBLIC_COOKIE_NAME=$NEXT_PUBLIC_COOKIE_NAME
 
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry

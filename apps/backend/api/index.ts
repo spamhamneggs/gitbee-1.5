@@ -4,11 +4,16 @@ import routes from "./routes/Routes.js";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import qs from "qs";
+import { DEV_BYPASS_USER, isSsoBypassEnabled } from "./utils/auth/devBypass.js";
 dotenv.config();
 
 if (process.env.NODE_ENV === "development") {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   console.log(process.env.NODE_ENV, `RejectUnauthorized is disabled.`)
+}
+
+if (isSsoBypassEnabled()) {
+  console.warn(`BYPASS_SSO is on: POST /api/auth/login-dev signs anyone in as ${DEV_BYPASS_USER.email}.`)
 }
 
 const app = express();

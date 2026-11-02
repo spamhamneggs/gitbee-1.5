@@ -67,6 +67,7 @@ services:
       dockerfile: apps/frontend/Dockerfile
       args:
         NEXT_PUBLIC_BACKEND_API: "${NEXT_PUBLIC_BACKEND_API:-http://localhost:5001/api/}"
+        NEXT_PUBLIC_COOKIE_NAME: "${COOKIE_NAME:-gitbee_token}"
     container_name: gitbee-frontend
     restart: unless-stopped
     ports:

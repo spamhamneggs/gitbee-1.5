@@ -75,6 +75,7 @@ const backendLines = [
   `ATLANTIS_API=${values.ATLANTIS_API || ""}`,
   `SEED_DUMMY_STUDENTS=${values.SEED_DUMMY_STUDENTS || "0"}`,
   `SEED_DUMMY_STAFF=${values.SEED_DUMMY_STAFF || "0"}`,
+  `BYPASS_SSO=${values.BYPASS_SSO || "false"}`,
 ];
 
 const frontendLines = [
@@ -86,6 +87,8 @@ const frontendLines = [
   `NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI=${values.NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI || `http://localhost:${frontendPort}/login`}`,
   `NEXT_PUBLIC_STORE_AUTH_STATE_IN_COOKIE=${values.NEXT_PUBLIC_STORE_AUTH_STATE_IN_COOKIE || "false"}`,
   `NEXT_PUBLIC_CACHE_LOCATION=${values.NEXT_PUBLIC_CACHE_LOCATION || "sessionStorage"}`,
+  `NEXT_PUBLIC_COOKIE_NAME=${values.COOKIE_NAME || "gitbee_token"}`,
+  `NEXT_PUBLIC_BYPASS_SSO=${values.BYPASS_SSO || "false"}`,
 ];
 
 writeEnvFile(backendEnvPath, backendLines);

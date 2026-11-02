@@ -1,56 +1,45 @@
 "use client";
 import { useMsal } from "@azure/msal-react";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { login } from "../actions";
+import { login, loginDevBypass } from "../actions";
 import { useAuth } from "@/app/context/AuthContext";
+import { dashboardPathForRole, SSO_BYPASS_ENABLED } from "@/lib/auth";
 
 const Page = () => {
   const { userData, setUserData } = useAuth();
   const { instance, inProgress, accounts } = useMsal();
   const router = useRouter();
+  // proxy.tsx also sends signed-in users here when their role doesn't match,
+  // so only use the dev account when there's no session to replace. The
+  // effect re-runs as MSAL's state changes; the bypass must only fire once.
+  const bypassRef = useRef<"skip" | "ready" | "started">(
+    SSO_BYPASS_ENABLED && !userData ? "ready" : "skip"
+  );
 
   useEffect(() => {
     const handleRedirect = async () => {
-      if (process.env.NODE_ENV === "development" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-        console.log("⚠️ [FRONTEND BYPASS] Initiating local dummy login...");
-        try {
-          const result = await login("bypass-test");
-          console.log("🔥 RESPONS BACKEND:", result);
-
-          if (result?.success) {
-            setUserData({
-              nim: result.data.nim,
-              name: result.data.Name,
-              email: result.data.Email,
-              role: result.data.ActiveRole,
-              listRole: result.data.Role,
-              microsoftToken: result.data.MicrosoftToken,
-            });
-
-            const role = result.data.ActiveRole?.toLowerCase() || "";
-            console.log("🔥 ROLE DETEKSI:", role);
-
-            if (role === "student") router.push("/dashboard");
-            else if (role === "lecturer") router.push("/dashboard-lecturer");
-            else if (role === "scc") router.push("/dashboard-scc");
-            else if (role === "hop") router.push("/dashboard-hop");
-            else if (role === "admin") router.push("/dashboard-admin");
-            else {
-              console.log("⚠️ Role tidak cocok, kembali ke beranda.");
-              router.push("/");
-            }
-            return;
-          } else {
-             console.error("⚠️ Bypass ditolak oleh backend:", result?.message);
-             return;
-          }
-        } catch (error) {
-          console.error("Frontend bypass failed:", error);
-          return;
+      if (bypassRef.current !== "skip") {
+        if (bypassRef.current === "started") return;
+        bypassRef.current = "started";
+        const result = await loginDevBypass();
+        if (result?.success) {
+          setUserData({
+            nim: result.data.nim,
+            name: result.data.Name,
+            email: result.data.Email,
+            role: result.data.ActiveRole,
+            listRole: result.data.Role,
+            microsoftToken: result.data.MicrosoftToken,
+          });
+          router.push(dashboardPathForRole(result.data.ActiveRole) ?? "/");
+        } else {
+          console.error("SSO bypass failed:", result?.message);
+          router.push("/");
         }
+        return;
       }
-    
+
       if (inProgress === "none" && accounts.length > 0) {
         try {
           const account = accounts[0];
@@ -81,16 +70,7 @@ const Page = () => {
             });
 
             console.log(result.data);
-            if (result.data.ActiveRole?.toLowerCase() == "student")
-              router.push("/dashboard");
-            if (result.data.ActiveRole?.toLowerCase() == "lecturer")
-              router.push("/dashboard-lecturer");
-            if (result.data.ActiveRole?.toLowerCase() == "scc")
-              router.push("/dashboard-scc");
-            if (result.data.ActiveRole?.toLowerCase() == "hop")
-              router.push("/dashboard-hop");
-            if (result.data.ActiveRole?.toLowerCase() == "admin")
-              router.push("/dashboard-admin");
+            router.push(dashboardPathForRole(result.data.ActiveRole) ?? "/");
           } else {
             router.push("/");
           }

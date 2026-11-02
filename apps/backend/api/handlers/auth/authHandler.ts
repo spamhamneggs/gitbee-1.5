@@ -7,6 +7,7 @@ import GenericService from "../../services/generic/genericService.js";
 import type { AtlantisAccountData } from "../../services/generic/genericService.js";
 import { prisma } from "../../prisma/client.js";
 import { hashPassword, verifyPassword } from "../../utils/auth/password.js";
+import { DEV_BYPASS_USER, isSsoBypassEnabled } from "../../utils/auth/devBypass.js";
 
 const DUMMY_PASSWORD_HASH = "scrypt$16384$8$1$Z2l0YmVlLWxvY2FsLWxvZ2luLWR1bW15LXNhbHQ=$wFAFffXSmSnjf95eUXNLQGx6IOgpXcbt/0yauPvSta/wt3Y85e6A9x17lhMJV8LyAqARq+3zt0t6doSwyqIfeA==";
 
@@ -193,6 +194,43 @@ export default class AuthHandler {
         }
     }
 
+    static async loginDevBypass(_req: Request, res: Response, next: NextFunction) {
+        if (!isSsoBypassEnabled()) {
+            return sendErrorResponse(res, "Not found", 404);
+        }
+        try {
+            const user = await prisma.user.upsert({
+                where: { email: DEV_BYPASS_USER.email },
+                update: {},
+                create: DEV_BYPASS_USER,
+                select: {
+                    id: true, email: true, name: true, role: true, user_type: true,
+                    student_id: true, binusian_id: true, lecturer_code: true,
+                    credential_version: true,
+                },
+            });
+            const roles = getLocalRoles(user);
+            if (roles.length === 0) {
+                return sendErrorResponse(res, "Invalid local account role", 403);
+            }
+            const token = createLocalToken(user);
+            return sendSuccessResponse(res, {
+                nim: getLocalNim(user),
+                Name: user.name.toUpperCase(),
+                Email: user.email,
+                Role: roles,
+                ActiveRole: roles[0],
+                MicrosoftToken: "",
+            }, {
+                name: process.env.COOKIE_NAME ?? "gitbee_token",
+                value: token.token,
+                expires: token.expires,
+            });
+        } catch (error) {
+            return next(error);
+        }
+    }
+
     static async login(req: Request, res: Response) {
         const schema = z.object({
             microsoft_token: z.string(),
@@ -206,46 +244,6 @@ export default class AuthHandler {
 
         try {
             const microsoftToken = valid.data.microsoft_token;
-
-            if (process.env.NODE_ENV === "development" && microsoftToken === "bypass-test") {
-                console.log("⚠️ [BACKEND BYPASS] Menerima request bypass lokal");
-                
-                const dummyNim = "2500000000";
-                const dummyName = "Developer Admin";
-                const dummyEmail = "developer@binus.ac.id";
-                const dummyRoles = ["admin", "student"]; 
-                const activeRole = valid.data.role ? valid.data.role : "admin"; 
-                
-                const token = createToken(
-                    dummyNim,
-                    "dummy-binusian-id", // username
-                    dummyName.toLowerCase(), // name
-                    dummyEmail.toLowerCase(), // email
-                    dummyRoles, // role array
-                    microsoftToken, // microsoftToken
-                    "",
-                    activeRole, // activeRole
-                    1, // dummy user ID
-                    0  // credential version
-                );
-
-                const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
-
-                return sendSuccessResponse(res, {
-                    nim: dummyNim,
-                    BinusianId: "dummy-binusian-id",
-                    Name: dummyName.toUpperCase(),
-                    Email: dummyEmail.toLowerCase(),
-                    Role: dummyRoles,
-                    ActiveRole: activeRole, 
-                    MicrosoftToken: microsoftToken
-                }, {
-                    name: cookieName,
-                    value: token.token,
-                    expires: token.expires,
-                });
-            }
-
             const decodedToken = parseJwt(microsoftToken);
 
             const email = decodedToken.preferred_username || decodedToken.unique_name;

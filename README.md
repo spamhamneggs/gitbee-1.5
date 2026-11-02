@@ -37,6 +37,8 @@ pnpm dev:backend   # tsx watch on :5001 (run in a separate terminal)
 pnpm dev:frontend  # next dev on :8000
 ```
 
+**Skipping Microsoft SSO.** Set `BYPASS_SSO=true` in the root `.env` and run `pnpm env:sync`. Logging in then signs you in as a local dev admin (`dev-bypass@gitbee.local`, roles Admin and Lecturer), created on first use, instead of redirecting to Microsoft. It only works with the host dev servers above: production builds ignore the flag, so it never applies in Docker. To work as a student, use the local password login with seeded dummy students (see [Dummy data](#dummy-data)).
+
 ## Database migrations
 
 Docker startup runs `prisma migrate deploy`. The `0_init` migration captures the
@@ -141,6 +143,7 @@ The root `.env.example` includes the shared settings for the full stack:
 - frontend: `FRONTEND_PORT`, `NEXT_PUBLIC_BACKEND_API`, `NEXT_PUBLIC_CLIENT_ID`, `NEXT_PUBLIC_TENANT_ID`, `NEXT_PUBLIC_REDIRECT_URI`, `NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI`, `NEXT_PUBLIC_STORE_AUTH_STATE_IN_COOKIE`, `NEXT_PUBLIC_CACHE_LOCATION`
 - docker behavior: `SEED_ON_BOOT`
 - seed: `SEED_DUMMY_STUDENTS`, `SEED_DUMMY_STAFF` (extra generated users, default 0)
+- local dev: `BYPASS_SSO` (default false; synced to the frontend as `NEXT_PUBLIC_BYPASS_SSO`, while `COOKIE_NAME` is synced as `NEXT_PUBLIC_COOKIE_NAME`)
 
 ### Notes on app-specific env files
 

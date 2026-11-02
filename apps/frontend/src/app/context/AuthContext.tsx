@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import Cookies from "js-cookie";
 import jwt from "jsonwebtoken";
+import { SESSION_COOKIE_NAME } from "@/lib/auth";
 
 interface UserData {
   nim: string;
@@ -40,7 +41,7 @@ const getUserDataFromCookie = (): UserData | null => {
   if (typeof document === "undefined") {
     return null;
   }
-  const token = Cookies.get(process.env.NEXT_PUBLIC_COOKIE_NAME || "gitbee_token");
+  const token = Cookies.get(SESSION_COOKIE_NAME);
   if (!token) {
     return null;
   }
