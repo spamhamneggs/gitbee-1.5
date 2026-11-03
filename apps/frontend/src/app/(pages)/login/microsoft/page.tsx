@@ -1,6 +1,7 @@
 "use client";
 import { useMsal } from "@azure/msal-react";
-import React, { useEffect, useRef } from "react";
+import Link from "next/link";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { login, loginDevBypass } from "../actions";
 import { useAuth } from "@/app/context/AuthContext";
@@ -16,6 +17,7 @@ const Page = () => {
   const bypassRef = useRef<"skip" | "ready" | "started">(
     SSO_BYPASS_ENABLED && !userData ? "ready" : "skip"
   );
+  const [bypassError, setBypassError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleRedirect = async () => {
@@ -23,7 +25,7 @@ const Page = () => {
         if (bypassRef.current === "started") return;
         bypassRef.current = "started";
         const result = await loginDevBypass();
-        if (result?.success) {
+        if (result.success) {
           setUserData({
             nim: result.data.nim,
             name: result.data.Name,
@@ -34,8 +36,9 @@ const Page = () => {
           });
           router.push(dashboardPathForRole(result.data.ActiveRole) ?? "/");
         } else {
-          console.error("SSO bypass failed:", result?.message);
-          router.push("/");
+          // Stay here with the reason: sending the developer home just makes
+          // the next login attempt fail the same way, unexplained.
+          setBypassError(result.message ?? "Dev login failed.");
         }
         return;
       }
@@ -84,6 +87,22 @@ const Page = () => {
 
     handleRedirect();
   }, [instance, accounts, inProgress, router, setUserData]);
+
+  if (bypassError) {
+    return (
+      <div className="fixed z-[100] bg-white w-screen h-screen flex justify-center items-center px-6">
+        <div className="max-w-xl flex flex-col gap-4 items-center text-center">
+          <h1 className="font-montserrat font-bold text-2xl text-primary-binus">
+            Dev login failed
+          </h1>
+          <p className="text-gray-700 break-words">{bypassError}</p>
+          <Link href="/" className="text-primary-orange underline">
+            Back to home
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed z-[100] bg-white w-screen h-screen flex justify-center items-center">

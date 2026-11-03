@@ -97,6 +97,18 @@ describe("SSO bypass", () => {
     assert.equal(admin.status, 200);
   });
 
+  it("reports a database failure as JSON the login page can show", async () => {
+    setEnv("BYPASS_SSO", "true");
+    stub(console, "error", () => {});
+    stub(prisma.user, "upsert", async () => {
+      throw new Error("\nInvalid `prisma.user.upsert()` invocation:\n\nThe column `credential_version` does not exist in the current database.");
+    });
+    const response = await request(app).post("/auth/login-dev");
+    assert.equal(response.status, 500);
+    assert.equal(response.body.errors, "The column `credential_version` does not exist in the current database.");
+    assert.equal(response.headers["set-cookie"], undefined);
+  });
+
   it("still requires a session on protected routes while the bypass is on", async () => {
     setEnv("BYPASS_SSO", "true");
     setEnv("NODE_ENV", "development");

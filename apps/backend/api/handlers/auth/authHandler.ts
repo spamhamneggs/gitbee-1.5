@@ -194,7 +194,7 @@ export default class AuthHandler {
         }
     }
 
-    static async loginDevBypass(_req: Request, res: Response, next: NextFunction) {
+    static async loginDevBypass(_req: Request, res: Response) {
         if (!isSsoBypassEnabled()) {
             return sendErrorResponse(res, "Not found", 404);
         }
@@ -227,7 +227,11 @@ export default class AuthHandler {
                 expires: token.expires,
             });
         } catch (error) {
-            return next(error);
+            // Dev-only route, so hand the cause (e.g. an unmigrated database)
+            // to the login page as JSON rather than Express's HTML 500.
+            console.error(error);
+            const cause = getErrorMessage(error).trim().split("\n").at(-1);
+            return sendErrorResponse(res, cause, 500);
         }
     }
 

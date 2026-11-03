@@ -24,24 +24,38 @@ export const login = async (microsoftToken: string, role?: string) => {
   }
 };
 
-// Signs in as the backend's local dev account (BYPASS_SSO only).
+// Signs in as the backend's local dev account (BYPASS_SSO only). Failures
+// come back with a message meant for the developer looking at the page.
 export const loginDevBypass = async () => {
+  let response: Response;
   try {
-    const response = await fetch(
+    response = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_API}auth/login-dev`,
       {
         method: "POST",
         credentials: "include",
       }
     );
-
-    const result = await response.json();
-    if (result.status) {
-      return { success: true, data: result.data };
-    } else {
-      return { success: false, message: result.errors ?? result.message };
-    }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
+  } catch {
+    return {
+      success: false,
+      message: `Couldn't reach the backend at ${process.env.NEXT_PUBLIC_BACKEND_API}. Is it running?`,
+    };
   }
+
+  const result = await response.json().catch(() => null);
+  if (result?.status) {
+    return { success: true, data: result.data };
+  }
+  if (response.status === 404) {
+    return {
+      success: false,
+      message:
+        "The backend has the SSO bypass turned off. Set BYPASS_SSO=true in the root .env, run pnpm env:sync, and restart the backend.",
+    };
+  }
+  return {
+    success: false,
+    message: `${result?.errors ?? `HTTP ${response.status}`} Check the backend log; if the database is behind, apply the migrations (see the README).`,
+  };
 };
