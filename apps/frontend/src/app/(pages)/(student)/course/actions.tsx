@@ -176,9 +176,17 @@ export const createGroup = async ({
     if (response.ok && result.status) {
       return { success: true, data: result.data || "" };
     } else {
+      // The backend puts the reason in `errors` (a string, or a list of
+      // validation messages); `message` is always just "failed".
+      const reason = Array.isArray(result.errors)
+        ? result.errors.join(", ")
+        : result.errors;
       return {
         success: false,
-        message: result.message || "Failed to create group",
+        message:
+          typeof reason === "string" && reason !== ""
+            ? reason
+            : "Failed to create group",
       };
     }
   } catch (error: any) {

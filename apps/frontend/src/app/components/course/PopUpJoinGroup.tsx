@@ -88,7 +88,11 @@ function PopUpJoinGroup(props: PopUpJoinGroupProps) {
     } else {
       props.toast({
         title: "Oops! Something went wrong!",
-        description: `Your Group hasn't been successfully created. You can try again later`,
+        // The server's reason (e.g. "Not enrolled in this class: …") when it
+        // answered; the generic text only when it couldn't be reached.
+        description:
+          result?.message ??
+          `Your Group hasn't been successfully created. You can try again later`,
       });
     }
     props.fetchData();
