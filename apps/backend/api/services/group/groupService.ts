@@ -108,10 +108,4 @@ export default class GroupService {
             where: { ...classRef, group }
         });
     }
-
-    /** The class's temporary groups (not yet submitted), grouped by number. */
-    static async listClassGroups(classRef: ClassRef) {
-        const rows = await prisma.temporaryGroup.findMany({ where: classRef });
-        return groupByNumber(rows);
-    }
 }
