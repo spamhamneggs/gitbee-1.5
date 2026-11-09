@@ -17,6 +17,7 @@ app.use("/api/project", projectRoutes);
 
 const suffix = randomBytes(6).toString("hex");
 const lecturerId = `D-${suffix}`;
+const altLecturerId = `D2-${suffix}`;
 const leaderId = `L-${suffix}`;
 const semesterId = `sem-${suffix}`;
 const courseId = `COMP-${suffix}`;
@@ -66,7 +67,7 @@ before(async () => {
 
 after(async () => {
   if (databaseUrl) {
-    await prisma.project.deleteMany({ where: { lecturer_id: lecturerId } });
+    await prisma.project.deleteMany({ where: { lecturer_id: { in: [lecturerId, altLecturerId] } } });
     await prisma.status.deleteMany({ where: { id: statusId } });
     await prisma.category.deleteMany({ where: { id: categoryId } });
     await prisma.major.deleteMany({ where: { id: majorId } });
@@ -124,5 +125,98 @@ describe("project insert concurrency against MySQL", {
     assert.equal(members.length, 1);
     assert.equal(members[0].student_name, "Roster Student");
     assert.equal(members[0].student_binusian_id, "BN-ROSTER");
+  });
+
+  it("rejects duplicate technology_ids with 400 and keeps the existing project", async () => {
+    const before = await prisma.projectDetail.findFirst({ where: groupWhere() });
+    assert.ok(before, "expected a project from an earlier test");
+
+    const response = await request(app)
+      .post("/api/project/insert")
+      .send({ ...payload(), technology_ids: [technologyId, technologyId] });
+
+    assert.equal(response.status, 400, JSON.stringify(response.body));
+
+    const after = await prisma.projectDetail.findFirst({ where: groupWhere() });
+    assert.ok(after, "the failed resubmit must not delete the existing project");
+    assert.equal(after.project_id, before.project_id);
+  });
+
+  it("keeps member names across a resubmit after the roster is cleared", async () => {
+    const group = 2;
+    const memberId = `P-${suffix}`;
+    const submit = () =>
+      request(app)
+        .post("/api/project/insert")
+        .send({ ...payload(), group, student_leader_id: memberId, group_members: [memberId] });
+
+    await prisma.temporaryGroup.create({
+      data: {
+        semester_id: semesterId,
+        course_id: courseId,
+        class: className,
+        group,
+        student_id: memberId,
+        student_name: "Persisted Student",
+        student_binusian_id: "BN-PERSIST"
+      }
+    });
+
+    const first = await submit();
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+
+    const rosterLeft = await prisma.temporaryGroup.count({
+      where: { semester_id: semesterId, course_id: courseId, class: className, group }
+    });
+    assert.equal(rosterLeft, 0, "the first submit clears the roster");
+
+    const second = await submit();
+    assert.equal(second.status, 200, JSON.stringify(second.body));
+
+    const saved = await prisma.projectGroup.findMany({ where: { student_id: memberId } });
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].student_name, "Persisted Student");
+    assert.equal(saved[0].student_binusian_id, "BN-PERSIST");
+  });
+
+  it("lets a group resubmit when the lecturer changes", async () => {
+    const group = 3;
+    const memberId = `A-${suffix}`;
+
+    const first = await request(app)
+      .post("/api/project/insert")
+      .send({ ...payload(), group, student_leader_id: memberId, group_members: [memberId] });
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+
+    const second = await request(app)
+      .post("/api/project/insert")
+      .send({ ...payload(), group, lecturer_id: altLecturerId, student_leader_id: memberId, group_members: [memberId] });
+    assert.equal(second.status, 200, JSON.stringify(second.body));
+
+    const details = await prisma.projectDetail.count({
+      where: { semester_id: semesterId, course_id: courseId, class: className, group }
+    });
+    assert.equal(details, 1);
+  });
+
+  it("lets a group resubmit when the submitter is not in the saved group", async () => {
+    const group = 4;
+    const firstMember = `A-${suffix}`;
+    const otherMember = `O-${suffix}`;
+
+    const first = await request(app)
+      .post("/api/project/insert")
+      .send({ ...payload(), group, student_leader_id: firstMember, group_members: [firstMember] });
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+
+    const second = await request(app)
+      .post("/api/project/insert")
+      .send({ ...payload(), group, student_leader_id: otherMember, group_members: [otherMember] });
+    assert.equal(second.status, 200, JSON.stringify(second.body));
+
+    const details = await prisma.projectDetail.count({
+      where: { semester_id: semesterId, course_id: courseId, class: className, group }
+    });
+    assert.equal(details, 1);
   });
 });

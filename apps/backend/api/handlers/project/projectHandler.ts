@@ -52,7 +52,8 @@ export default class ProjectHandler {
 
             // Local lookups replace the two Atlantis HTTP calls per group member:
             // the user table wins, then the group's temporary roster (members who
-            // have not logged in yet), then the NIM.
+            // have not logged in yet), then the names on the project being
+            // replaced, then the NIM.
             const [memberUsers, roster] = await Promise.all([
                 prisma.user.findMany({
                     where: { student_id: { in: groupMembers } },
@@ -68,20 +69,12 @@ export default class ProjectHandler {
             );
 
             const { newProject, newProjectDetail } = await prisma.$transaction(async (tx) => {
+                // Match the same columns as the project_detail unique key
+                // (semester/course/class/group). If the lookup filtered on other
+                // columns (lecturer, group member), a resubmit could miss the old
+                // project, hit the unique key on insert, and 409 on every try.
                 const existingProject = await tx.project.findFirst({
-                    where: {
-                        lecturer_id: params.lecturer_id,
-                        projectGroups: {
-                            some: {
-                                student_id: params.student_leader_id,
-                            },
-                        },
-                        projectDetail: {
-                            course_id: params.course_id,
-                            semester_id: params.semester_id,
-                            class: params.class
-                        }
-                    },
+                    where: { projectDetail: whereCondition },
                     include: {
                         projectDetail: true,
                         projectGroups: true
@@ -150,12 +143,17 @@ export default class ProjectHandler {
                     const newProjectGroup = groupMembers.map((student_id) => {
                         const member = memberByIdentifier.get(student_id);
                         const rosterMember = rosterById.get(student_id);
+                        // The first submit cleared temporary_group, so a resubmit
+                        // falls back to the names saved on the project it replaces.
+                        const previousMember = existingProject?.projectGroups.find(
+                            (row) => row.student_id === student_id
+                        );
 
                         return {
                             project_id: project.id,
                             student_id,
-                            student_name: member?.name ?? rosterMember?.student_name ?? student_id,
-                            student_binusian_id: member?.binusian_id ?? rosterMember?.student_binusian_id ?? student_id
+                            student_name: member?.name ?? rosterMember?.student_name ?? previousMember?.student_name ?? student_id,
+                            student_binusian_id: member?.binusian_id ?? rosterMember?.student_binusian_id ?? previousMember?.student_binusian_id ?? student_id
                         };
                     });
 
@@ -173,7 +171,14 @@ export default class ProjectHandler {
 
             sendSuccessResponse(res, { newProject, newProjectDetail });
         } catch (error) {
-            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            // Only the project_detail group key means "this group already has a
+            // project". Other P2002s (e.g. a duplicate technology_id) are bad
+            // input and fall through to the generic 400.
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === "P2002" &&
+                error.meta?.modelName === "ProjectDetail"
+            ) {
                 return sendErrorResponse(res, "A project already exists for this group.", 409);
             }
             sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
