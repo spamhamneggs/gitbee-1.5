@@ -39,14 +39,15 @@ The index also blocks two simultaneous *first-time* submits, which the old looku
 |---|---|---|---|
 | 1 | `ProjectHandler.insertProject` | `tx.projectDetail.create(...)` | Must run *after* the previous detail is deleted in the same tx; on P2002 → 409. |
 | 2 | `ProjectHandler.insertProject` | deletes of gallery / project_technology / project_group / project_detail / project | Switched to `deleteMany` so a lost race does not throw P2025 before the insert; the insert becomes the conflict signal. |
-| 3 | `ProjectHandler.insertProject` | `prisma.temporaryGroup.findMany(...)` | Read before the write to backfill member names; only submitted members are deleted at the end of the tx. |
+| 3 | `ProjectHandler.insertProject` | `tx.temporaryGroup.findMany(...)` | Read in the transaction to verify first-submission membership and backfill member names; only submitted members are deleted at the end of the tx. |
 | 4 | `api/prisma/seed.ts` | `prisma.projectDetail.create(...)` | Seed combos (`BW11`/`BW22` groups 1–5) are unique on the tuple — no conflict. |
 | 5 | `api/prisma/dummy/generateCsv.ts` and other project seeders | — | No `project_detail` writes. |
 | 6 | `StudentGroupHandler.insertTemporaryGroup` | member checks, group-number lookup and roster inserts | Run in one serializable transaction; retry P2034 conflicts up to four times so concurrent groups receive different numbers. |
 
 Project submission requires a student session whose signed NIM matches the submitted
-leader. Before replacing an existing project, the handler checks that this student
-belongs to its saved group. A collision with an unrelated group returns 409 and
+leader. A first submission requires membership in the temporary roster. A replacement
+requires membership in the saved project group. Both checks run inside the write
+transaction before any writes. A collision with an unrelated group returns 409 and
 preserves the existing project, assessment and waiting roster. The frontend includes
 its session cookie when submitting.
 

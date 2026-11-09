@@ -68,6 +68,11 @@ const tokenFor = (studentId = leaderId, role = "Student") => jwt.sign({
 const submit = (body = payload(), studentId = body.student_leader_id) =>
   request(app).post("/api/project/insert")
     .set("Authorization", `Bearer ${tokenFor(studentId)}`).send(body);
+const reserveGroup = (group: number, studentIds: string[]) => prisma.temporaryGroup.createMany({
+  data: studentIds.map((student_id) => ({
+    ...groupWhere(), group, student_id, student_name: student_id, student_binusian_id: student_id,
+  })),
+});
 
 before(async () => {
   if (!databaseUrl) return;
@@ -75,6 +80,9 @@ before(async () => {
   categoryId = (await prisma.category.create({ data: { name: `category-${suffix}` } })).id;
   majorId = (await prisma.major.create({ data: { name: `major-${suffix}` } })).id;
   technologyId = (await prisma.technology.create({ data: { name: `technology-${suffix}` } })).id;
+  await reserveGroup(1, [leaderId, `M-${suffix}`]);
+  await reserveGroup(3, [`A-${suffix}`]);
+  await reserveGroup(6, [leaderId, `member-${suffix}`]);
 });
 
 after(async () => {
@@ -148,6 +156,44 @@ describe("project insert concurrency against MySQL", {
     assert.equal(members.length, 1);
     assert.equal(members[0].student_name, "Roster Student");
     assert.equal(members[0].student_binusian_id, "BN-ROSTER");
+  });
+
+  it("rejects an outsider's first submission and leaves the reserved group able to submit", async () => {
+    const group = 7;
+    const memberId = `reserved-${suffix}`;
+    const outsiderId = `outside-${suffix}`;
+    await reserveGroup(group, [memberId]);
+    const where = { ...groupWhere(), group };
+    const roster = await prisma.temporaryGroup.findMany({ where });
+    const projectsBefore = await prisma.project.count({ where: { lecturer_id: lecturerId } });
+
+    const rejected = await submit({
+      ...payload(), group, student_leader_id: outsiderId, group_members: [memberId, outsiderId],
+    });
+    assert.equal(rejected.status, 409, JSON.stringify(rejected.body));
+    assert.equal(await prisma.projectDetail.count({ where }), 0);
+    assert.equal(await prisma.project.count({ where: { lecturer_id: lecturerId } }), projectsBefore);
+    assert.deepEqual(await prisma.temporaryGroup.findMany({ where }), roster);
+
+    const accepted = await submit({
+      ...payload(), group, student_leader_id: memberId, group_members: [memberId],
+    });
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+    assert.equal(accepted.body.data.newProject.student_leader_id, memberId);
+    assert.equal(await prisma.projectDetail.count({ where }), 1);
+    assert.equal(await prisma.temporaryGroup.count({ where }), 0);
+  });
+
+  it("rejects a first submission without a matching reserved roster", async () => {
+    const group = 8;
+    const studentId = `unreserved-${suffix}`;
+    const projectsBefore = await prisma.project.count({ where: { lecturer_id: lecturerId } });
+    const rejected = await submit({
+      ...payload(), group, student_leader_id: studentId, group_members: [studentId],
+    });
+    assert.equal(rejected.status, 409, JSON.stringify(rejected.body));
+    assert.equal(await prisma.projectDetail.count({ where: { ...groupWhere(), group } }), 0);
+    assert.equal(await prisma.project.count({ where: { lecturer_id: lecturerId } }), projectsBefore);
   });
 
   it("rejects duplicate technology_ids with 400 and keeps the existing project", async () => {

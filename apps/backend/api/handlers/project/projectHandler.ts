@@ -58,20 +58,13 @@ export default class ProjectHandler {
             // the user table wins, then the group's temporary roster (members who
             // have not logged in yet), then the names on the project being
             // replaced, then the NIM.
-            const [memberUsers, roster] = await Promise.all([
-                prisma.user.findMany({
-                    where: { student_id: { in: groupMembers } },
-                    select: { student_id: true, name: true, binusian_id: true }
-                }),
-                prisma.temporaryGroup.findMany({ where: whereCondition })
-            ]);
+            const memberUsers = await prisma.user.findMany({
+                where: { student_id: { in: groupMembers } },
+                select: { student_id: true, name: true, binusian_id: true }
+            });
             const memberByIdentifier = new Map(
                 memberUsers.map((member) => [member.student_id, member])
             );
-            const rosterById = new Map(
-                roster.map((member) => [member.student_id, member])
-            );
-
             const submitted = await prisma.$transaction(async (tx) => {
                 // Match the same columns as the project_detail unique key
                 // (semester/course/class/group). If the lookup filtered on other
@@ -84,11 +77,16 @@ export default class ProjectHandler {
                         projectGroups: true
                     }
                 });
+                const roster = await tx.temporaryGroup.findMany({ where: whereCondition });
+                const allowedMembers = existingProject?.projectGroups ?? roster;
+                if (!allowedMembers.some((member) => member.student_id === requester.nim)) {
+                    return null;
+                }
+                const rosterById = new Map(
+                    roster.map((member) => [member.student_id, member])
+                );
 
                 if (existingProject) {
-                    if (!existingProject.projectGroups.some((member) => member.student_id === requester.nim)) {
-                        return null;
-                    }
                     const projectId = existingProject.id;
 
                     // deleteMany, not delete: a concurrent resubmit may have already
@@ -177,7 +175,7 @@ export default class ProjectHandler {
             });
 
             if (!submitted) {
-                return sendErrorResponse(res, "This group number belongs to another group.", 409);
+                return sendErrorResponse(res, "You are not a member of this group.", 409);
             }
             sendSuccessResponse(res, submitted);
         } catch (error) {
