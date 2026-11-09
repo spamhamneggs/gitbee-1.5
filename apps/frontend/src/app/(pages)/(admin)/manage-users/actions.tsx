@@ -87,6 +87,55 @@ export const uploadExcelUsers = async (file: File) => {
   }
 };
 
+export type UserCsvType = "staff" | "student";
+
+export interface UserCsvReport {
+  totalParsed: number;
+  createdCount: number;
+  skippedCount: number;
+  failedCount: number;
+  errors: { line: number; errors: string[] }[];
+}
+
+type UserCsvResult =
+  | { success: true; data: UserCsvReport }
+  | { success: false; message: string };
+
+// Imports staff or student accounts from a CSV file. The response reports
+// every rejected row, so the caller can show what to fix.
+export const uploadUsersCsv = async (
+  file: File,
+  type: UserCsvType
+): Promise<UserCsvResult> => {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/upload-${type}-csv`,
+      {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      }
+    );
+    const result = await response.json();
+
+    if (response.ok && result.status && result.data) {
+      return { success: true, data: result.data as UserCsvReport };
+    }
+    return {
+      success: false,
+      message:
+        typeof result.errors === "string" ? result.errors : "Import failed.",
+    };
+  } catch {
+    return {
+      success: false,
+      message: "Couldn't reach the server. Please try again.",
+    };
+  }
+};
+
 export const deleteAllUser = async () => {
   try {
     const response = await fetch(
