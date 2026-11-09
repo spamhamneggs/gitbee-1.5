@@ -14,6 +14,8 @@
     "start": "node dist/index.js",
     "dev": "pnpm prisma:generate && tsx watch ./api/index.ts",
     "dummy:csv": "tsx api/prisma/dummy/generateCsv.ts",
+    "demo:seed": "tsx api/prisma/demo/seedDemo.ts",
+    "demo:samples": "tsx api/prisma/demo/generateSamples.ts",
     "postinstall": "pnpm prisma:generate"
   },
   "keywords": [],

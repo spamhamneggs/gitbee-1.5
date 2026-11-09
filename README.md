@@ -1,5 +1,13 @@
 # GitBee (monorepo)
 
+## CSV / Excel database demo
+
+Run `npm run demo` after installing the app dependencies. The demo creates a
+separate `gitbee_demo` database, seeds synthetic accounts/projects, and opens
+an admin workspace for file validation, account import, live database rows,
+and schema relationships. See [the demo guide](docs/demo.md) for setup,
+credentials, sample files, and a presentation walkthrough.
+
 | App      | Dir             | Stack                    | Port |
 | -------- | --------------- | ------------------------ | ---- |
 | Backend  | `apps/backend`  | Express + Prisma (MySQL) | 5000 |

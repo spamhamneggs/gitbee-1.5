@@ -1,0 +1,11 @@
+nim,name,email,binusian_id,major_code,password
+2702001001,Oktavia Halim,import.student.1@example.test,BN100001001,CS,GitbeeDummy#2026
+2702001002,Yudi Susanto,import.student.2@example.test,BN100001002,GAT,GitbeeDummy#2026
+2702001003,Eka Siregar,import.student.3@example.test,BN100001003,MAT,GitbeeDummy#2026
+2702001004,Gita Wibowo,import.student.4@example.test,BN100001004,DS,GitbeeDummy#2026
+2702001005,Yudi Gunawan,import.student.5@example.test,BN100001005,CYBER,GitbeeDummy#2026
+2702001006,Fajar Putra,import.student.6@example.test,BN100001006,CS,GitbeeDummy#2026
+2702001007,Sari Nugroho,import.student.7@example.test,BN100001007,GAT,GitbeeDummy#2026
+2702001008,Eka Siregar,import.student.8@example.test,BN100001008,MAT,GitbeeDummy#2026
+2702001001,Oktavia Halim,import.student.1@example.test,BN100001001,CS,GitbeeDummy#2026
+2702001002,,invalid-email,BN100001002,GAT,GitbeeDummy#2026

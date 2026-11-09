@@ -5,9 +5,11 @@ import { RoleMiddleware } from "../../../middlewares/roleMiddleware.js";
 import { currentAdminMiddleware } from "../../../middlewares/currentAdminMiddleware.js";
 import { uploadCsv } from "../../../middlewares/uploadMiddleware.js";
 import multer from "multer";
+import dataToolsRoutes from "./dataToolsRoutes.js";
 const upload = multer({ storage: multer.memoryStorage() });
 
 const adminUserRoutes = express.Router();
+adminUserRoutes.use("/data-tools", dataToolsRoutes);
 
 adminUserRoutes.get("/get-user", currentAdminMiddleware, AdminUserHandler.getUser);
 adminUserRoutes.post(

@@ -36,6 +36,6 @@ app.set('query parser', function (str: string) {
 
 app.use("/api", routes)
 
-app.listen(port, () => {
+app.listen(Number(port), process.env.HOST ?? "0.0.0.0", () => {
   console.log(`Application is running on port ${port}.`);
 });

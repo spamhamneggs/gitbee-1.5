@@ -1,0 +1,7 @@
+lecturer_code,name,email,binusian_id,role,major_codes,password
+D6001,Lestari Purnomo,import.staff.1@example.test,BN200001001,Lecturer,CS,GitbeeDummy#2026
+D6002,Sari Wibowo,import.staff.2@example.test,BN200001002,Admin,GAT;DS,GitbeeDummy#2026
+D6003,Rizky Purnomo,import.staff.3@example.test,BN200001003,SCC,MAT,GitbeeDummy#2026
+D6005,Rizky Siregar,import.staff.4@example.test,,Lecturer,CYBER;GAT,GitbeeDummy#2026
+D6006,Oktavia Ramadhan,import.staff.5@example.test,BN200001006,Admin,CS,GitbeeDummy#2026
+D6007,Putri Susanto,import.staff.6@example.test,BN200001007,SCC,GAT,GitbeeDummy#2026

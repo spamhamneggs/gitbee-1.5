@@ -6,6 +6,7 @@
   "packageManager": "pnpm@12.16.1",
   "scripts": {
     "env:sync": "node ./scripts/sync-env.mjs",
+    "demo": "node ./scripts/demo.mjs",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",

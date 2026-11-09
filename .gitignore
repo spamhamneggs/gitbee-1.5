@@ -10,3 +10,4 @@ apps/frontend/out/
 .turbo/
 .agents/
 skills-lock.json
+.demo/

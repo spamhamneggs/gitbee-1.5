@@ -92,12 +92,21 @@ export const prismaUserStore: CsvUserStore = {
     const distinct = [...new Set(values)];
     if (distinct.length === 0) return new Map();
 
-    const rows = await prisma.$queryRaw<{ value: string; sort_key: string }[]>`
-      SELECT input.value,
-             HEX(TRIM(TRAILING WEIGHT_STRING(_utf8mb4' ' COLLATE ${Prisma.raw(USER_TABLE_COLLATION)})
-                      FROM WEIGHT_STRING(input.value COLLATE ${Prisma.raw(USER_TABLE_COLLATION)}))) AS sort_key
-      FROM JSON_TABLE(${JSON.stringify(distinct)}, '$[*]' COLUMNS (value VARCHAR(255) PATH '$')) AS input`;
-    return new Map(rows.map((row) => [row.value, row.sort_key]));
+    const keys = new Map<string, string>();
+    // Parameterized UNION works on both MySQL 8 and local MariaDB versions
+    // without JSON_TABLE. Bound each query rather than building one huge union.
+    for (let start = 0; start < distinct.length; start += 250) {
+      const input = Prisma.join(distinct.slice(start, start + 250).map(value =>
+        Prisma.sql`SELECT CAST(${value} AS CHAR CHARACTER SET utf8mb4) AS value`
+      ), " UNION ALL ");
+      const rows = await prisma.$queryRaw<{ value: string; sort_key: string }[]>`
+        SELECT input.value,
+               HEX(TRIM(TRAILING WEIGHT_STRING(_utf8mb4' ' COLLATE ${Prisma.raw(USER_TABLE_COLLATION)})
+                        FROM WEIGHT_STRING(input.value COLLATE ${Prisma.raw(USER_TABLE_COLLATION)}))) AS sort_key
+        FROM (${input}) AS input`;
+      rows.forEach(row => keys.set(row.value, row.sort_key));
+    }
+    return keys;
   },
   async createMany(users) {
     if (users.length === 0) return 0;

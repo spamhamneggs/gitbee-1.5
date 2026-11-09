@@ -42,6 +42,7 @@ export function proxy(req: NextRequest) {
         /^\/manage-student(?:\/|$)/,
         /^\/manage-transactions(?:\/|$)/,
         /^\/manage-users(?:\/|$)/,
+        /^\/data-demo(?:\/|$)/,
       ],
     };
 
@@ -76,5 +77,6 @@ export const config = {
     "/manage-student/:path*",
     "/manage-transactions/:path*",
     "/manage-users/:path*",
+    "/data-demo/:path*",
   ],
 };

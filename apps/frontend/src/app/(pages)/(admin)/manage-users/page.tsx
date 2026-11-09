@@ -93,6 +93,7 @@ const Page = () => {
 
   return (
     <motion.div className="relative min-h-screen flex flex-col pt-20 sm:pt-28 2xl:px-16 pb-10 bg-gray-50">
+      <Link href="/data-demo" className="mx-5 sm:mx-9 mb-5 text-sm text-primary-binus underline w-fit">Import CSV / Excel & browse database →</Link>
       <div
         className={`sticky ${
           expand ? "top-20 sm:top-28" : "top-7"

@@ -27,7 +27,7 @@ const pathsByRole = {
   Lecturer: ["/dashboard-lecturer", "/course-lecturer", "/history-lecturer"],
   SCC: ["/dashboard-scc"],
   HoP: ["/dashboard-hop"],
-  Admin: ["/dashboard-admin", "/detail-admin-project/1", "/manage-categories", "/manage-student", "/manage-transactions", "/manage-users"],
+  Admin: ["/dashboard-admin", "/detail-admin-project/1", "/manage-categories", "/manage-student", "/manage-transactions", "/manage-users", "/data-demo"],
 };
 const memberships = {
   Student: ["Student"], Lecturer: ["Lecturer"],
@@ -45,7 +45,7 @@ test("Next applies the guard to every protected page and leaves public pages ava
   for (const path of Object.values(pathsByRole).flat()) {
     assert.equal(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: path }), true, path);
   }
-  for (const path of ["/", "/explore", "/login/microsoft", "/favicon.ico"]) {
+  for (const path of ["/", "/explore", "/login/microsoft", "/demo-login", "/favicon.ico"]) {
     assert.equal(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url: path }), false, path);
   }
 });
