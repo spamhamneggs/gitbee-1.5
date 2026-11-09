@@ -3,8 +3,6 @@ import LecturerGroupHandler from "../../../handlers/group/lecturer/lecturerGroup
 
 const lecturerGroupRoutes = express.Router();
 
-lecturerGroupRoutes.get("/class-group", LecturerGroupHandler.getClassGroup);
-lecturerGroupRoutes.get("/class-list", LecturerGroupHandler.getClassList);
 
 lecturerGroupRoutes.patch("/remove", LecturerGroupHandler.removeTemporaryGroup);
 

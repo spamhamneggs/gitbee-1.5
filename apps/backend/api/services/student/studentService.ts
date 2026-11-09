@@ -100,21 +100,4 @@ export default class StudentService {
         }
         return { members, notEnrolled };
     }
-
-    /** The student's name from the user table, else from any class roster; null when neither knows the NIM. */
-    static async findStudentName(studentId: string): Promise<string | null> {
-        const user = await prisma.user.findUnique({
-            where: { student_id: studentId },
-            select: { name: true },
-        });
-        const userName = firstFilled(user?.name);
-        if (userName) return userName;
-
-        const rosterRow = await prisma.studentListTransaction.findFirst({
-            where: { student_id: studentId, student_name: { not: "" } },
-            orderBy: { id: "desc" },
-            select: { student_name: true },
-        });
-        return firstFilled(rosterRow?.student_name) ?? null;
-    }
 }

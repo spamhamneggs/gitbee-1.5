@@ -1,4 +1,4 @@
-// Group creation and the name lookup read students from the local database
+// Group creation reads students from the local database
 // (user + student_list_transaction) instead of Atlantis.
 // Skipped unless TEST_DATABASE_URL points at a migrated test database.
 import assert from "node:assert/strict";
@@ -9,16 +9,13 @@ import request from "supertest";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 process.env.DATABASE_URL = databaseUrl ?? "mysql://test:test@127.0.0.1:3306/test";
-process.env.JWT_SECRET = "group-member-lookup-test-secret"; // the admin user routes need one at import
 delete process.env.ATLANTIS_API; // any remaining Atlantis call would fail loudly
 const { prisma } = await import("../api/prisma/client.js");
 const { default: groupRoutes } = await import("../api/routes/group/groupRoutes.js");
-const { default: userRoutes } = await import("../api/routes/user/userRoutes.js");
 
 const app = express();
 app.use(express.json());
 app.use("/api/group", groupRoutes);
-app.use("/api/user", userRoutes);
 
 const suffix = randomBytes(5).toString("hex");
 const semesterId = `sem-${suffix}`;
@@ -102,19 +99,4 @@ describe("group members and names from the local database", {
     assert.equal(response.body.errors, "Choose at least one group member");
   });
 
-  it("looks names up in the user table, then the roster", async () => {
-    const fromUser = await request(app).get("/api/user/get-name").query({ nim: nim("A") });
-    assert.equal(fromUser.status, 200, JSON.stringify(fromUser.body));
-    assert.equal(fromUser.body.data, "Ayu User");
-
-    const fromRoster = await request(app).get("/api/user/get-name").query({ nim: nim("C") });
-    assert.equal(fromRoster.status, 200, JSON.stringify(fromRoster.body));
-    assert.equal(fromRoster.body.data, "Citra Roster");
-
-    const unknown = await request(app).get("/api/user/get-name").query({ nim: nim("Z") });
-    assert.equal(unknown.status, 404);
-
-    const blank = await request(app).get("/api/user/get-name").query({ nim: " " });
-    assert.equal(blank.status, 400);
-  });
 });

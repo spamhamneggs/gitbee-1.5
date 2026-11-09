@@ -5,7 +5,6 @@ import adminTechnologyRoutes from "./admin/adminTechnologyRoutes.js";
 const technologyRoutes = express.Router();
 
 technologyRoutes.get("/all", TechnologyHandler.getAllTechnology);
-technologyRoutes.get("/data", TechnologyHandler.getTechnology);
 
 technologyRoutes.use("/admin", adminTechnologyRoutes);
 
