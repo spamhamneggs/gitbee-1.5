@@ -5,10 +5,11 @@ import adminProjectRoutes from "./admin/adminProjectRoutes.js";
 import studentProjectRoutes from "./student/studentProjectRoutes.js";
 import sccProjectRoutes from "./scc/sccProjectRoutes.js";
 import hopProjectRoutes from "./hop/hopProjectRoutes.js";
+import { RoleMiddleware } from "../../middlewares/roleMiddleware.js";
 
 const projectRoutes = express.Router();
 
-projectRoutes.post("/insert", ProjectHandler.insertProject);
+projectRoutes.post("/insert", RoleMiddleware("Student"), ProjectHandler.insertProject);
 projectRoutes.get("/all", ProjectHandler.getAllProject);
 projectRoutes.get("/detail", ProjectHandler.getDetailProject);
 

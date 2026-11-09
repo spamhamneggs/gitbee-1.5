@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import express from "express";
+import cookieParser from "cookie-parser";
+import jwt from "jsonwebtoken";
 import request from "supertest";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -10,10 +12,13 @@ process.env.JWT_SECRET = "project-concurrent-test-secret";
 process.env.COOKIE_NAME = "project_concurrent_test";
 const { prisma } = await import("../api/prisma/client.js");
 const { default: projectRoutes } = await import("../api/routes/project/projectRoutes.js");
+const { default: groupRoutes } = await import("../api/routes/group/groupRoutes.js");
+const { default: GenericService } = await import("../api/services/generic/genericService.js");
 
 const app = express();
-app.use(express.json());
+app.use(express.json(), cookieParser());
 app.use("/api/project", projectRoutes);
+app.use("/api/group", groupRoutes);
 
 const suffix = randomBytes(6).toString("hex");
 const lecturerId = `D-${suffix}`;
@@ -57,6 +62,13 @@ const groupWhere = () => ({
   group: 1
 });
 
+const tokenFor = (studentId = leaderId, role = "Student") => jwt.sign({
+  nim: studentId, role: [role], email: `${studentId}@project-submit.example.test`,
+}, process.env.JWT_SECRET!);
+const submit = (body = payload(), studentId = body.student_leader_id) =>
+  request(app).post("/api/project/insert")
+    .set("Authorization", `Bearer ${tokenFor(studentId)}`).send(body);
+
 before(async () => {
   if (!databaseUrl) return;
   statusId = (await prisma.status.create({ data: { name: `status-${suffix}` } })).id;
@@ -68,6 +80,7 @@ before(async () => {
 after(async () => {
   if (databaseUrl) {
     await prisma.project.deleteMany({ where: { lecturer_id: { in: [lecturerId, altLecturerId] } } });
+    await prisma.temporaryGroup.deleteMany({ where: { semester_id: semesterId } });
     await prisma.status.deleteMany({ where: { id: statusId } });
     await prisma.category.deleteMany({ where: { id: categoryId } });
     await prisma.major.deleteMany({ where: { id: majorId } });
@@ -79,11 +92,23 @@ after(async () => {
 describe("project insert concurrency against MySQL", {
   skip: databaseUrl ? false : "set TEST_DATABASE_URL to a migrated test database",
 }, () => {
+  it("requires a student session and binds the leader to the signed NIM", async () => {
+    for (const authorization of [undefined, "Bearer invalid-token"]) {
+      const req = request(app).post("/api/project/insert");
+      if (authorization) req.set("Authorization", authorization);
+      assert.equal((await req.send(payload())).status, 401);
+    }
+    assert.equal((await request(app).post("/api/project/insert")
+      .set("Authorization", `Bearer ${tokenFor(leaderId, "Lecturer")}`).send(payload())).status, 403);
+    assert.equal((await submit(payload(), `outsider-${suffix}`)).status, 403);
+    assert.equal(await prisma.projectDetail.count({ where: { semester_id: semesterId } }), 0);
+  });
+
   it("keeps exactly one project when a group submits twice at once", async () => {
     for (let round = 0; round < 5; round++) {
       const responses = await Promise.all([
-        request(app).post("/api/project/insert").send(payload()),
-        request(app).post("/api/project/insert").send(payload())
+        submit(),
+        submit()
       ]);
 
       for (const response of responses) {
@@ -115,9 +140,7 @@ describe("project insert concurrency against MySQL", {
       }
     });
 
-    const response = await request(app)
-      .post("/api/project/insert")
-      .send({ ...payload(), group_members: [rosterStudentId] });
+    const response = await submit({ ...payload(), group_members: [rosterStudentId] });
 
     assert.equal(response.status, 200, JSON.stringify(response.body));
 
@@ -131,9 +154,7 @@ describe("project insert concurrency against MySQL", {
     const before = await prisma.projectDetail.findFirst({ where: groupWhere() });
     assert.ok(before, "expected a project from an earlier test");
 
-    const response = await request(app)
-      .post("/api/project/insert")
-      .send({ ...payload(), technology_ids: [technologyId, technologyId] });
+    const response = await submit({ ...payload(), technology_ids: [technologyId, technologyId] });
 
     assert.equal(response.status, 400, JSON.stringify(response.body));
 
@@ -145,10 +166,7 @@ describe("project insert concurrency against MySQL", {
   it("keeps member names across a resubmit after the roster is cleared", async () => {
     const group = 2;
     const memberId = `P-${suffix}`;
-    const submit = () =>
-      request(app)
-        .post("/api/project/insert")
-        .send({ ...payload(), group, student_leader_id: memberId, group_members: [memberId] });
+    const resubmit = () => submit({ ...payload(), group, student_leader_id: memberId, group_members: [memberId] });
 
     await prisma.temporaryGroup.create({
       data: {
@@ -162,7 +180,7 @@ describe("project insert concurrency against MySQL", {
       }
     });
 
-    const first = await submit();
+    const first = await resubmit();
     assert.equal(first.status, 200, JSON.stringify(first.body));
 
     const rosterLeft = await prisma.temporaryGroup.count({
@@ -170,7 +188,7 @@ describe("project insert concurrency against MySQL", {
     });
     assert.equal(rosterLeft, 0, "the first submit clears the roster");
 
-    const second = await submit();
+    const second = await resubmit();
     assert.equal(second.status, 200, JSON.stringify(second.body));
 
     const saved = await prisma.projectGroup.findMany({ where: { student_id: memberId } });
@@ -183,13 +201,12 @@ describe("project insert concurrency against MySQL", {
     const group = 3;
     const memberId = `A-${suffix}`;
 
-    const first = await request(app)
-      .post("/api/project/insert")
-      .send({ ...payload(), group, student_leader_id: memberId, group_members: [memberId] });
+    const first = await submit({ ...payload(), group, student_leader_id: memberId, group_members: [memberId] });
     assert.equal(first.status, 200, JSON.stringify(first.body));
 
     const second = await request(app)
       .post("/api/project/insert")
+      .set("Cookie", `${process.env.COOKIE_NAME}=${tokenFor(memberId)}`)
       .send({ ...payload(), group, lecturer_id: altLecturerId, student_leader_id: memberId, group_members: [memberId] });
     assert.equal(second.status, 200, JSON.stringify(second.body));
 
@@ -199,24 +216,81 @@ describe("project insert concurrency against MySQL", {
     assert.equal(details, 1);
   });
 
-  it("lets a group resubmit when the submitter is not in the saved group", async () => {
+  it("lets another saved group member resubmit as the leader", async () => {
+    const memberId = `member-${suffix}`;
+    const first = await submit({ ...payload(), group: 6, group_members: [memberId] });
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    const second = await submit({ ...payload(), group: 6, student_leader_id: memberId, group_members: [leaderId] });
+    assert.equal(second.status, 200, JSON.stringify(second.body));
+    assert.equal(second.body.data.newProject.student_leader_id, memberId);
+    assert.equal(await prisma.projectDetail.count({ where: { ...groupWhere(), group: 6 } }), 1);
+  });
+
+  it("preserves the project, assessment and waiting roster when another group has the same number", async () => {
     const group = 4;
     const firstMember = `A-${suffix}`;
     const otherMember = `O-${suffix}`;
 
-    const first = await request(app)
-      .post("/api/project/insert")
-      .send({ ...payload(), group, student_leader_id: firstMember, group_members: [firstMember] });
+    await prisma.temporaryGroup.createMany({ data: [firstMember, otherMember].map((student_id) => ({
+      ...groupWhere(), group, student_id, student_name: student_id, student_binusian_id: student_id,
+    })) });
+    const first = await submit({ ...payload(), group, student_leader_id: firstMember, group_members: [firstMember] });
     assert.equal(first.status, 200, JSON.stringify(first.body));
+    const projectId = first.body.data.newProject.id;
+    const assessment = await prisma.assessment.create({ data: {
+      project_id: projectId, grade: 5, reason: "Must survive a conflicting submit",
+    } });
 
-    const second = await request(app)
-      .post("/api/project/insert")
-      .send({ ...payload(), group, student_leader_id: otherMember, group_members: [otherMember] });
-    assert.equal(second.status, 200, JSON.stringify(second.body));
+    const second = await submit({ ...payload(), group, student_leader_id: otherMember, group_members: [otherMember] });
+    assert.equal(second.status, 409, JSON.stringify(second.body));
+    assert.ok(await prisma.project.findUnique({ where: { id: projectId } }));
+    assert.ok(await prisma.assessment.findUnique({ where: { id: assessment.id } }));
+    assert.equal(await prisma.gallery.count({ where: { project_id: projectId } }), 1);
+    assert.equal(await prisma.projectTechnology.count({ where: { project_id: projectId } }), 1);
+    const savedMembers = await prisma.projectGroup.findMany({ where: { project_id: projectId } });
+    assert.deepEqual(savedMembers.map((row) => row.student_id), [firstMember]);
+    const waiting = await prisma.temporaryGroup.findMany({ where: { ...groupWhere(), group } });
+    assert.deepEqual(waiting.map((row) => row.student_id), [otherMember]);
 
     const details = await prisma.projectDetail.count({
       where: { semester_id: semesterId, course_id: courseId, class: className, group }
     });
     assert.equal(details, 1);
+  });
+
+  it("allocates different numbers to concurrent groups and lets both submit", async (t) => {
+    t.mock.method(GenericService, "getName", async (studentId: string) => ({ message: "successful", status: true, data: studentId }));
+    t.mock.method(GenericService, "getBinusianID", async (studentId: string) => ({ message: "successful", status: true, data: studentId }));
+    for (let round = 0; round < 5; round++) {
+      const classId = `R${round}`;
+      const students = [`G1-${suffix}`, `G2-${suffix}`];
+      const groups = await Promise.all(students.map((student_id) => request(app)
+        .post("/api/group/student/insert")
+        .send({ semester_id: semesterId, course_id: courseId, class: classId, student_ids: [student_id] })));
+      for (const response of groups) assert.equal(response.status, 200, JSON.stringify(response.body));
+      assert.notEqual(groups[0]!.body.data[0].group, groups[1]!.body.data[0].group);
+      const submissions = await Promise.all(students.map((student_id, i) => submit({
+        ...payload(), class: classId, group: groups[i]!.body.data[0].group,
+        student_leader_id: student_id, group_members: [student_id],
+      })));
+      for (const response of submissions) assert.equal(response.status, 200, JSON.stringify(response.body));
+      assert.equal(await prisma.projectDetail.count({ where: { semester_id: semesterId, class: classId } }), 2);
+    }
+  });
+
+  it("rejects overlapping concurrent groups without leaving a partial roster", async (t) => {
+    t.mock.method(GenericService, "getName", async (studentId: string) => ({ message: "successful", status: true, data: studentId }));
+    t.mock.method(GenericService, "getBinusianID", async (studentId: string) => ({ message: "successful", status: true, data: studentId }));
+    const studentIds = [`C1-${suffix}`, `C2-${suffix}`];
+    const body = { semester_id: semesterId, course_id: courseId, class: "OVERLAP", student_ids: studentIds };
+    const responses = await Promise.all([
+      request(app).post("/api/group/student/insert").send(body),
+      request(app).post("/api/group/student/insert").send(body),
+    ]);
+    assert.deepEqual(responses.map((response) => response.status).sort(), [200, 400]);
+    const rows = await prisma.temporaryGroup.findMany({ where: { semester_id: semesterId, class: body.class } });
+    assert.equal(rows.length, 2);
+    assert.equal(new Set(rows.map((row) => row.group)).size, 1);
+    assert.deepEqual(rows.map((row) => row.student_id).sort(), studentIds);
   });
 });

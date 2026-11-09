@@ -116,6 +116,7 @@ export const insertProject = async ({
       `${process.env.NEXT_PUBLIC_BACKEND_API}project/insert`,
       {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },

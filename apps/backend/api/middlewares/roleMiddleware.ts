@@ -51,6 +51,7 @@ export const RoleMiddleware = (requiredRole: string) => {
         }
       }
 
+      res.locals.authPayload = verify.data;
       next();
     } catch (error) {
       next(error);

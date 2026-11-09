@@ -37,6 +37,10 @@ export default class ProjectHandler {
             }
 
             const params = validationResult.data;
+            const requester = res.locals.authPayload as { nim?: unknown } | undefined;
+            if (typeof requester?.nim !== "string" || !requester.nim || requester.nim !== params.student_leader_id) {
+                return sendErrorResponse(res, "The project leader must match the signed-in student.", 403);
+            }
 
             const groupMembers = params.group_members || [];
             if (!groupMembers.includes(params.student_leader_id)) {
@@ -68,7 +72,7 @@ export default class ProjectHandler {
                 roster.map((member) => [member.student_id, member])
             );
 
-            const { newProject, newProjectDetail } = await prisma.$transaction(async (tx) => {
+            const submitted = await prisma.$transaction(async (tx) => {
                 // Match the same columns as the project_detail unique key
                 // (semester/course/class/group). If the lookup filtered on other
                 // columns (lecturer, group member), a resubmit could miss the old
@@ -82,6 +86,9 @@ export default class ProjectHandler {
                 });
 
                 if (existingProject) {
+                    if (!existingProject.projectGroups.some((member) => member.student_id === requester.nim)) {
+                        return null;
+                    }
                     const projectId = existingProject.id;
 
                     // deleteMany, not delete: a concurrent resubmit may have already
@@ -163,13 +170,16 @@ export default class ProjectHandler {
                 }
 
                 await tx.temporaryGroup.deleteMany({
-                    where: whereCondition
+                    where: { ...whereCondition, student_id: { in: groupMembers } }
                 });
 
                 return { newProject: project, newProjectDetail: projectDetail };
             });
 
-            sendSuccessResponse(res, { newProject, newProjectDetail });
+            if (!submitted) {
+                return sendErrorResponse(res, "This group number belongs to another group.", 409);
+            }
+            sendSuccessResponse(res, submitted);
         } catch (error) {
             // Only the project_detail group key means "this group already has a
             // project". Other P2002s (e.g. a duplicate technology_id) are bad

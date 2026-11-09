@@ -4,6 +4,7 @@ import validateSchema from "../../../utils/validator/validateSchema.js";
 import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../../utils/response/response.js";
 import { prisma } from "../../../prisma/client.js";
 import GenericService from "../../../services/generic/genericService.js";
+import { Prisma } from "../../../prisma/generated/prisma/client.js";
 
 
 export default class StudentGroupHandler {
@@ -24,126 +25,68 @@ export default class StudentGroupHandler {
             const params = validationResult.data;
             const studentIds = Array.isArray(params.student_ids) ? params.student_ids : [params.student_ids];
 
-            const existingInTemporaryGroup = await prisma.temporaryGroup.findMany({
-                where: {
-                    semester_id: params.semester_id,
-                    course_id: params.course_id,
-                    class: params.class,
-                    student_id: { in: studentIds },
-                },
-                select: {
-                    student_id: true,
-                },
-            });
-
-            const existingInProjectGroup = await prisma.project.findMany({
-                where: {
-                    projectDetail: {
-                        semester_id: params.semester_id,
-                        course_id: params.course_id,
-                        class: params.class,
-                    },
-                    projectGroups: {
-                        some: { student_id: { in: studentIds } },
-                    },
-                },
-                select: {
-                    projectGroups: {
-                        select: {
-                            student_id: true,
-                        },
-                    },
-                },
-            });
-
-            const studentsInTemporaryGroup = new Set(
-                existingInTemporaryGroup.map((entry) => entry.student_id)
-            );
-            const studentsInProjectGroup = new Set(
-                existingInProjectGroup.flatMap((project) =>
-                    project.projectGroups.map((group) => group.student_id)
-                )
-            );
-    
-            const conflictingStudents = Array.from(new Set([
-                ...studentsInTemporaryGroup,
-                ...studentsInProjectGroup,
-            ]));
-    
-            if (conflictingStudents.length > 0) {
-                return sendErrorResponse(
-                    res,
-                    `One Of The Group Members Has Already Created A Group`
-                );
-            }
-
-            const existingTemporaryGroups = await prisma.temporaryGroup.findMany({
-                where: {
-                    semester_id: params.semester_id,
-                    course_id: params.course_id,
-                    class: params.class
-                },
-                orderBy: {
-                    group: 'asc'
-                },
-                select: {
-                    group: true
-                },
-                distinct: ['group']
-            });
-            console.log(existingTemporaryGroups)
-
-            const existingGroupsInProject = await prisma.projectDetail.findMany({
-                where: {
-                  semester_id: params.semester_id,
-                  course_id: params.course_id,
-                  class: params.class,
-                },
-                orderBy: {
-                    group: 'asc'
-                },
-                select: {
-                  group: true,
-                }
-            });
-            console.log(existingGroupsInProject)
-
-            const combinedGroups = existingTemporaryGroups.concat(existingGroupsInProject);
-            combinedGroups.sort((a, b) => a.group - b.group);
-            console.log(combinedGroups);
-            
-            let currentProjectGroupIndex = 1;
-
-            for (const temporaryGroup of combinedGroups) {
-                if(temporaryGroup.group == currentProjectGroupIndex) {
-                    currentProjectGroupIndex++;
-                } else {
-                    break;
-                }
-            }
-            console.log("next group: " + currentProjectGroupIndex);
-        
-            const insertedGroups = await Promise.all(studentIds.map(async (student_id) => {
-                const nameResponse = await GenericService.getName(student_id);
-                const student_name = nameResponse.data ?? student_id;
-    
-                const binusianIDResponse = await GenericService.getBinusianID(student_id);
-                const student_binusian_id = binusianIDResponse.data ?? student_id;
-    
-                return prisma.temporaryGroup.create({
-                    data: {
-                        semester_id: params.semester_id,
-                        course_id: params.course_id,
-                        class: params.class,
-                        group: currentProjectGroupIndex,
-                        student_id,
-                        student_name,
-                        student_binusian_id
-                    }
-                });
+            const whereCondition = {
+                semester_id: params.semester_id,
+                course_id: params.course_id,
+                class: params.class
+            };
+            // Resolve external data before taking database locks, including retries.
+            const members = await Promise.all(studentIds.map(async (student_id) => {
+                const [name, binusianId] = await Promise.all([
+                    GenericService.getName(student_id),
+                    GenericService.getBinusianID(student_id)
+                ]);
+                return {
+                    student_id,
+                    student_name: name.data ?? student_id,
+                    student_binusian_id: binusianId.data ?? student_id
+                };
             }));
-    
-            sendSuccessResponse(res, insertedGroups);
+
+            for (let attempt = 0; ; attempt++) {
+                try {
+                    const insertedGroups = await prisma.$transaction(async (tx) => {
+                        const [existingMember, existingProject] = await Promise.all([
+                            tx.temporaryGroup.findFirst({
+                                where: { ...whereCondition, student_id: { in: studentIds } },
+                                select: { id: true }
+                            }),
+                            tx.project.findFirst({
+                                where: {
+                                    projectDetail: whereCondition,
+                                    projectGroups: { some: { student_id: { in: studentIds } } }
+                                },
+                                select: { id: true }
+                            })
+                        ]);
+                        if (existingMember || existingProject) return null;
+
+                        const [temporaryGroups, projectGroups] = await Promise.all([
+                            tx.temporaryGroup.findMany({ where: whereCondition, select: { group: true } }),
+                            tx.projectDetail.findMany({ where: whereCondition, select: { group: true } })
+                        ]);
+                        const usedNumbers = new Set([...temporaryGroups, ...projectGroups].map((row) => row.group));
+                        let group = 1;
+                        while (usedNumbers.has(group)) group++;
+
+                        return Promise.all(members.map((member) => tx.temporaryGroup.create({
+                            data: { ...whereCondition, group, ...member }
+                        })));
+                    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+                    if (!insertedGroups) {
+                        return sendErrorResponse(res, "One Of The Group Members Has Already Created A Group");
+                    }
+                    return sendSuccessResponse(res, insertedGroups);
+                } catch (error) {
+                    // Serializable allocations can deadlock; retry from a fresh snapshot.
+                    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+                        if (attempt < 4) continue;
+                        return sendErrorResponse(res, "Another group is being created. Please try again.", 409);
+                    }
+                    throw error;
+                }
+            }
         } catch (error) {
             sendErrorResponse(res, getErrorMessage(error, "Insert Failed"));
         }

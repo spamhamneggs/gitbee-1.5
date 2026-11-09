@@ -77,7 +77,7 @@ model ProjectDetail {
   category          Category        @relation(fields: [category_id], references: [id], onDelete: Restrict)
   major             Major           @relation(fields: [major_id], references: [id], onDelete: Restrict)
 
-  @@unique([semester_id, course_id, class, group], name: "project_detail_group_key")
+  @@unique([semester_id, course_id, class, group], name: "project_detail_group_key", map: "project_detail_group_key")
   @@map("project_detail")
 }
 
