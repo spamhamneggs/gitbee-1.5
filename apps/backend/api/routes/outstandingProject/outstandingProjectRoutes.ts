@@ -1,9 +1,8 @@
 import express from "express";
-import hopOutstandingProjectRoutes from "./hop/hopOutstandingProjectRoutes.js";
+import OutstandingProjectHandler from "../../handlers/outstandingProject/outstandingProjectHandler.js";
 
 const outstandingProjectRoutes = express.Router();
 
-
-outstandingProjectRoutes.use("/hop", hopOutstandingProjectRoutes);
+outstandingProjectRoutes.post("/hop/insert", OutstandingProjectHandler.recordDecision);
 
 export default outstandingProjectRoutes;

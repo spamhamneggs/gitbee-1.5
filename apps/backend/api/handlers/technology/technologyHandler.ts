@@ -1,16 +1,42 @@
+import { z } from "zod";
 import type { Request, Response } from "express";
-import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../utils/response/response.js";
-import { prisma } from "../../prisma/client.js";
-
+import validateSchema from "../../utils/validator/validateSchema.js";
+import { sendErrorResponse, sendServiceError, sendSuccessResponse } from "../../utils/response/response.js";
+import TechnologyService from "../../services/technology/technologyService.js";
 
 export default class TechnologyHandler {
-    static async getAllTechnology(req : Request, res : Response) {
+    static async listTechnologies(_req: Request, res: Response) {
         try {
-            const technologies = await prisma.technology.findMany();
-            sendSuccessResponse(res, technologies);
+            sendSuccessResponse(res, await TechnologyService.listTechnologies());
         } catch (error) {
-            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
+            sendServiceError(res, error, "Fetch Failed");
         }
     }
-    
+
+    static async createTechnology(req: Request, res: Response) {
+        try {
+            const validationResult = validateSchema(z.object({ name: z.string() }), req.body);
+            if (validationResult.error) {
+                return sendErrorResponse(res, validationResult.details);
+            }
+
+            sendSuccessResponse(res, await TechnologyService.createTechnology(validationResult.data.name));
+        } catch (error) {
+            sendServiceError(res, error, "Insert Failed");
+        }
+    }
+
+    static async updateTechnology(req: Request, res: Response) {
+        try {
+            const validationResult = validateSchema(z.object({ id: z.string(), name: z.string() }), req.body);
+            if (validationResult.error) {
+                return sendErrorResponse(res, validationResult.details);
+            }
+
+            const { id, name } = validationResult.data;
+            sendSuccessResponse(res, await TechnologyService.updateTechnology(Number(id), name));
+        } catch (error) {
+            sendServiceError(res, error, "Update Failed");
+        }
+    }
 }

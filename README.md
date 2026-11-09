@@ -126,6 +126,16 @@ DATABASE_URL=mysql://root:admin@localhost:3306/gitbee_test pnpm --filter gitbee_
 TEST_DATABASE_URL=mysql://root:admin@localhost:3306/gitbee_test pnpm test
 ```
 
+## Backend layout
+
+Each API resource has one router, one handler and one or more services, named after the resource:
+
+- `api/routes/<resource>/<resource>Routes.ts` lists every path under `/api/<resource>`, including role-specific ones such as `/project/hop/dashboard`, with their middleware. `api/routes/Routes.ts` mounts the routers.
+- `api/handlers/<resource>/<resource>Handler.ts` validates the request with Zod, calls a service and sends the response. Handlers don't query the database.
+- `api/services/<resource>/` holds the Prisma queries and business rules. A service throws `ServiceError(message, status)` for an expected failure, and the handler sends that message and status.
+
+`tests/routeTable.test.ts` lists every route, so adding, removing or renaming one is a reviewed change.
+
 ## Env wiring
 
 Use the root `.env` as the shared source of truth for this monorepo.

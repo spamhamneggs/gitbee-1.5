@@ -1,9 +1,8 @@
 import express from "express";
-import sccReviewedProjectRoutes from "./scc/sccReviewedProjectRoutes.js";
+import ReviewedProjectHandler from "../../handlers/reviewedProject/reviewedProjectHandler.js";
 
 const reviewedProjectRoutes = express.Router();
 
-
-reviewedProjectRoutes.use("/scc", sccReviewedProjectRoutes);
+reviewedProjectRoutes.post("/scc/insert", ReviewedProjectHandler.recordReview);
 
 export default reviewedProjectRoutes;

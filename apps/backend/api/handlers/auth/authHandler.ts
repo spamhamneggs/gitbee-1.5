@@ -1,15 +1,29 @@
 import { z } from "zod";
-import { parseJwt } from "../../utils/auth/auth.js";
 import type { NextFunction, Request, Response } from "express";
-import { createLocalToken, createToken, getLocalNim, getLocalRoles } from "../../utils/auth/auth.js";
-import { getErrorMessage, sendSuccessResponse, sendErrorResponse } from "../../utils/response/response.js";
-import GenericService from "../../services/generic/genericService.js";
-import type { AtlantisAccountData } from "../../services/generic/genericService.js";
-import { prisma } from "../../prisma/client.js";
-import { hashPassword, verifyPassword } from "../../utils/auth/password.js";
-import { DEV_BYPASS_USER, isSsoBypassEnabled } from "../../utils/auth/devBypass.js";
+import { createLocalToken, createToken, getLocalNim, getLocalRoles, parseJwt } from "../../utils/auth/auth.js";
+import { getErrorMessage, sendSuccessResponse, sendErrorResponse, ServiceError } from "../../utils/response/response.js";
+import { isSsoBypassEnabled } from "../../utils/auth/devBypass.js";
+import AuthService from "../../services/auth/authService.js";
 
-const DUMMY_PASSWORD_HASH = "scrypt$16384$8$1$Z2l0YmVlLWxvY2FsLWxvZ2luLWR1bW15LXNhbHQ=$wFAFffXSmSnjf95eUXNLQGx6IOgpXcbt/0yauPvSta/wt3Y85e6A9x17lhMJV8LyAqARq+3zt0t6doSwyqIfeA==";
+type LocalUser = NonNullable<Awaited<ReturnType<typeof AuthService.findLocalUser>>>;
+
+const cookieName = () => process.env.COOKIE_NAME ?? "gitbee_token";
+
+/** The login payload the frontend stores for a local (non-SSO) session. */
+const localSession = (user: LocalUser, roles: string[], activeRole: string | undefined) => ({
+    nim: getLocalNim(user),
+    Name: user.name.toUpperCase(),
+    Email: user.email,
+    Role: roles,
+    ActiveRole: activeRole,
+    MicrosoftToken: "",
+});
+
+const sessionCookie = (token: { token: string; expires: Date }) => ({
+    name: cookieName(),
+    value: token.token,
+    expires: token.expires,
+});
 
 export default class AuthHandler {
     static async loginLocal(req: Request, res: Response, next: NextFunction) {
@@ -23,36 +37,8 @@ export default class AuthHandler {
                 return sendErrorResponse(res, valid.error.issues[0]?.message ?? "Invalid request body", 400);
             }
 
-            const email = valid.data.email.toLowerCase();
-            const user = await prisma.user.findUnique({
-                where: { email },
-                select: {
-                    id: true,
-                    email: true,
-                    name: true,
-                    role: true,
-                    user_type: true,
-                    student_id: true,
-                    binusian_id: true,
-                    lecturer_code: true,
-                    credential_version: true,
-                },
-            });
+            const user = await AuthService.verifyLocalLogin(valid.data.email.toLowerCase(), valid.data.password);
             if (!user) {
-                await verifyPassword(valid.data.password, DUMMY_PASSWORD_HASH);
-                return sendErrorResponse(res, "Invalid email or password", 401);
-            }
-
-            // The shared Prisma client masks User.password in query results.
-            const credentials = await prisma.$queryRaw<Array<{ password: string | null }>>`
-                SELECT password FROM user WHERE email = ${user.email} LIMIT 1
-            `;
-            const passwordHash = credentials[0]?.password;
-            if (!passwordHash) {
-                await verifyPassword(valid.data.password, DUMMY_PASSWORD_HASH);
-                return sendErrorResponse(res, "Invalid email or password", 401);
-            }
-            if (!(await verifyPassword(valid.data.password, passwordHash))) {
                 return sendErrorResponse(res, "Invalid email or password", 401);
             }
 
@@ -60,7 +46,6 @@ export default class AuthHandler {
             if (roles.length === 0) {
                 return sendErrorResponse(res, "Invalid local account role", 403);
             }
-            const activeRole = roles[0] ?? user.role;
             const token = createLocalToken(user);
             return sendSuccessResponse(res, {
                 user: {
@@ -70,17 +55,8 @@ export default class AuthHandler {
                     role: user.role,
                     user_type: user.user_type,
                 },
-                nim: getLocalNim(user),
-                Name: user.name.toUpperCase(),
-                Email: user.email,
-                Role: roles,
-                ActiveRole: activeRole,
-                MicrosoftToken: "",
-            }, {
-                name: process.env.COOKIE_NAME ?? "gitbee_token",
-                value: token.token,
-                expires: token.expires,
-            });
+                ...localSession(user, roles, roles[0] ?? user.role),
+            }, sessionCookie(token));
         } catch (error) {
             return next(error);
         }
@@ -96,42 +72,11 @@ export default class AuthHandler {
                 return sendErrorResponse(res, valid.error.issues[0]?.message ?? "Invalid request body", 400);
             }
 
-            const userId = res.locals.localUserId as number;
-
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: {
-                    id: true,
-                    email: true,
-                    name: true,
-                    role: true,
-                    user_type: true,
-                    student_id: true,
-                    binusian_id: true,
-                    lecturer_code: true,
-                    credential_version: true,
-                },
-            });
-            if (!user) {
-                return sendErrorResponse(res, "Unauthorized", 401);
-            }
-
-            const credentials = await prisma.$queryRaw<Array<{ password: string | null }>>`
-                SELECT password FROM user WHERE id = ${userId} LIMIT 1
-            `;
-            const passwordHash = credentials[0]?.password;
-            if (!passwordHash || !(await verifyPassword(valid.data.currentPassword, passwordHash))) {
-                return sendErrorResponse(res, "Invalid current password", 401);
-            }
-
-            const updatedVersion = user.credential_version + 1;
-            await prisma.user.update({
-                where: { id: userId },
-                data: {
-                    password: await hashPassword(valid.data.newPassword),
-                    credential_version: { increment: 1 },
-                },
-            });
+            const user = await AuthService.changePassword(
+                res.locals.localUserId as number,
+                valid.data.currentPassword,
+                valid.data.newPassword
+            );
             const roles = getLocalRoles(user);
             if (roles.length === 0) {
                 return sendErrorResponse(res, "Invalid local account role", 403);
@@ -139,20 +84,12 @@ export default class AuthHandler {
             const activeRole = roles.includes(res.locals.localActiveRole)
                 ? res.locals.localActiveRole
                 : roles[0];
-            const token = createLocalToken(
-                { ...user, credential_version: updatedVersion },
-                activeRole
-            );
-            return sendSuccessResponse(
-                res,
-                { message: "Password updated successfully" },
-                {
-                    name: process.env.COOKIE_NAME ?? "gitbee_token",
-                    value: token.token,
-                    expires: token.expires,
-                }
-            );
+            const token = createLocalToken(user, activeRole);
+            return sendSuccessResponse(res, { message: "Password updated successfully" }, sessionCookie(token));
         } catch (error) {
+            if (error instanceof ServiceError) {
+                return sendErrorResponse(res, error.message, error.status);
+            }
             return next(error);
         }
     }
@@ -163,32 +100,14 @@ export default class AuthHandler {
             if (!valid.success) {
                 return sendErrorResponse(res, "Invalid role", 400);
             }
-            const user = await prisma.user.findUnique({
-                where: { id: res.locals.localUserId as number },
-                select: {
-                    id: true, email: true, name: true, role: true, user_type: true,
-                    student_id: true, binusian_id: true, lecturer_code: true,
-                    credential_version: true,
-                },
-            });
+            const user = await AuthService.findLocalUser(res.locals.localUserId as number);
             if (!user) return sendErrorResponse(res, "Unauthorized", 401);
             const roles = getLocalRoles(user);
             if (!roles.includes(valid.data.role)) {
                 return sendErrorResponse(res, "Forbidden", 403);
             }
             const token = createLocalToken(user, valid.data.role);
-            return sendSuccessResponse(res, {
-                nim: getLocalNim(user),
-                Name: user.name.toUpperCase(),
-                Email: user.email,
-                Role: roles,
-                ActiveRole: valid.data.role,
-                MicrosoftToken: "",
-            }, {
-                name: process.env.COOKIE_NAME ?? "gitbee_token",
-                value: token.token,
-                expires: token.expires,
-            });
+            return sendSuccessResponse(res, localSession(user, roles, valid.data.role), sessionCookie(token));
         } catch (error) {
             return next(error);
         }
@@ -199,33 +118,13 @@ export default class AuthHandler {
             return sendErrorResponse(res, "Not found", 404);
         }
         try {
-            const user = await prisma.user.upsert({
-                where: { email: DEV_BYPASS_USER.email },
-                update: {},
-                create: DEV_BYPASS_USER,
-                select: {
-                    id: true, email: true, name: true, role: true, user_type: true,
-                    student_id: true, binusian_id: true, lecturer_code: true,
-                    credential_version: true,
-                },
-            });
+            const user = await AuthService.upsertDevBypassUser();
             const roles = getLocalRoles(user);
             if (roles.length === 0) {
                 return sendErrorResponse(res, "Invalid local account role", 403);
             }
             const token = createLocalToken(user);
-            return sendSuccessResponse(res, {
-                nim: getLocalNim(user),
-                Name: user.name.toUpperCase(),
-                Email: user.email,
-                Role: roles,
-                ActiveRole: roles[0],
-                MicrosoftToken: "",
-            }, {
-                name: process.env.COOKIE_NAME ?? "gitbee_token",
-                value: token.token,
-                expires: token.expires,
-            });
+            return sendSuccessResponse(res, localSession(user, roles, roles[0]), sessionCookie(token));
         } catch (error) {
             // Dev-only route, so hand the cause (e.g. an unmigrated database)
             // to the login page as JSON rather than Express's HTML 500.
@@ -242,7 +141,7 @@ export default class AuthHandler {
         });
 
         const valid = schema.safeParse(req.body);
-        if (valid.success != true) {    
+        if (valid.success != true) {
             return sendErrorResponse(res, valid?.error?.issues[0]?.message, 400);
         }
 
@@ -257,70 +156,12 @@ export default class AuthHandler {
                 return sendErrorResponse(res, "Invalid token: Missing email or name", 400);
             }
 
-            const atlantis = await GenericService.getAtlantisData(email);
-            if (atlantis instanceof Error) {
-                return sendErrorResponse(res, "Failed to fetch Binusian data", 401);
-            }
-
-            const atlantisAccount = atlantis.data as AtlantisAccountData | null;
-            const username = atlantisAccount?.BinusianID ?? "";
-            const lecturer_code = atlantisAccount?.KodeDosen ?? "";
-
-            const userLookupConditions = [
-                { email: email },
-                ...(lecturer_code ? [{ lecturer_code }] : []),
-                ...(atlantisAccount?.NIM ? [{ student_id: atlantisAccount.NIM }] : []),
-                ...(atlantisAccount?.BinusianID ? [{ binusian_id: atlantisAccount.BinusianID }] : []),
-            ];
-
-            const user = await prisma.user.findFirst({
-                where: {
-                    OR: userLookupConditions,
-                },
-                select: {
-                    id: true,
-                    lecturer_code: true,
-                    student_id: true,
-                    binusian_id: true,
-                    email: true,
-                    role: true,
-                    user_type: true,
-                    credential_version: true,
-                },
-            });
-
-            // Students can have user rows too (role "Student", user_type "student"),
-            // so a matched row alone doesn't make someone staff.
-            const isStaff = user != null && user.role !== "Student" && user.user_type !== "student";
-
-            const role = isStaff
-            ? user.role === "Lecturer"
-                ? ["Lecturer"]
-                : [user.role, "Lecturer"]
-            : ["Student"];
-
-            let nim: string;
-
-            if (isStaff) {
-                nim = user?.lecturer_code ?? "";
-            } else if (user) {
-                // A student account must carry its NIM. binusian_id is NOT a NIM and
-                // cannot substitute for it: downstream student class/group queries
-                // match on the NIM, so a wrong value silently returns no data.
-                if (!user.student_id) {
-                    return sendErrorResponse(res, "Student account is missing its student_id (NIM). Please contact an administrator.", 401);
-                }
-                nim = user.student_id;
-            } else {
-                // No local user row yet (students are not guaranteed one): fall back to
-                // Atlantis until every student account has been backfilled with a student_id.
-                nim = atlantisAccount?.NIM ?? "";
-            }
+            const { user, isStaff, roles, nim, username } = await AuthService.resolveSsoAccount(email);
 
             let activeRole: string | undefined;
             if (valid.data.role) {
                 // Only allow switching to a role this user actually has.
-                if (role.includes(valid.data.role)) {
+                if (roles.includes(valid.data.role)) {
                     activeRole = valid.data.role;
                 }
             } else {
@@ -332,7 +173,7 @@ export default class AuthHandler {
                 username,
                 name.toLowerCase(),
                 email.toLowerCase(),
-                role,
+                roles,
                 microsoftToken,
                 "",
                 activeRole,
@@ -340,8 +181,8 @@ export default class AuthHandler {
                 user?.credential_version ?? 0,
             );
 
-            const cookieName = process.env.COOKIE_NAME;
-            if (!cookieName) {
+            const ssoCookieName = process.env.COOKIE_NAME;
+            if (!ssoCookieName) {
                 return sendErrorResponse(res, "Cookie name is not configured", 500);
             }
 
@@ -350,15 +191,18 @@ export default class AuthHandler {
                 BinusianId: username,
                 Name: name.toUpperCase(),
                 Email: email.toLowerCase(),
-                Role: role,
+                Role: roles,
                 ActiveRole: activeRole,
                 MicrosoftToken: microsoftToken
             }, {
-                name: cookieName,
+                name: ssoCookieName,
                 value: token.token,
                 expires: token.expires,
             });
         } catch (error) {
+            if (error instanceof ServiceError) {
+                return sendErrorResponse(res, error.message, error.status);
+            }
             return sendErrorResponse(res, getErrorMessage(error), 400);
         }
     }
