@@ -26,7 +26,6 @@ function PopUpTechnologies(props: PopUpTechnologiesProps) {
       );
       props.fetchData();
       props.setOpenPopUpTechnologies(false);
-      console.log("Update Result:", resultUpdate);
     } catch (error) {
       console.error("Failed to update user role:", error);
     }

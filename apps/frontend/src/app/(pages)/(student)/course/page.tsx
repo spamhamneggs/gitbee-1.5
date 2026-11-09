@@ -76,7 +76,6 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
         scrollYProgress.onChange(handleScroll);
       }
@@ -104,7 +103,6 @@ const Page = () => {
     );
 
     fetchData();
-    console.log(resultDeleteGroup);
   };
 
   const fetchData = async () => {
@@ -118,13 +116,11 @@ const Page = () => {
     );
     setProjectDetail(resultProjectDetail?.data?.updatedProjects);
     setClassTransactionDetail(resultProjectDetail?.data?.classTransactions);
-    console.log(resultProjectDetail?.data);
 
     if (resultProjectDetail?.data?.updatedProjects?.length > 0) {
       setGroupDetail(
         resultProjectDetail?.data?.updatedProjects[0]?.projectGroups
       );
-      console.log(resultProjectDetail?.data?.updatedProjects[0]?.projectGroups);
     } else if (projectDetail?.length == 0) {
       const resultDetailGroup = await getGroupDetail(
         semester_id ? semester_id : "",
@@ -133,7 +129,6 @@ const Page = () => {
         userData?.nim ? userData?.nim : ""
       );
       setGroupDetail(resultDetailGroup?.data);
-      console.log(resultDetailGroup?.data);
     }
 
     const resultCategories = await getAllCategory();

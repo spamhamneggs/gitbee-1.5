@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { BsGlobe2 } from "react-icons/bs";
 import { motion } from "framer-motion";
 import { IoIosArrowRoundBack, IoIosVideocam } from "react-icons/io";
@@ -24,10 +24,6 @@ function ProjectDetailScc(props: ProjectDetailSccProps) {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { duration: 1 } },
   };
-
-  useEffect(() => {
-    console.log(props.selectedDetailProject);
-  }, [props.selectedDetailProject]);
 
   const confirmStatus = async () => {
     const result = await setProjectStatus(

@@ -71,7 +71,6 @@ export const toggleIsDisable = async (id_project: string) => {
     const payload = {
       project_id: id_project,
     };
-    console.log(payload);
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_API}project/admin/disable-toggle?project_id=${id_project}`,
       {
@@ -81,9 +80,7 @@ export const toggleIsDisable = async (id_project: string) => {
         },
       }
     );
-    console.log("MASUKASD");
     const result = await response.json();
-    console.log(result);
 
     if (result.status) {
       return { success: true, data: result.data ? result.data : "" };

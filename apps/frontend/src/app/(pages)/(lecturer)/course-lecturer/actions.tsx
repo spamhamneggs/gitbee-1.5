@@ -72,7 +72,6 @@ export const finalizeClassProject = async (
       assessments,
     };
 
-    console.log(groupData);
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_API}assessment/insert`,
       {

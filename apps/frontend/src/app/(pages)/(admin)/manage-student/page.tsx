@@ -29,7 +29,6 @@ const Page = () => {
 
   const fetchData = useCallback(async () => {
     const resultStudents = await getAllStudents(search);
-    console.log(resultStudents?.data);
     setStudents(resultStudents?.data);
   }, [search]);
 
@@ -51,9 +50,7 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
-        console.log("MASUK");
         scrollYProgress.onChange(handleScroll);
       }
     };
@@ -78,7 +75,6 @@ const Page = () => {
   const handleDeleteAllStudents = async () => {
     setLoading(true);
     const resultDeleteAllStudents = await deleteAllStudents();
-    console.log(resultDeleteAllStudents?.data);
     setOpenPopUpConfirmation(false);
     fetchData();
     setLoading(false);

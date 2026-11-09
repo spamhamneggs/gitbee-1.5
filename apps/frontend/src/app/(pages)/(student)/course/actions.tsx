@@ -110,7 +110,6 @@ export const insertProject = async ({
       technology_ids: selectedTechnologies,
       group: group,
     };
-    console.log(payload);
 
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_API}project/insert`,
@@ -126,7 +125,6 @@ export const insertProject = async ({
 
     const result = await response.json();
 
-    console.log(result);
     if (response.ok && result.status) {
       return { success: true, data: result.data || "" };
     } else {
@@ -159,7 +157,6 @@ export const createGroup = async ({
       student_ids,
     };
 
-    console.log(groupData);
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_API}group/student/insert`,
       {

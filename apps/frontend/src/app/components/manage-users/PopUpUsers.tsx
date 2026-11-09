@@ -59,7 +59,6 @@ function PopUpUsers(props: PopUpUsersProps) {
       );
       props.fetchData();
       props.setOpenPopUpUsers(false);
-      console.log("Update Result:", resultUpdate);
     } catch (error) {
       console.error("Failed to update user role:", error);
     }

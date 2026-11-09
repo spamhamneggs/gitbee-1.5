@@ -37,7 +37,6 @@ const Page = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const resultUsers = await getAllUsers(search);
-    console.log(resultUsers?.data);
     setUsers(resultUsers?.data);
     setLoading(false);
   }, [search]);
@@ -45,7 +44,6 @@ const Page = () => {
   const handleDeleteAllLecturer = async () => {
     setLoading(true);
     const resultDeleteAllLecturer = await deleteAllUser();
-    console.log(resultDeleteAllLecturer?.data);
     setOpenPopUpConfirmation(false);
     fetchData();
     setLoading(false);
@@ -69,9 +67,7 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
-        console.log("MASUK");
         scrollYProgress.onChange(handleScroll);
       }
     };

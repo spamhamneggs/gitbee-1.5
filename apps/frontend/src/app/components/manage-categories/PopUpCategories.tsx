@@ -26,7 +26,6 @@ function PopUpCategories(props: PopUpCategoriesProps) {
       );
       props.fetchData();
       props.setOpenPopUpCategories(false);
-      console.log("Update Result:", resultUpdate);
     } catch (error) {
       console.error("Failed to update user role:", error);
     }

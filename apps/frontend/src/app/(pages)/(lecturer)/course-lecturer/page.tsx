@@ -102,7 +102,6 @@ const Page = () => {
     setReasons(
       Array(resultAllGroupsData?.data?.updatedProjects?.length).fill("")
     );
-    console.log(resultAllGroupsData?.data);
 
     setStatus({
       id: resultAllGroupsData?.data?.updatedProjects[0]?.projectDetail
@@ -198,7 +197,6 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
         scrollYProgress.onChange(handleScroll);
       }
@@ -226,7 +224,6 @@ const Page = () => {
     );
 
     fetchData();
-    console.log(resultDeleteGroup);
   };
 
   return (

@@ -58,7 +58,6 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
         scrollYProgress.onChange(handleScroll);
       }
@@ -99,14 +98,12 @@ const Page = () => {
         userData?.nim ? userData?.nim : "",
         selectedCategoryFilter
       );
-      console.log(resultTransactions?.data);
       setTransactions(resultTransactions?.data);
 
     const resultCourses = await getCoursesByLecturer(
       currentSemester?.data?.SemesterId,
       userData?.nim ? userData?.nim : ""
     );
-    console.log(resultCourses?.data);
     setCategories(resultCourses?.data);
     setLoading(false);
     };

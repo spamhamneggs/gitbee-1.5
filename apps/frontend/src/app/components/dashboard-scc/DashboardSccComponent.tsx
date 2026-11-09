@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
 import Card from "../Card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,10 +19,6 @@ function DashboardSccComponent(props: DashboardSccProps) {
     hidden: { opacity: 0 },
     reveal: { opacity: 1 },
   };
-
-  useEffect(() => {
-    console.log(props.projects);
-  }, [props.projects]);
 
   return (
     <motion.div

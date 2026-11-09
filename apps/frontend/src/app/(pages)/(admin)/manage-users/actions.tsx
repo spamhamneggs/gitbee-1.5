@@ -52,7 +52,6 @@ export const updateUserRole = async (
     );
     const result = await response.json();
 
-    console.log(result);
     if (result.status) {
       return { success: true, data: result.data ? result.data : "" };
     } else {
@@ -76,7 +75,6 @@ export const uploadExcelUsers = async (file: File) => {
     );
     const result = await response.json();
 
-    console.log(result);
     if (result.status) {
       return { success: true, data: result.data ? result.data : "" };
     } else {
@@ -146,7 +144,6 @@ export const deleteAllUser = async () => {
     );
     const result = await response.json();
 
-    console.log(result);
     if (result.status) {
       return { success: true, data: result.data ? result.data : "" };
     } else {

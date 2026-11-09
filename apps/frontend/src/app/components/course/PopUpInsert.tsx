@@ -112,7 +112,6 @@ function PopUpInsert(props: PopUpInsertProps) {
   const [prevGroupMembers, setPrevGroupMembers] = useState(props.groupMembers);
   if (props.groupMembers !== prevGroupMembers) {
     setPrevGroupMembers(props.groupMembers);
-    console.log(props.groupMembers.length);
     if (props.groupMembers?.length > 0) {
       setCurrentStep(2);
     }
@@ -126,7 +125,6 @@ function PopUpInsert(props: PopUpInsertProps) {
         props.course_code,
         props.class_id
       );
-      console.log(resultStudentList);
       setListStudent(resultStudentList?.data);
     };
     fetchStudentList();

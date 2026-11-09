@@ -21,7 +21,6 @@ const Page = () => {
     const fetchData = async () => {
       const resultProjectStudent = await getCurrStudentProject(id.toString());
       setStudentProjects(resultProjectStudent?.data);
-      console.log(resultProjectStudent?.data);
     };
     fetchData();
   }, [id]);
