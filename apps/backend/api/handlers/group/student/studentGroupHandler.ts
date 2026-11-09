@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import validateSchema from "../../../utils/validator/validateSchema.js";
 import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../../utils/response/response.js";
 import { prisma } from "../../../prisma/client.js";
-import GenericService from "../../../services/generic/genericService.js";
+import StudentService from "../../../services/student/studentService.js";
 import { Prisma } from "../../../prisma/generated/prisma/client.js";
 
 
@@ -23,25 +23,25 @@ export default class StudentGroupHandler {
             }
     
             const params = validationResult.data;
-            const studentIds = Array.isArray(params.student_ids) ? params.student_ids : [params.student_ids];
 
             const whereCondition = {
                 semester_id: params.semester_id,
                 course_id: params.course_id,
                 class: params.class
             };
-            // Resolve external data before taking database locks, including retries.
-            const members = await Promise.all(studentIds.map(async (student_id) => {
-                const [name, binusianId] = await Promise.all([
-                    GenericService.getName(student_id),
-                    GenericService.getBinusianID(student_id)
-                ]);
-                return {
-                    student_id,
-                    student_name: name.data ?? student_id,
-                    student_binusian_id: binusianId.data ?? student_id
-                };
-            }));
+            // Check the members against the class roster and read their names
+            // before taking the serializable locks below (and their retries).
+            const { members, notEnrolled } = await StudentService.resolveClassMembers(
+                whereCondition,
+                Array.isArray(params.student_ids) ? params.student_ids : [params.student_ids]
+            );
+            if (notEnrolled.length > 0) {
+                return sendErrorResponse(res, `Not enrolled in this class: ${notEnrolled.join(", ")}`);
+            }
+            if (members.length === 0) {
+                return sendErrorResponse(res, "Choose at least one group member");
+            }
+            const studentIds = members.map((member) => member.student_id);
 
             for (let attempt = 0; ; attempt++) {
                 try {

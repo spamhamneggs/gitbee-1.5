@@ -13,7 +13,6 @@ process.env.COOKIE_NAME = "project_concurrent_test";
 const { prisma } = await import("../api/prisma/client.js");
 const { default: projectRoutes } = await import("../api/routes/project/projectRoutes.js");
 const { default: groupRoutes } = await import("../api/routes/group/groupRoutes.js");
-const { default: GenericService } = await import("../api/services/generic/genericService.js");
 
 const app = express();
 app.use(express.json(), cookieParser());
@@ -68,6 +67,12 @@ const tokenFor = (studentId = leaderId, role = "Student") => jwt.sign({
 const submit = (body = payload(), studentId = body.student_leader_id) =>
   request(app).post("/api/project/insert")
     .set("Authorization", `Bearer ${tokenFor(studentId)}`).send(body);
+// Group creation only accepts students on the class roster.
+const enrol = (classId: string, studentIds: string[]) => prisma.studentListTransaction.createMany({
+  data: studentIds.map((student_id) => ({
+    semester_id: semesterId, student_id, student_name: student_id, course_code: courseId, class: classId,
+  })),
+});
 const reserveGroup = (group: number, studentIds: string[]) => prisma.temporaryGroup.createMany({
   data: studentIds.map((student_id) => ({
     ...groupWhere(), group, student_id, student_name: student_id, student_binusian_id: student_id,
@@ -89,6 +94,7 @@ after(async () => {
   if (databaseUrl) {
     await prisma.project.deleteMany({ where: { lecturer_id: { in: [lecturerId, altLecturerId] } } });
     await prisma.temporaryGroup.deleteMany({ where: { semester_id: semesterId } });
+    await prisma.studentListTransaction.deleteMany({ where: { semester_id: semesterId } });
     await prisma.status.deleteMany({ where: { id: statusId } });
     await prisma.category.deleteMany({ where: { id: categoryId } });
     await prisma.major.deleteMany({ where: { id: majorId } });
@@ -304,12 +310,11 @@ describe("project insert concurrency against MySQL", {
     assert.equal(details, 1);
   });
 
-  it("allocates different numbers to concurrent groups and lets both submit", async (t) => {
-    t.mock.method(GenericService, "getName", async (studentId: string) => ({ message: "successful", status: true, data: studentId }));
-    t.mock.method(GenericService, "getBinusianID", async (studentId: string) => ({ message: "successful", status: true, data: studentId }));
+  it("allocates different numbers to concurrent groups and lets both submit", async () => {
     for (let round = 0; round < 5; round++) {
       const classId = `R${round}`;
       const students = [`G1-${suffix}`, `G2-${suffix}`];
+      await enrol(classId, students);
       const groups = await Promise.all(students.map((student_id) => request(app)
         .post("/api/group/student/insert")
         .send({ semester_id: semesterId, course_id: courseId, class: classId, student_ids: [student_id] })));
@@ -324,10 +329,9 @@ describe("project insert concurrency against MySQL", {
     }
   });
 
-  it("rejects overlapping concurrent groups without leaving a partial roster", async (t) => {
-    t.mock.method(GenericService, "getName", async (studentId: string) => ({ message: "successful", status: true, data: studentId }));
-    t.mock.method(GenericService, "getBinusianID", async (studentId: string) => ({ message: "successful", status: true, data: studentId }));
+  it("rejects overlapping concurrent groups without leaving a partial roster", async () => {
     const studentIds = [`C1-${suffix}`, `C2-${suffix}`];
+    await enrol("OVERLAP", studentIds);
     const body = { semester_id: semesterId, course_id: courseId, class: "OVERLAP", student_ids: studentIds };
     const responses = await Promise.all([
       request(app).post("/api/group/student/insert").send(body),
