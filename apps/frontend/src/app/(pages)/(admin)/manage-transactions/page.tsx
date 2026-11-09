@@ -73,7 +73,7 @@ const Page = () => {
 
   const handleDeleteAllTransaction = async () => {
     setLoading(true);
-    const resultDeleteAllTransaction = await deleteAllTransaction();
+    await deleteAllTransaction();
     setOpenPopUpConfirmation(false);
     fetchData();
     setLoading(false);

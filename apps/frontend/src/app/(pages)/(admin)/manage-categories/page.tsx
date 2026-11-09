@@ -80,13 +80,13 @@ const Page = () => {
   }, [fetchData]);
 
   const handleAddCategory = async () => {
-    const result = await AddCategory(inputCategory);
+    await AddCategory(inputCategory);
     setInputCategory("");
     fetchData();
   };
 
   const handleAddTech = async () => {
-    const result = await AddTech(inputTechnologies);
+    await AddTech(inputTechnologies);
     setInputTechnologies("");
     fetchData();
   };

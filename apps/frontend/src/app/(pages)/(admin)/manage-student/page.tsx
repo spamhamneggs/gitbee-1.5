@@ -74,7 +74,7 @@ const Page = () => {
 
   const handleDeleteAllStudents = async () => {
     setLoading(true);
-    const resultDeleteAllStudents = await deleteAllStudents();
+    await deleteAllStudents();
     setOpenPopUpConfirmation(false);
     fetchData();
     setLoading(false);

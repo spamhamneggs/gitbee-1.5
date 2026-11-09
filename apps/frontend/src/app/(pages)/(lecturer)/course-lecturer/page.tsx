@@ -216,7 +216,7 @@ const Page = () => {
   }, [scrollYProgress]);
 
   const handleDeleteGroup = async (group: string) => {
-    const resultDeleteGroup = await deleteGroup(
+    await deleteGroup(
       semester_id ? semester_id : "",
       course_code ? course_code : "",
       class_id ? class_id : "",

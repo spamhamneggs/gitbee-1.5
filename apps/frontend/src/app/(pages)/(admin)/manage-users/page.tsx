@@ -43,7 +43,7 @@ const Page = () => {
 
   const handleDeleteAllLecturer = async () => {
     setLoading(true);
-    const resultDeleteAllLecturer = await deleteAllUser();
+    await deleteAllUser();
     setOpenPopUpConfirmation(false);
     fetchData();
     setLoading(false);

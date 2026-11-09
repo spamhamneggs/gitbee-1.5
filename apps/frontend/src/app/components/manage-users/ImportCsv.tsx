@@ -4,7 +4,7 @@ import {
   type UserCsvType,
 } from "@/app/(pages)/(admin)/manage-users/actions";
 import Link from "next/link";
-import React, { useState } from "react";
+import { useState } from "react";
 import { LuDownload } from "react-icons/lu";
 
 interface ImportCsvProps {

@@ -68,9 +68,6 @@ export const getProjectDetail = async (id_project: string) => {
 
 export const toggleIsDisable = async (id_project: string) => {
   try {
-    const payload = {
-      project_id: id_project,
-    };
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_API}project/admin/disable-toggle?project_id=${id_project}`,
       {

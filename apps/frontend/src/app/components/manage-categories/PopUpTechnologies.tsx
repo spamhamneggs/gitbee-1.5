@@ -20,7 +20,7 @@ function PopUpTechnologies(props: PopUpTechnologiesProps) {
       return;
     }
     try {
-      const resultUpdate = await UpdateTechnologies(
+      await UpdateTechnologies(
         props.selectedTechnologiesToUpdate.id.toString(),
         name
       );

@@ -50,7 +50,7 @@ function PopUpUsers(props: PopUpUsersProps) {
 
     try {
       if (role == "HoP" && selectedMajors.length < 1) return;
-      const resultUpdate = await updateUserRole(
+      await updateUserRole(
         props.selectedUserToUpdate.id.toString(),
         role,
         role === "HoP"

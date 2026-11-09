@@ -20,7 +20,7 @@ function PopUpCategories(props: PopUpCategoriesProps) {
       return;
     }
     try {
-      const resultUpdate = await UpdateCategory(
+      await UpdateCategory(
         props.selectedCategoryToUpdate.id.toString(),
         name
       );
