@@ -11,19 +11,19 @@ import { getCurrStudentProject } from "./actions";
 import { IoIosVideocam } from "react-icons/io";
 
 const Page = () => {
-  const { userData } = useAuth();
+  const { session } = useAuth();
   const [studentProjects, setStudentProjects] = useState<any>();
 
   useEffect(() => {
     const fetchData = async () => {
       const resultProjectStudent = await getCurrStudentProject(
-        userData?.nim ? userData.nim : ""
+        session?.nim ? session.nim : ""
       );
       setStudentProjects(resultProjectStudent?.data);
       console.log(resultProjectStudent?.data);
     };
     fetchData();
-  }, [userData?.nim]);
+  }, [session?.nim]);
 
 
 
@@ -42,11 +42,11 @@ const Page = () => {
           <div className="flex flex-col">
             <h1 className="text-2xl font-semibold capitalize">
               Hi<span className="text-primary-orange">,</span> I'm{" "}
-              {userData?.name.toLowerCase()}
+              {session?.name.toLowerCase()}
               <span className="text-primary-orange">.</span>
             </h1>
-            <span className="text-sm">{userData?.email}</span>
-            <span className="text-sm">{userData?.nim}</span>
+            <span className="text-sm">{session?.email}</span>
+            <span className="text-sm">{session?.nim}</span>
           </div>
         </div>
       </div>

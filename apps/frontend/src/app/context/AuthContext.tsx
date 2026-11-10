@@ -1,23 +1,12 @@
 "use client";
-import { createContext, use, useState, useSyncExternalStore } from "react";
+import { createContext, use, useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-
-import Cookies from "js-cookie";
-import jwt from "jsonwebtoken";
-import { SESSION_COOKIE_NAME } from "@/lib/auth";
-
-interface UserData {
-  nim: string;
-  name: string;
-  email: string;
-  role: string;
-  listRole: string[];
-  microsoftToken: string;
-}
+import type { Session } from "@/lib/auth";
+import { getSession } from "@/app/(pages)/login/actions";
 
 interface AuthContextType {
-  userData: UserData | null;
-  setUserData: (userData: UserData | null) => void; // Updated type
+  session: Session | null;
+  setSession: (session: Session | null) => void;
   loading: boolean;
 }
 
@@ -31,55 +20,60 @@ export const useAuth = () => {
   return context;
 };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [sessionState, setSessionState] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
-const getUserDataFromCookie = (): UserData | null => {
-  // Lazy initializers also run during SSR prerender, where `document`
-  // (and therefore the cookie) does not exist.
-  if (typeof document === "undefined") {
-    return null;
-  }
-  const token = Cookies.get(SESSION_COOKIE_NAME);
-  if (!token) {
-    return null;
-  }
+  const setSession = useCallback((session: Session | null) => {
+    setSessionState(session);
+    if (session) setError(false);
+  }, []);
 
-  const decoded = jwt.decode(token);
-  if (!decoded || typeof decoded === "string" ||
-      typeof decoded.exp !== "number" || decoded.exp <= Date.now() / 1000) {
-    return null;
-  }
-  const roles = Array.isArray(decoded.role)
-    ? decoded.role.filter((role): role is string => typeof role === "string")
-    : [];
-  return {
-    nim: typeof decoded.nim === "string" ? decoded.nim : "",
-    name: typeof decoded.name === "string" ? decoded.name : "",
-    email: typeof decoded.email === "string" ? decoded.email : "",
-    role: typeof decoded.activeRole === "string" ? decoded.activeRole : "",
-    listRole: roles,
-    microsoftToken:
-      typeof decoded.microsoftToken === "string" ? decoded.microsoftToken : "",
-  };
-};
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [userData, setUserData] = useState<UserData | null>(
-    getUserDataFromCookie
-  );
-  // Render children only after mount so the cookie-backed userData never
-  // hydrates differently from the server snapshot.
-  const mounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
+  useEffect(() => {
+    const controller = new AbortController();
+    getSession(controller.signal)
+      .then((session) => {
+        if (!controller.signal.aborted) setSession(session);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setSession(null);
+          setError(true);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [attempt, setSession]);
 
   return (
-    <AuthContext value={{ userData, setUserData, loading: !mounted }}>
-      {mounted && children}
+    <AuthContext value={{ session: sessionState, setSession, loading }}>
+      {loading ? (
+        <p role="status" className="p-6 text-center">Restoring your session...</p>
+      ) : (
+        <>
+          {error && (
+            <div role="alert" className="relative z-[100] mt-20 bg-white p-4 text-center sm:mt-28">
+              Couldn't restore your session.{' '}
+              <button
+                type="button"
+                className="text-primary-orange underline"
+                onClick={() => {
+                  setError(false);
+                  setLoading(true);
+                  setAttempt((value) => value + 1);
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {children}
+        </>
+      )}
     </AuthContext>
   );
 };

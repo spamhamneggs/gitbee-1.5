@@ -15,7 +15,7 @@ import Loading from "@/app/components/Loading";
 import { useAuth } from "@/app/context/AuthContext";
 
 const Page = () => {
-  const { userData } = useAuth();
+  const { session } = useAuth();
   const { scrollYProgress } = useScroll();
   const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
@@ -81,18 +81,18 @@ const Page = () => {
   useEffect(() => {
     const fetchTransactionData = async () => {
       setLoading(true);
-      console.log(userData?.nim);
+      console.log(session?.nim);
       console.log(currentSemester?.data?.SemesterId);
       const resultTransactions = await getTranscationByStudent(
         currentSemester?.data?.SemesterId,
-        userData?.nim ? userData?.nim : ""
+        session?.nim ? session?.nim : ""
       );
       console.log(resultTransactions?.data);
       setTransactions(resultTransactions?.data);
       setLoading(false);
     };
     fetchTransactionData();
-  }, [currentSemester, userData?.nim]);
+  }, [currentSemester, session?.nim]);
   /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
 
 

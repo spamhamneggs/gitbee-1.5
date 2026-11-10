@@ -25,6 +25,8 @@ export const AuthMiddleware = () => {
             if (currentSession.status === "invalid") {
                 return sendErrorResponse(res, "Unauthorized", 401);
             }
+            res.locals.authPayload = verify.data;
+            res.locals.authUser = currentSession.status === "current" ? currentSession.user : undefined;
             next();
         } catch (error) {
             next(error);

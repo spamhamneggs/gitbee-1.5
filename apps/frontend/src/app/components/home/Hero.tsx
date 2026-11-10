@@ -45,7 +45,7 @@ const descriptionChars = keyChars(description);
 
 export const Hero = () => {
   const { instance, inProgress, accounts } = useMsal();
-  const { userData, setUserData } = useAuth();
+  const { session } = useAuth();
   const { scrollYProgress } = useScroll();
   const yTranslationUp = useMotionValue(0);
   const yTranslationDown = useMotionValue(0);
@@ -188,7 +188,7 @@ export const Hero = () => {
           >
             Explore
           </motion.a>
-          {userData ? (
+          {session ? (
             <motion.a
               href="/dashboard"
               variants={{

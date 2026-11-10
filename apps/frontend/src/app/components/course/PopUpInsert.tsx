@@ -78,7 +78,7 @@ function PopUpInsert(props: PopUpInsertProps) {
     "Preview Project",
   ];
   const [currentStep, setCurrentStep] = useState(1);
-  const { userData } = useAuth();
+  const { session } = useAuth();
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -238,7 +238,7 @@ function PopUpInsert(props: PopUpInsertProps) {
 
   const handleFinalized = async () => {
     setLoading(true);
-    const studentLeaderId = userData?.nim ? userData?.nim : "";
+    const studentLeaderId = session?.nim ? session?.nim : "";
     const groupMembersId = props.groupMembers.map(
       (member: any) => member.student_id
     );
@@ -326,7 +326,7 @@ function PopUpInsert(props: PopUpInsertProps) {
           setLoading={setLoading}
           fetchData={props.fetchData}
           toast={props.toast}
-          userId={userData?.nim}
+          userId={session?.nim}
           setCurrentStep={setCurrentStep}
           course_code={props.course_code}
           semester_id={props.semester_id}
