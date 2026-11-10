@@ -1,3 +1,12 @@
+export interface Session {
+  nim: string;
+  name: string;
+  email: string;
+  activeRole: string;
+  roles: string[];
+  authMethod: "sso" | "local";
+}
+
 // Must match the backend's COOKIE_NAME; `pnpm env:sync` copies it over.
 export const SESSION_COOKIE_NAME =
   process.env.NEXT_PUBLIC_COOKIE_NAME || "gitbee_token";

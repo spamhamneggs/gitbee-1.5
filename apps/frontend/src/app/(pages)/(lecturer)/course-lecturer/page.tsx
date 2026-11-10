@@ -54,7 +54,7 @@ interface Status {
 }
 
 const Page = () => {
-  const { userData } = useAuth();
+  const { session } = useAuth();
   const searchParams = useSearchParams();
   const course_code = searchParams.get("course_code");
   const course_name = searchParams.get("course_name");
@@ -148,7 +148,7 @@ const Page = () => {
       semester_id: semester_id ? semester_id : "",
       course_id: course_code ? course_code : "",
       class: class_id ? class_id : "",
-      lecturer_id: userData?.nim ? userData?.nim : "",
+      lecturer_id: session?.nim ? session?.nim : "",
       assessments: assessments,
     };
 

@@ -8,14 +8,14 @@ import { useAuth } from "@/app/context/AuthContext";
 import { dashboardPathForRole, SSO_BYPASS_ENABLED } from "@/lib/auth";
 
 const Page = () => {
-  const { userData, setUserData } = useAuth();
+  const { session, setSession } = useAuth();
   const { instance, inProgress, accounts } = useMsal();
   const router = useRouter();
   // proxy.tsx also sends signed-in users here when their role doesn't match,
   // so only use the dev account when there's no session to replace. The
   // effect re-runs as MSAL's state changes; the bypass must only fire once.
   const bypassRef = useRef<"skip" | "ready" | "started">(
-    SSO_BYPASS_ENABLED && !userData ? "ready" : "skip"
+    SSO_BYPASS_ENABLED && !session ? "ready" : "skip"
   );
   const [bypassError, setBypassError] = useState<string | null>(null);
 
@@ -26,15 +26,8 @@ const Page = () => {
         bypassRef.current = "started";
         const result = await loginDevBypass();
         if (result.success) {
-          setUserData({
-            nim: result.data.nim,
-            name: result.data.Name,
-            email: result.data.Email,
-            role: result.data.ActiveRole,
-            listRole: result.data.Role,
-            microsoftToken: result.data.MicrosoftToken,
-          });
-          router.push(dashboardPathForRole(result.data.ActiveRole) ?? "/");
+          setSession(result.data);
+          router.push(dashboardPathForRole(result.data.activeRole) ?? "/");
         } else {
           // Stay here with the reason: sending the developer home just makes
           // the next login attempt fail the same way, unexplained.
@@ -58,22 +51,10 @@ const Page = () => {
             throw new Error("Token acquisition failed");
           }
 
-          const idToken = accounts[0]?.idToken ? accounts[0].idToken : "";
-          console.log(idToken);
-          const result = await login(idToken);
-          console.log(result);
+          const result = await login(response.idToken);
           if (result?.success) {
-            setUserData({
-              nim: result.data.nim,
-              name: result.data.Name,
-              email: result.data.Email,
-              role: result.data.ActiveRole,
-              listRole: result.data.Role,
-              microsoftToken: result.data.MicrosoftToken,
-            });
-
-            console.log(result.data);
-            router.push(dashboardPathForRole(result.data.ActiveRole) ?? "/");
+            setSession(result.data);
+            router.push(dashboardPathForRole(result.data.activeRole) ?? "/");
           } else {
             router.push("/");
           }
@@ -86,7 +67,7 @@ const Page = () => {
     };
 
     handleRedirect();
-  }, [instance, accounts, inProgress, router, setUserData]);
+  }, [instance, accounts, inProgress, router, setSession]);
 
   if (bypassError) {
     return (

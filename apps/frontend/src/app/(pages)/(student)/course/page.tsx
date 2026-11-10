@@ -46,7 +46,7 @@ const Page = () => {
   const course_name = searchParams.get("course_name");
   const semester_id = searchParams.get("semester_id");
   const class_id = searchParams.get("class_id");
-  const { userData } = useAuth();
+  const { session } = useAuth();
   const { scrollYProgress } = useScroll();
   const prevScrollYRef = useRef(0);
   const { toast } = useToast();
@@ -114,7 +114,7 @@ const Page = () => {
       semester_id ? semester_id : "",
       course_code ? course_code : "",
       class_id ? class_id : "",
-      userData?.nim ? userData?.nim : ""
+      session?.nim ? session?.nim : ""
     );
     setProjectDetail(resultProjectDetail?.data?.updatedProjects);
     setClassTransactionDetail(resultProjectDetail?.data?.classTransactions);
@@ -130,7 +130,7 @@ const Page = () => {
         semester_id ? semester_id : "",
         course_code ? course_code : "",
         class_id ? class_id : "",
-        userData?.nim ? userData?.nim : ""
+        session?.nim ? session?.nim : ""
       );
       setGroupDetail(resultDetailGroup?.data);
       console.log(resultDetailGroup?.data);
@@ -480,7 +480,7 @@ const Page = () => {
           course_code={course_code ? course_code : ""}
           semester_id={semester_id ? semester_id : ""}
           class_id={class_id ? class_id : ""}
-          userId={userData?.nim}
+          userId={session?.nim}
           lecturer_id={classTransactionDetail?.lecturer_code}
         />
       )}

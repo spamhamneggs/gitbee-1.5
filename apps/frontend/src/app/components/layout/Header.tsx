@@ -4,7 +4,6 @@ import { useMsal } from "@azure/msal-react";
 import { useScroll } from "framer-motion";
 import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
-import Cookies from "js-cookie";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Popover,
@@ -15,18 +14,17 @@ import { FaUser } from "react-icons/fa";
 import { IoLogOut } from "react-icons/io5";
 import { MdSupportAgent } from "react-icons/md";
 import { useRouter } from "next/navigation";
-import { switchRole } from "@/app/(pages)/login/actions";
+import { logout, switchRole } from "@/app/(pages)/login/actions";
 import {
   dashboardPathForRole,
-  SESSION_COOKIE_NAME,
   SSO_BYPASS_ENABLED,
 } from "@/lib/auth";
 import Loading from "../Loading";
 
 const Header = () => {
   const router = useRouter();
-  const { userData, setUserData } = useAuth();
-  const { instance, inProgress, accounts } = useMsal();
+  const { session, setSession } = useAuth();
+  const { instance } = useMsal();
   const { scrollYProgress } = useScroll();
   const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
@@ -98,36 +96,35 @@ const Header = () => {
   };
 
   const logoutMircosoft = async () => {
-    Cookies.remove(SESSION_COOKIE_NAME, { path: "/" });
-    Cookies.remove("token", { path: "/" });
-    setUserData(null);
-    if (!userData?.microsoftToken) {
-      router.push("/");
-      return;
-    }
-    await instance.logoutRedirect().catch((error: unknown) => {
-      console.error("Logout failed:", error);
-    });
-  };
-
-  const changeRole = async (role: string) => {
-    if (!userData) return;
     setLoading(true);
     setRoleError(null);
     try {
-      const result = await switchRole(userData.microsoftToken, role);
+      await logout();
+      setSession(null);
+      if (session?.authMethod === "sso") {
+        await instance.logoutRedirect();
+      } else {
+        router.push("/");
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+      setRoleError("Couldn't sign out. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const changeRole = async (role: string) => {
+    if (!session) return;
+    setLoading(true);
+    setRoleError(null);
+    try {
+      const result = await switchRole(role);
       if (result.success) {
         const data = result.data;
-        setUserData({
-          nim: data.nim,
-          name: data.Name,
-          email: data.Email,
-          role: data.ActiveRole,
-          listRole: data.Role,
-          microsoftToken: data.MicrosoftToken,
-        });
+        setSession(data);
 
-        const dashboard = dashboardPathForRole(data.ActiveRole);
+        const dashboard = dashboardPathForRole(data.activeRole);
         if (dashboard) router.push(dashboard);
       } else {
         setRoleError(result.message);
@@ -185,7 +182,7 @@ const Header = () => {
           <ul
             className={`top-0 absolute right-0 lg:relative flex justify-center items-center gap-5 h-full w-full lg:w-auto pt-20 overflow-auto sm:pt-28 lg:pt-0 -z-10 lg:z-0`}
           >
-            {!userData && (
+            {!session && (
               <ul
                 className={`${
                   openHamburger
@@ -213,7 +210,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role === "Student" && (
+            {session && session.activeRole === "Student" && (
               <ul
                 className={`${
                   openHamburger
@@ -241,7 +238,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role === "Lecturer" && (
+            {session && session.activeRole === "Lecturer" && (
               <ul
                 className={`${
                   openHamburger
@@ -269,7 +266,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role.toLowerCase() === "scc" && (
+            {session && session.activeRole.toLowerCase() === "scc" && (
               <ul
                 className={`${
                   openHamburger
@@ -297,7 +294,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role.toLowerCase() === "hop" && (
+            {session && session.activeRole.toLowerCase() === "hop" && (
               <ul
                 className={`${
                   openHamburger
@@ -325,7 +322,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role === "Admin" && (
+            {session && session.activeRole === "Admin" && (
               <ul
                 className={`${
                   openHamburger
@@ -381,7 +378,7 @@ const Header = () => {
               </ul>
             )}
           </ul>
-          {!userData ? (
+          {!session ? (
             <button
               onClick={() => loginMicrosoft()}
               className="relative isolate whitespace-nowrap shrink-0 border border-primary-orange bg-transparent ml-1 px-5 py-1.5 lg:py-2.5 text-primary-orange transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-bottom-right before:scale-y-0 before:scale-x-0 before:bg-primary-orange before:transition-transform before:duration-300 before:content-[''] hover:text-white before:hover:scale-y-100 before:hover:scale-x-100 rounded-md before:rounded-sm overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-orange"
@@ -408,17 +405,17 @@ const Header = () => {
                     </div>
                     <div className="text-end">
                       <h1 className="truncate w-32 capitalize">
-                        {userData.name.toLowerCase()}
+                        {session.name.toLowerCase()}
                       </h1>
                       <h3 className="truncate w-32 text-sm text-primary-orange">
-                        {userData.nim}
+                        {session.nim}
                       </h3>
                     </div>
                   </div>
                   <div className="bg-gray-50 py-2 px-2 rounded-md my-3">
                     <ul className="flex flex-col justify-center items-center gap-1">
-                      {userData?.listRole
-                        ?.filter((role) => role !== userData.role)
+                      {session?.roles
+                        ?.filter((role) => role !== session.activeRole)
                         .map((role) => (
                           <div
                             key={role}
@@ -431,7 +428,7 @@ const Header = () => {
                             </li>
                           </div>
                         ))}
-                      {userData && userData.role === "Student" && (
+                      {session && session.activeRole === "Student" && (
                         <Link
                           className="py-10 lg:py-0 w-full border-b lg:border-none  flex justify-end items-center pl-auto lg:pl-0"
                           href="/profile"

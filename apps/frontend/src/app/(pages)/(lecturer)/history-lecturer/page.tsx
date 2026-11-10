@@ -27,7 +27,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import { IoIosVideocam } from "react-icons/io";
 
 const Page = () => {
-  const { userData } = useAuth();
+  const { session } = useAuth();
   const { scrollYProgress } = useScroll();
   const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
@@ -100,7 +100,7 @@ const Page = () => {
   const fetchHistroyData = async () => {
     const resultHistoryOutstandingData = await getHistoryByLecturer(
       currentSemester?.data?.SemesterId,
-      userData?.nim ? userData.nim : "",
+      session?.nim ? session.nim : "",
       search
     );
     setHistoryOutstandingProject(resultHistoryOutstandingData?.data);
