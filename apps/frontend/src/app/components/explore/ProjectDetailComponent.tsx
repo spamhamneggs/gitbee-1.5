@@ -18,7 +18,7 @@ interface ProjectDetailProps {
 }
 
 function ProjectDetailComponent(props: ProjectDetailProps) {
-  const { userData } = useAuth();
+  const { session } = useAuth();
   const { toast } = useToast();
   const [detailProject, setDetailProject] = useState<any>();
   const containerVariants = {
@@ -113,7 +113,7 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
                   {detailProject?.projectDetail?.description}
                 </h1>
               </div>
-              {userData && userData?.role != "Student" && (
+              {session && session?.activeRole != "Student" && (
                 <Link
                   href={
                     detailProject?.projectDetail?.github_link
@@ -178,7 +178,7 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
             ))}
           </div>
 
-          {userData && userData?.role != "Student" && (
+          {session && session?.activeRole != "Student" && (
             <Link
               href={
                 detailProject?.projectDetail?.documentation
@@ -190,7 +190,7 @@ function ProjectDetailComponent(props: ProjectDetailProps) {
               Download PDF File
             </Link>
           )}
-          {userData && userData?.role != "Student" && (
+          {session && session?.activeRole != "Student" && (
             <iframe
               src={
                 detailProject?.projectDetail?.documentation

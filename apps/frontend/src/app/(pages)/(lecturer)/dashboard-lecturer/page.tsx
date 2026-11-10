@@ -27,7 +27,7 @@ import { useAuth } from "@/app/context/AuthContext";
 import Loading from "@/app/components/Loading";
 
 const Page = () => {
-  const { userData } = useAuth();
+  const { session } = useAuth();
   const { scrollYProgress } = useScroll();
   const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
@@ -95,20 +95,20 @@ const Page = () => {
       setLoading(true);
       const resultTransactions = await getTranscationByLecturer(
         currentSemester?.data?.SemesterId,
-        userData?.nim ? userData?.nim : "",
+        session?.nim ? session?.nim : "",
         selectedCategoryFilter
       );
       setTransactions(resultTransactions?.data);
 
     const resultCourses = await getCoursesByLecturer(
       currentSemester?.data?.SemesterId,
-      userData?.nim ? userData?.nim : ""
+      session?.nim ? session?.nim : ""
     );
     setCategories(resultCourses?.data);
     setLoading(false);
     };
     fetchTransactionData();
-  }, [currentSemester, selectedCategoryFilter, userData?.nim]);
+  }, [currentSemester, selectedCategoryFilter, session?.nim]);
   /* eslint-enable react-you-might-not-need-an-effect/no-derived-state */
 
   return (

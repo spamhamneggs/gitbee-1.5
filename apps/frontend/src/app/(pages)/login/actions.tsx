@@ -1,15 +1,30 @@
-interface LoginData {
-  nim: string;
-  Name: string;
-  Email: string;
-  ActiveRole: string;
-  Role: string[];
-  MicrosoftToken: string;
-}
+import type { Session } from "@/lib/auth";
 
 type LoginResult =
-  | { success: true; data: LoginData }
+  | { success: true; data: Session }
   | { success: false; message: string };
+
+export const getSession = async (signal?: AbortSignal): Promise<Session | null> => {
+  const deadline = AbortSignal.timeout(10_000);
+  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}auth/session`, {
+    credentials: "include",
+    cache: "no-store",
+    signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+  });
+  if (response.status === 401) return null;
+  const result = await response.json() as { status?: boolean; data?: Session; errors?: string };
+  if (!response.ok || !result.status || !result.data) {
+    throw new Error(result.errors ?? "Couldn't load the session.");
+  }
+  return result.data;
+};
+
+// The session comes from the response that sets the cookie, so a second request
+// cannot fail after the server has already changed the signed-in identity.
+const sessionResult = (session?: Session): LoginResult =>
+  session
+    ? { success: true, data: session }
+    : { success: false, message: "The backend returned no session. Please sign in again." };
 
 export const login = async (microsoftToken: string, role?: string): Promise<LoginResult> => {
   try {
@@ -26,10 +41,10 @@ export const login = async (microsoftToken: string, role?: string): Promise<Logi
     );
 
     const resultlogin = await responselogin.json() as {
-      status?: boolean; data?: LoginData; errors?: string; message?: string;
+      status?: boolean; errors?: string; message?: string; data?: { session?: Session };
     };
-    if (responselogin.ok && resultlogin.status && resultlogin.data) {
-      return { success: true, data: resultlogin.data };
+    if (responselogin.ok && resultlogin.status) {
+      return sessionResult(resultlogin.data?.session);
     } else {
       return { success: false, message: resultlogin.errors ?? resultlogin.message ?? "Login failed" };
     }
@@ -38,14 +53,11 @@ export const login = async (microsoftToken: string, role?: string): Promise<Logi
   }
 };
 
-// Local passwords and the dev bypass both use the session cookie. Only SSO
-// sessions re-post their Microsoft token when choosing another role.
-export const switchRole = async (microsoftToken: string, role: string): Promise<LoginResult> => {
-  if (microsoftToken) return login(microsoftToken, role);
-
+// Every login method switches with its verified session cookie.
+export const switchRole = async (role: string): Promise<LoginResult> => {
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}auth/login-local/role`,
+      `${process.env.NEXT_PUBLIC_BACKEND_API}auth/session/role`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,9 +65,9 @@ export const switchRole = async (microsoftToken: string, role: string): Promise<
         body: JSON.stringify({ role }),
       }
     );
-    const result = await response.json() as { status?: boolean; data?: LoginData; errors?: string };
-    if (response.ok && result.status && result.data) {
-      return { success: true, data: result.data };
+    const result = await response.json() as { status?: boolean; errors?: string; data?: { session?: Session } };
+    if (response.ok && result.status) {
+      return sessionResult(result.data?.session);
     }
     return { success: false, message: result.errors ?? "Role switch failed" };
   } catch {
@@ -65,7 +77,7 @@ export const switchRole = async (microsoftToken: string, role: string): Promise<
 
 // Signs in as the backend's local dev account (BYPASS_SSO only). Failures
 // come back with a message meant for the developer looking at the page.
-export const loginDevBypass = async () => {
+export const loginDevBypass = async (): Promise<LoginResult> => {
   let response: Response;
   try {
     response = await fetch(
@@ -83,8 +95,8 @@ export const loginDevBypass = async () => {
   }
 
   const result = await response.json().catch(() => null);
-  if (result?.status) {
-    return { success: true, data: result.data };
+  if (response.ok && result?.status) {
+    return sessionResult(result.data?.session);
   }
   if (response.status === 404) {
     return {
@@ -97,4 +109,12 @@ export const loginDevBypass = async () => {
     success: false,
     message: `${result?.errors ?? `HTTP ${response.status}`} Check the backend log; if the database is behind, apply the migrations (see the README).`,
   };
+};
+
+export const logout = async (): Promise<void> => {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Couldn't sign out. Please try again.");
 };

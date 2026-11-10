@@ -1,10 +1,12 @@
 import { prisma } from "../../prisma/client.js";
 
-type SessionUser = {
+export type SessionUser = {
   id: number;
   email: string;
   role: string;
   user_type: string | null;
+  student_id: string | null;
+  lecturer_code: string | null;
   credential_version: number;
 };
 
@@ -39,6 +41,8 @@ export async function resolveCurrentSession(payload: unknown): Promise<CurrentSe
       email: true,
       role: true,
       user_type: true,
+      student_id: true,
+      lecturer_code: true,
       credential_version: true,
   } as const;
   const user = hasUserId
