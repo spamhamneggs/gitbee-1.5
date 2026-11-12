@@ -34,6 +34,14 @@ interface PopUpJoinGroupProps {
   class_id: string;
 } 
 
+// The roster can spell a NIM with a different case or stray spaces (the Excel
+// import keeps them, and the backend matches IDs the same way), so a selected
+// ID and a roster ID are never compared with ===.
+const studentIdKey = (studentId: string | undefined) =>
+  studentId?.trim().toLowerCase() ?? "";
+const sameStudentId = (a: string | undefined, b: string | undefined) =>
+  studentIdKey(a) !== "" && studentIdKey(a) === studentIdKey(b);
+
 function PopUpJoinGroup(props: PopUpJoinGroupProps) {
   const [totalMember, setTotalMember] = useState(2);
   const [openStates, setOpenStates] = useState<boolean[]>([false]);
@@ -41,6 +49,18 @@ function PopUpJoinGroup(props: PopUpJoinGroupProps) {
     props.userId || "",
   ]);
   const [isAgreementChecked, setIsAgreementChecked] = useState(false);
+
+  // The roster line for a member slot, or just the ID while the roster is
+  // still loading.
+  const slotLabel = (studentId: string | undefined) => {
+    if (!studentId) return "Select student...";
+    const student = props.listStudent?.find((entry) =>
+      sameStudentId(entry.student_id, studentId)
+    );
+    return student
+      ? `${String(student.student_id).trim()} - ${student.student_name}`
+      : studentId;
+  };
 
   const handleSelect = (index: number, value: string) => {
     const newSelection = [...selectedStudents];
@@ -132,17 +152,7 @@ function PopUpJoinGroup(props: PopUpJoinGroupProps) {
                 className="w-full justify-between"
                 disabled={i === 0}
               >
-                {selectedStudents[i]
-                  ? `${
-                    props.listStudent?.find(
-                        (student) => student.student_id === selectedStudents[i]
-                      )?.student_id
-                    } - ${
-                      props.listStudent?.find(
-                        (student) => student.student_id === selectedStudents[i]
-                      )?.student_name
-                    }`
-                  : "Select student..."}
+                {slotLabel(selectedStudents[i])}
 
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
@@ -160,21 +170,23 @@ function PopUpJoinGroup(props: PopUpJoinGroupProps) {
                         onSelect={(currentValue: string) => {
                           handleSelect(
                             i,
-                            currentValue === selectedStudents[i]
+                            sameStudentId(currentValue, selectedStudents[i])
                               ? ""
                               : currentValue
                           );
                           togglePopover(i, false);
                         }}
                         disabled={
-                          selectedStudents.includes(student?.student_id) || 
+                          selectedStudents.some((selected) =>
+                            sameStudentId(selected, student?.student_id)
+                          ) ||
                           student.is_disable === 1
                         }
                       >
                         <Check
                           className={cn(
                             "mr-2 h-4 w-4",
-                            selectedStudents[i] === student.student_id
+                            sameStudentId(selectedStudents[i], student.student_id)
                               ? "opacity-100"
                               : "opacity-0"
                           )}
