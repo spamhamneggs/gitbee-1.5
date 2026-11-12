@@ -17,9 +17,10 @@ interface UserIdentity {
     binusian_id: string | null;
 }
 
-// MySQL's utf8mb4_unicode_ci matches IDs case-insensitively, so the in-memory
-// lookups have to as well, or a roster row MySQL returned would look missing.
-const idKey = (studentId: string) => studentId.trim().toLowerCase();
+// MySQL's utf8mb4_unicode_ci matches IDs ignoring case and trailing spaces, so
+// in-memory comparisons have to as well, or a row MySQL returned would look
+// missing. Use this wherever two student IDs from different tables are compared.
+export const idKey = (studentId: string) => studentId.trim().toLowerCase();
 
 const firstFilled = (...values: (string | null | undefined)[]) =>
     values.find((value): value is string => typeof value === "string" && value.trim() !== "");
@@ -95,8 +96,11 @@ export default class StudentService {
                 notEnrolled.push(studentId);
                 continue;
             }
-            // Store the roster's spelling of the ID so later lookups match it exactly.
-            members.push(toStudentIdentity(rosterRow.student_id, userById.get(idKey(studentId)), rosterRow.student_name));
+            // Save the ID as it was requested (trimmed), not the roster's spelling.
+            // The roster can carry stray whitespace from the Excel import, and
+            // project submission compares the saved ID with the signed-in
+            // student's NIM exactly; the requested ID is that NIM.
+            members.push(toStudentIdentity(studentId, userById.get(idKey(studentId)), rosterRow.student_name));
         }
         return { members, notEnrolled };
     }

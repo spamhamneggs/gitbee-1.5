@@ -343,4 +343,30 @@ describe("project insert concurrency against MySQL", {
     assert.equal(new Set(rows.map((row) => row.group)).size, 1);
     assert.deepEqual(rows.map((row) => row.student_id).sort(), studentIds);
   });
+
+  it("lets a student create a group and submit when the roster's copy of a NIM has a trailing space", async () => {
+    // The Excel enrolment import keeps a string cell's whitespace, and MySQL
+    // still matches it, so the group is created. Submission then compares the
+    // saved ID with the signed-in NIM exactly.
+    const leader = `W1-${suffix}`;
+    const member = `W2-${suffix}`;
+    await enrol("WSPACE", [`${leader} `, `${member} `]);
+
+    // The dialog sends the signed-in NIM first, then the roster's spelling of the others.
+    const group = await request(app).post("/api/group/student/insert")
+      .send({ semester_id: semesterId, course_id: courseId, class: "WSPACE", student_ids: [leader, `${member} `] });
+    assert.equal(group.status, 200, JSON.stringify(group.body));
+    const savedIds: string[] = group.body.data.map((row: { student_id: string }) => row.student_id);
+    assert.deepEqual(savedIds, [leader, member]);
+
+    const response = await submit({
+      ...payload(), class: "WSPACE", group: group.body.data[0].group,
+      student_leader_id: leader, group_members: savedIds,
+    });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const projectMembers = await prisma.projectGroup.findMany({
+      where: { project_id: response.body.data.newProject.id }, orderBy: { id: "asc" },
+    });
+    assert.deepEqual(projectMembers.map((row) => row.student_id), [leader, member]);
+  });
 });

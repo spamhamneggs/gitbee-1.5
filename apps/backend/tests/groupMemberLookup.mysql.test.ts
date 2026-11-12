@@ -12,10 +12,12 @@ process.env.DATABASE_URL = databaseUrl ?? "mysql://test:test@127.0.0.1:3306/test
 delete process.env.ATLANTIS_API; // any remaining Atlantis call would fail loudly
 const { prisma } = await import("../api/prisma/client.js");
 const { default: groupRoutes } = await import("../api/routes/group/groupRoutes.js");
+const { default: classRoutes } = await import("../api/routes/class/classRoutes.js");
 
 const app = express();
 app.use(express.json());
 app.use("/api/group", groupRoutes);
+app.use("/api/class", classRoutes);
 
 const suffix = randomBytes(5).toString("hex");
 const semesterId = `sem-${suffix}`;
@@ -48,6 +50,8 @@ before(async () => {
     roster(nim("E"), "Other Class Student", "LB02"),
     roster(nim("F"), "Fajar Roster"),
     roster(nim("G"), "Gita Roster"),
+    // A trailing space, as the Excel enrolment import keeps from a string cell.
+    roster(`${nim("H")} `, "Hana Roster"),
   ] });
 });
 
@@ -86,11 +90,29 @@ describe("group members and names from the local database", {
     assert.equal((await savedMembers([nim("F"), nim("E"), nim("Z")])).length, 0);
   });
 
-  it("ignores blank member slots and repeated IDs, and stores the roster's spelling", async () => {
-    const response = await createGroup([nim("G").toUpperCase(), "", "  ", nim("G")]);
+  it("ignores blank member slots and repeated IDs, and saves the ID as first requested", async () => {
+    const requested = nim("G").toUpperCase();
+    const response = await createGroup([requested, "", "  ", nim("G")]);
     assert.equal(response.status, 200, JSON.stringify(response.body));
     const rows = await savedMembers([nim("G")]);
-    assert.deepEqual(rows.map((row) => [row.student_id, row.student_name]), [[nim("G"), "Gita Roster"]]);
+    assert.deepEqual(rows.map((row) => [row.student_id, row.student_name]), [[requested, "Gita Roster"]]);
+  });
+
+  it("saves the requested NIM when the roster's copy has a trailing space, and still marks the student as taken", async () => {
+    const response = await createGroup([nim("H")]);
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const rows = await savedMembers([nim("H")]);
+    assert.deepEqual(rows.map((row) => [row.student_id, row.student_name]), [[nim("H"), "Hana Roster"]]);
+
+    // The member picker reads is_disable from the class list, which compares
+    // the roster's "H " with the saved "H".
+    const list = await request(app).get("/api/class/student/list")
+      .query({ semester_id: semesterId, course_id: courseId, class: className });
+    assert.equal(list.status, 200, JSON.stringify(list.body));
+    const taken = Object.fromEntries(list.body.data.map((student: { student_id: string; is_disable: number }) =>
+      [student.student_id.trim(), student.is_disable]));
+    assert.equal(taken[nim("H")], 1);
+    assert.equal(taken[nim("F")], 0);
   });
 
   it("asks for a member when every slot is blank", async () => {

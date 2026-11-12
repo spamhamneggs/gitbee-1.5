@@ -1,4 +1,5 @@
 import { prisma } from "../../prisma/client.js";
+import { idKey } from "../student/studentService.js";
 
 export default class ClassService {
     /** The lecturer's classes in a semester (optionally one course), each with its enrolled student count. */
@@ -120,19 +121,18 @@ export default class ClassService {
             },
         });
 
-        const groupedStudentIds = new Set(groupedStudents.map((g) => g.student_id));
-        const projectStudentIds = new Set(
-            projectsWithDetailsAndGroups.flatMap((project) =>
-                project.projectGroups.map((group) => group.student_id)
-            )
-        );
+        // A roster ID and the ID saved for the same student in a group or project
+        // can differ in case or stray whitespace, so compare them by idKey.
+        const takenStudentIds = new Set([
+            ...groupedStudents.map((member) => idKey(member.student_id)),
+            ...projectsWithDetailsAndGroups.flatMap((project) =>
+                project.projectGroups.map((member) => idKey(member.student_id))
+            ),
+        ]);
 
         return studentLists.map((student) => ({
             ...student,
-            is_disable:
-                groupedStudentIds.has(student.student_id) || projectStudentIds.has(student.student_id)
-                    ? 1
-                    : 0,
+            is_disable: takenStudentIds.has(idKey(student.student_id)) ? 1 : 0,
         }));
     }
 }
