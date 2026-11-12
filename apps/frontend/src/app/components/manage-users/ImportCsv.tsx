@@ -30,15 +30,24 @@ const csvTypes: Record<
   },
 };
 
-// Shows at most this many rejected rows; the summary still counts them all.
-const MAX_LISTED_ERRORS = 50;
+// The report lists skipped duplicates as well as rejected rows, in file order,
+// so a rejected row can sit behind many skipped ones. Show this many lines at
+// first; "Show all" reveals the rest.
+const INITIAL_LISTED_LINES = 50;
 
 function ImportCsv(props: ImportCsvProps) {
   const [type, setType] = useState<UserCsvType>("staff");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [report, setReport] = useState<UserCsvReport | null>(null);
+  const [showAllLines, setShowAllLines] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const clearResult = () => {
+    setReport(null);
+    setShowAllLines(false);
+    setError(null);
+  };
 
   const handleUpload = async () => {
     if (!selectedFile) {
@@ -47,8 +56,7 @@ function ImportCsv(props: ImportCsvProps) {
     }
 
     setUploading(true);
-    setError(null);
-    setReport(null);
+    clearResult();
     const result = await uploadUsersCsv(selectedFile, type);
     setUploading(false);
     if (result.success) {
@@ -89,8 +97,7 @@ function ImportCsv(props: ImportCsvProps) {
               aria-checked={type === option}
               onClick={() => {
                 setType(option);
-                setReport(null);
-                setError(null);
+                clearResult();
               }}
               className={`flex-1 py-2 px-4 rounded-sm border ${
                 type === option
@@ -121,8 +128,7 @@ function ImportCsv(props: ImportCsvProps) {
             accept=".csv,text/csv"
             onChange={(event) => {
               setSelectedFile(event.target.files?.[0] ?? null);
-              setReport(null);
-              setError(null);
+              clearResult();
             }}
           />
         </div>
@@ -157,8 +163,14 @@ function ImportCsv(props: ImportCsvProps) {
               {report.failedCount > 0 && ` ${report.failedCount} rejected.`}
             </p>
             {report.errors.length > 0 && (
-              <ul className="max-h-48 overflow-y-auto border rounded-sm p-2 bg-gray-50">
-                {report.errors.slice(0, MAX_LISTED_ERRORS).map((rowError) => (
+              <ul
+                id="csv_report_lines"
+                className="max-h-48 overflow-y-auto border rounded-sm p-2 bg-gray-50"
+              >
+                {(showAllLines
+                  ? report.errors
+                  : report.errors.slice(0, INITIAL_LISTED_LINES)
+                ).map((rowError) => (
                   <li
                     key={`${rowError.line}:${rowError.errors.join("|")}`}
                     className="text-red-600"
@@ -166,12 +178,20 @@ function ImportCsv(props: ImportCsvProps) {
                     Line {rowError.line}: {rowError.errors.join("; ")}
                   </li>
                 ))}
-                {report.errors.length > MAX_LISTED_ERRORS && (
-                  <li className="text-gray-600">
-                    …and {report.errors.length - MAX_LISTED_ERRORS} more.
-                  </li>
-                )}
               </ul>
+            )}
+            {report.errors.length > INITIAL_LISTED_LINES && (
+              <button
+                type="button"
+                className="self-start text-primary-binus underline"
+                aria-controls="csv_report_lines"
+                aria-expanded={showAllLines}
+                onClick={() => setShowAllLines(!showAllLines)}
+              >
+                {showAllLines
+                  ? `Show the first ${INITIAL_LISTED_LINES} lines only`
+                  : `Show all ${report.errors.length} lines`}
+              </button>
             )}
           </div>
         )}
