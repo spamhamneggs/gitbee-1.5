@@ -68,9 +68,7 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
-        console.log("MASUK");
         scrollYProgress.onChange(handleScroll);
       }
     };
@@ -91,14 +89,12 @@ const Page = () => {
   /* eslint-disable react-you-might-not-need-an-effect/no-derived-state -- server fetch: the result depends on an async round-trip and cannot be computed during render */
   useEffect(() => {
     const fetchProjectData = async () => {
-      console.log(currentSemester?.data?.SemesterId);
       const resultProject = await getAllProjects(
         search,
         selectedCategoryFilter,
         selectedMajorFilter,
         currentSemester?.data?.SemesterId
       );
-      console.log(resultProject?.data);
       if (resultProject?.success) setProjects(resultProject.data);
     };
     fetchProjectData();

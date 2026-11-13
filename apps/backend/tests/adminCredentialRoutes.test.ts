@@ -11,8 +11,8 @@ process.env.JWT_SECRET = "admin-credential-route-test-secret";
 process.env.COOKIE_NAME = "test_auth";
 
 const { prisma } = await import("../api/prisma/client.js");
-const { default: adminUserRoutes } = await import(
-  "../api/routes/user/admin/adminUserRoutes.js"
+const { default: userRoutes } = await import(
+  "../api/routes/user/userRoutes.js"
 );
 const { default: authRoutes } = await import("../api/routes/auth/authRoutes.js");
 const { createLocalToken } = await import("../api/utils/auth/auth.js");
@@ -24,7 +24,7 @@ const { Prisma } = await import("../api/prisma/generated/prisma/client.js");
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
-app.use("/api/user/admin", adminUserRoutes);
+app.use("/api/user", userRoutes);
 app.use("/api/auth", authRoutes);
 app.get("/api/auth-checked", AuthMiddleware(), (_req, res) => res.sendStatus(200));
 

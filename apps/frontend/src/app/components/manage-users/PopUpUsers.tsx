@@ -50,7 +50,7 @@ function PopUpUsers(props: PopUpUsersProps) {
 
     try {
       if (role == "HoP" && selectedMajors.length < 1) return;
-      const resultUpdate = await updateUserRole(
+      await updateUserRole(
         props.selectedUserToUpdate.id.toString(),
         role,
         role === "HoP"
@@ -59,7 +59,6 @@ function PopUpUsers(props: PopUpUsersProps) {
       );
       props.fetchData();
       props.setOpenPopUpUsers(false);
-      console.log("Update Result:", resultUpdate);
     } catch (error) {
       console.error("Failed to update user role:", error);
     }

@@ -61,7 +61,6 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
         scrollYProgress.onChange(handleScroll);
       }
@@ -86,7 +85,6 @@ const Page = () => {
 
     const resultCurrentSemester = await getCurrentSemester();
     setCurrentSemester(resultCurrentSemester);
-    console.log(resultCurrentSemester?.data?.SemesterId);
 
     fetchHistroyData();
   };

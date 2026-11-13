@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import React, { useEffect } from "react";
+import React from "react";
 import { BsGlobe2 } from "react-icons/bs";
 import { motion } from "framer-motion";
 import { IoIosArrowRoundBack, IoIosVideocam } from "react-icons/io";
@@ -18,10 +18,6 @@ function PreviewDetailComponent(props: PreviewDetailProps) {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { duration: 1 } },
   };
-
-  useEffect(() => {
-    console.log(props.selectedPreviewProject);
-  }, [props.selectedPreviewProject]);
 
   return (
     <motion.div

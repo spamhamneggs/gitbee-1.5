@@ -74,9 +74,7 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
-        console.log("MASUK");
         scrollYProgress.onChange(handleScroll);
       }
     };
@@ -103,10 +101,8 @@ const Page = () => {
     );
 
     if (resultProject?.success) {
-      console.log();
       setProject(resultProject?.data);
     }
-    console.log(resultProject);
   }, [search]);
 
   useEffect(() => {

@@ -10,8 +10,8 @@ process.env.JWT_SECRET = "admin-csv-upload-test-secret";
 process.env.COOKIE_NAME = "test_auth";
 
 const { createToken } = await import("../api/utils/auth/auth.js");
-const { default: adminUserRoutes } = await import(
-  "../api/routes/user/admin/adminUserRoutes.js"
+const { default: userRoutes } = await import(
+  "../api/routes/user/userRoutes.js"
 );
 const { prismaUserStore } = await import("../api/utils/csv/csvUserImport.js");
 const { prisma } = await import("../api/prisma/client.js");
@@ -71,10 +71,10 @@ const delimitedRoleToken = tokenWithClaims({ role: "Student,Admin" });
 
 const app = express();
 app.use(cookieParser());
-app.use("/api/user/admin", adminUserRoutes);
+app.use("/api/user", userRoutes);
 
 const appWithoutCookieParser = express();
-appWithoutCookieParser.use("/api/user/admin", adminUserRoutes);
+appWithoutCookieParser.use("/api/user", userRoutes);
 
 const authCookie = `${process.env.COOKIE_NAME}=${authToken}`;
 const studentCsvPath = "/api/user/admin/upload-student-csv";

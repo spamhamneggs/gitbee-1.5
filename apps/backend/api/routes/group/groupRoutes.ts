@@ -1,10 +1,10 @@
 import express from "express";
-import studentGroupRoutes from "./student/studentGroupRoutes.js";
-import lecturerGroupRoutes from "./lecturer/lecturerGroupRoutes.js";
+import GroupHandler from "../../handlers/group/groupHandler.js";
 
 const groupRoutes = express.Router();
 
-groupRoutes.use("/student", studentGroupRoutes);
-groupRoutes.use("/lecturer", lecturerGroupRoutes);
+groupRoutes.post("/student/insert", GroupHandler.createGroup);
+groupRoutes.get("/student/current", GroupHandler.getStudentGroup);
+groupRoutes.patch("/lecturer/remove", GroupHandler.deleteGroup);
 
 export default groupRoutes;

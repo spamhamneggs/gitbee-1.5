@@ -55,9 +55,7 @@ const Header = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
-        console.log("MASUK");
         scrollYProgress.onChange(handleScroll);
       }
     };

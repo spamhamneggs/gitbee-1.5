@@ -35,6 +35,22 @@ export function getErrorMessage(error: unknown, fallback = "Unknown Error"): str
     return error instanceof Error && error.message ? error.message : fallback;
 }
 
+/** An expected failure a service reports: `message` goes to the client with `status`. */
+export class ServiceError extends Error {
+    constructor(message: string, readonly status = 400) {
+        super(message);
+        this.name = "ServiceError";
+    }
+}
+
+/** Sends a ServiceError as-is; anything else becomes a 400 with its message, or `fallback`. */
+export function sendServiceError(res: Response, error: unknown, fallback: string) {
+    if (error instanceof ServiceError) {
+        return sendErrorResponse(res, error.message, error.status);
+    }
+    return sendErrorResponse(res, getErrorMessage(error, fallback));
+}
+
 export function getErrors(error: unknown, message?: string) {
     const err = axios.isAxiosError(error) ? (
         error.response?.data ?? error.message

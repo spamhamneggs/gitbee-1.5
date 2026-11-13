@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import Link from "next/link";
 import ImportExcel from "@/app/components/manage-users/ImportExcel";
+import ImportCsv from "@/app/components/manage-users/ImportCsv";
 import PopUpUsers from "@/app/components/manage-users/PopUpUsers";
 import Loading from "@/app/components/Loading";
 import PopUpConfirmation from "@/app/components/manage-users/PopUpConfirmation";
@@ -27,6 +28,7 @@ const Page = () => {
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<any>([]);
   const [openImportExcel, setOpenImportExcel] = useState(false);
+  const [openImportCsv, setOpenImportCsv] = useState(false);
   const [openPopUpUsers, setOpenPopUpUsers] = useState(false);
   const [selectedUserToUpdate, setSelectedUserToUpdate] = useState<any>();
   const [openPopUpConfirmation, setOpenPopUpConfirmation] = useState(false);
@@ -35,15 +37,13 @@ const Page = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const resultUsers = await getAllUsers(search);
-    console.log(resultUsers?.data);
     setUsers(resultUsers?.data);
     setLoading(false);
   }, [search]);
 
   const handleDeleteAllLecturer = async () => {
     setLoading(true);
-    const resultDeleteAllLecturer = await deleteAllUser();
-    console.log(resultDeleteAllLecturer?.data);
+    await deleteAllUser();
     setOpenPopUpConfirmation(false);
     fetchData();
     setLoading(false);
@@ -67,9 +67,7 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
-        console.log("MASUK");
         scrollYProgress.onChange(handleScroll);
       }
     };
@@ -162,6 +160,12 @@ const Page = () => {
           >
             Import Excel Lecturer
           </button>
+          <button
+            className="w-full whitespace-nowrap cursor-pointer text-xs sm:text-base py-1 px-2 md:py-2 md:px-3 relative text-primary-binus rounded-sm border-l"
+            onClick={() => setOpenImportCsv(true)}
+          >
+            Import CSV
+          </button>
         </div>
       </div>
 
@@ -237,6 +241,9 @@ const Page = () => {
           setOpenImportExcel={setOpenImportExcel}
           fetchData={fetchData}
         />
+      )}
+      {openImportCsv && (
+        <ImportCsv setOpenImportCsv={setOpenImportCsv} fetchData={fetchData} />
       )}
       {openPopUpUsers && (
         <PopUpUsers

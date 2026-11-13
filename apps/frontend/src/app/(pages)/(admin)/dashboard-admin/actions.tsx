@@ -75,7 +75,6 @@ export const getAllProjects = async (
   majorFilter: string,
   semester_id: string
 ) => {
-  console.log(semester_id)
   try {
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_API}project/admin/dashboard?search=${search}&categoryFilter=${categoryFilter}&majorFilter=${majorFilter}&semester_id=${semester_id}`

@@ -35,7 +35,6 @@ const Page = () => {
   const fetchData = useCallback(async () => {
     const resultCategory = await getAllCategory();
     if (resultCategory?.success) setCategories(resultCategory.data);
-    console.log(resultCategory?.data);
 
     const resultTech = await getAllTech();
     if (resultTech?.success) setTechs(resultTech.data);
@@ -58,7 +57,6 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
         scrollYProgress.onChange(handleScroll);
       }
@@ -82,16 +80,14 @@ const Page = () => {
   }, [fetchData]);
 
   const handleAddCategory = async () => {
-    const result = await AddCategory(inputCategory);
+    await AddCategory(inputCategory);
     setInputCategory("");
-    console.log(result);
     fetchData();
   };
 
   const handleAddTech = async () => {
-    const result = await AddTech(inputTechnologies);
+    await AddTech(inputTechnologies);
     setInputTechnologies("");
-    console.log(result);
     fetchData();
   };
 

@@ -20,13 +20,12 @@ function PopUpTechnologies(props: PopUpTechnologiesProps) {
       return;
     }
     try {
-      const resultUpdate = await UpdateTechnologies(
+      await UpdateTechnologies(
         props.selectedTechnologiesToUpdate.id.toString(),
         name
       );
       props.fetchData();
       props.setOpenPopUpTechnologies(false);
-      console.log("Update Result:", resultUpdate);
     } catch (error) {
       console.error("Failed to update user role:", error);
     }

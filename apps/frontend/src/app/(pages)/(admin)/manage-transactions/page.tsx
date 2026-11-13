@@ -29,7 +29,6 @@ const Page = () => {
 
   const fetchData = useCallback(async () => {
     const resultTransactions = await getAllTransactions(search);
-    console.log(resultTransactions?.data);
     setTransactions(resultTransactions?.data);
   }, [search]);
 
@@ -50,9 +49,7 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
-        console.log("MASUK");
         scrollYProgress.onChange(handleScroll);
       }
     };
@@ -76,8 +73,7 @@ const Page = () => {
 
   const handleDeleteAllTransaction = async () => {
     setLoading(true);
-    const resultDeleteAllTransaction = await deleteAllTransaction();
-    console.log(resultDeleteAllTransaction?.data);
+    await deleteAllTransaction();
     setOpenPopUpConfirmation(false);
     fetchData();
     setLoading(false);

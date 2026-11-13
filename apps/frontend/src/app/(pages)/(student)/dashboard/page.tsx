@@ -41,7 +41,6 @@ const Page = () => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
         scrollYProgress.onChange(handleScroll);
       }
@@ -65,12 +64,10 @@ const Page = () => {
     const fetchData = async () => {
       setLoading(true);
       const resultListSemester = await getAllSemester();
-      console.log(resultListSemester);
       setListSemester(resultListSemester);
 
       const resultCurrentSemester = await getCurrentSemester();
       setCurrentSemester(resultCurrentSemester);
-      console.log(resultCurrentSemester);
       setLoading(false);
     };
     fetchData();
@@ -81,13 +78,10 @@ const Page = () => {
   useEffect(() => {
     const fetchTransactionData = async () => {
       setLoading(true);
-      console.log(userData?.nim);
-      console.log(currentSemester?.data?.SemesterId);
       const resultTransactions = await getTranscationByStudent(
         currentSemester?.data?.SemesterId,
         userData?.nim ? userData?.nim : ""
       );
-      console.log(resultTransactions?.data);
       setTransactions(resultTransactions?.data);
       setLoading(false);
     };

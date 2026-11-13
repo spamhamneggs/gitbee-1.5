@@ -99,7 +99,6 @@ export const deleteAllTransaction = async () => {
     );
     const result = await response.json();
 
-    console.log(result);
     if (result.status) {
       return { success: true, data: result.data ? result.data : "" };
     } else {

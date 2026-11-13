@@ -68,9 +68,7 @@ const Page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
     setLoading(true);
     const resultProject = await getProjectDetail(id);
     if (resultProject?.success) setProject(resultProject.data[0]);
-    console.log(resultProject?.data[0]);
     setToggleStatus(resultProject?.data[0]?.is_disable);
-    console.log(resultProject?.data[0]?.is_disable);
     setLoading(false);
   }, [id]);
 
@@ -91,9 +89,7 @@ const Page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
     const mediaQuery = window.matchMedia("(max-width: 1535px)");
 
     const scrollListener = () => {
-      console.log(mediaQuery);
       if (!mediaQuery.matches) {
-        console.log("MASUK");
         scrollYProgress.onChange(handleScroll);
       }
     };
@@ -125,9 +121,7 @@ const Page: React.FC<{ params: { id: string } }> = ({ params: { id } }) => {
   };
 
   const handleToggleIsDisabled = async () => {
-    console.log("Masuk");
     const resultToggleIsDisable = await toggleIsDisable(id);
-    console.log(resultToggleIsDisable);
     if (resultToggleIsDisable?.success) fetchProjectData();
   };
 

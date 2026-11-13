@@ -3,6 +3,6 @@ import AssessmentHandler from "../../handlers/assessment/assessmentHandler.js";
 
 const assessmentRoutes = express.Router();
 
-assessmentRoutes.post("/insert", AssessmentHandler.insertAssessment);
+assessmentRoutes.post("/insert", AssessmentHandler.gradeClass);
 
 export default assessmentRoutes;

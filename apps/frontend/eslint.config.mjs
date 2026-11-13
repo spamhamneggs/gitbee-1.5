@@ -32,4 +32,12 @@ export default [
       parser: tseslint.parser,
     },
   },
+  {
+    // Debug logging doesn't ship to browsers; report real problems with
+    // console.warn or console.error.
+    files: ["src/**"],
+    rules: {
+      "no-console": ["error", { allow: ["warn", "error"] }],
+    },
+  },
 ];

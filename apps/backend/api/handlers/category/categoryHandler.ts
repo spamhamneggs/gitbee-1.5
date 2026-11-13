@@ -1,15 +1,42 @@
+import { z } from "zod";
 import type { Request, Response } from "express";
-import { getErrorMessage, sendErrorResponse, sendSuccessResponse } from "../../utils/response/response.js";
-import { prisma } from "../../prisma/client.js";
-
+import validateSchema from "../../utils/validator/validateSchema.js";
+import { sendErrorResponse, sendServiceError, sendSuccessResponse } from "../../utils/response/response.js";
+import CategoryService from "../../services/category/categoryService.js";
 
 export default class CategoryHandler {
-    static async getAllCategory(req : Request, res : Response) {
+    static async listCategories(_req: Request, res: Response) {
         try {
-            const categories = await prisma.category.findMany();
-            sendSuccessResponse(res, categories);
+            sendSuccessResponse(res, await CategoryService.listCategories());
         } catch (error) {
-            sendErrorResponse(res, getErrorMessage(error, "Fetch Failed"));
+            sendServiceError(res, error, "Fetch Failed");
+        }
+    }
+
+    static async createCategory(req: Request, res: Response) {
+        try {
+            const validationResult = validateSchema(z.object({ name: z.string() }), req.body);
+            if (validationResult.error) {
+                return sendErrorResponse(res, validationResult.details);
+            }
+
+            sendSuccessResponse(res, await CategoryService.createCategory(validationResult.data.name));
+        } catch (error) {
+            sendServiceError(res, error, "Insert Failed");
+        }
+    }
+
+    static async updateCategory(req: Request, res: Response) {
+        try {
+            const validationResult = validateSchema(z.object({ id: z.string(), name: z.string() }), req.body);
+            if (validationResult.error) {
+                return sendErrorResponse(res, validationResult.details);
+            }
+
+            const { id, name } = validationResult.data;
+            sendSuccessResponse(res, await CategoryService.updateCategory(Number(id), name));
+        } catch (error) {
+            sendServiceError(res, error, "Update Failed");
         }
     }
 }

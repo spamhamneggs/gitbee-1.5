@@ -59,9 +59,7 @@ const Page = () => {
           }
 
           const idToken = accounts[0]?.idToken ? accounts[0].idToken : "";
-          console.log(idToken);
           const result = await login(idToken);
-          console.log(result);
           if (result?.success) {
             setUserData({
               nim: result.data.nim,
@@ -72,7 +70,6 @@ const Page = () => {
               microsoftToken: result.data.MicrosoftToken,
             });
 
-            console.log(result.data);
             router.push(dashboardPathForRole(result.data.ActiveRole) ?? "/");
           } else {
             router.push("/");

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from "react";
+import React from "react";
 import { motion } from "framer-motion";
 import Card from "../Card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,10 +18,6 @@ function ExploreComponent(props: ExploreProps) {
     hidden: { opacity: 0 },
     reveal: { opacity: 1 },
   };
-
-  useEffect(() => {
-    console.log(props.projects);
-  }, [props.projects]);
 
   return (
     <motion.div

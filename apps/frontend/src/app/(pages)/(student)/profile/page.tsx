@@ -20,7 +20,6 @@ const Page = () => {
         userData?.nim ? userData.nim : ""
       );
       setStudentProjects(resultProjectStudent?.data);
-      console.log(resultProjectStudent?.data);
     };
     fetchData();
   }, [userData?.nim]);

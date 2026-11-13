@@ -3,7 +3,6 @@ import MajorHandler from "../../handlers/major/majorHandler.js";
 
 const majorRoutes = express.Router();
 
-majorRoutes.get("/all", MajorHandler.getAllMajor);
-majorRoutes.post("/insert", MajorHandler.insertMajor);
+majorRoutes.get("/all", MajorHandler.listMajors);
 
 export default majorRoutes;

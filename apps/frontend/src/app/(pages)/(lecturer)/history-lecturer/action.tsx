@@ -41,8 +41,6 @@ export const getHistoryByLecturer = async (
   search: string
 ) => {
   try {
-    console.log(semester_id);
-    console.log(lecturer_id);
     const response = await fetch(
       `${process.env.NEXT_PUBLIC_BACKEND_API}project/lecturer/all-reviewed?semester_id=${semester_id}&lecturer_id=${lecturer_id}&search=${search}`
     );

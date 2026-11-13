@@ -14,4 +14,13 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }],
     },
   },
+  {
+    // No debug logging on request paths. The startup messages in index.ts
+    // and the seed and dummy-data CLIs under api/prisma print on purpose.
+    files: ["api/**/*.ts"],
+    ignores: ["api/index.ts", "api/prisma/**"],
+    rules: {
+      "no-console": ["error", { allow: ["warn", "error"] }],
+    },
+  },
 );
