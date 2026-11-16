@@ -3,7 +3,7 @@ import { useMsal } from "@azure/msal-react";
 import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, loginDevBypass } from "../actions";
+import { getSession, login, loginDevBypass } from "../actions";
 import { useAuth } from "@/app/context/AuthContext";
 import { dashboardPathForRole, SSO_BYPASS_ENABLED } from "@/lib/auth";
 
@@ -15,13 +15,23 @@ const Page = () => {
   const [bypassError, setBypassError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loading) return;
+    // Another tab can remove the cookie while this tab keeps its identity.
+    if (session) {
+      const controller = new AbortController();
+      getSession(controller.signal)
+        .then((current) => {
+          if (controller.signal.aborted) return;
+          if (current) router.push(dashboardPathForRole(current.activeRole) ?? "/");
+          else setSession(null);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) router.push("/");
+        });
+      return () => controller.abort();
+    }
+
     const handleRedirect = async () => {
-      if (loading) return;
-      // A role mismatch can send an already signed-in user here.
-      if (session) {
-        router.push(dashboardPathForRole(session.activeRole) ?? "/");
-        return;
-      }
       if (SSO_BYPASS_ENABLED) {
         if (bypassStartedRef.current) return;
         bypassStartedRef.current = true;
