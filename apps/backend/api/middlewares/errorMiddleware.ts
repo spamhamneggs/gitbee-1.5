@@ -23,20 +23,34 @@ export const notFoundHandler: RequestHandler = (_req, _res, next) => {
   next(new AppError(404, "Route not found"));
 };
 
-function isMalformedJsonError(error: unknown): boolean {
-  return error instanceof SyntaxError && (
-    ("type" in error && error.type === "entity.parse.failed")
-    || ("status" in error && error.status === 400 && "body" in error)
-  );
-}
+function getBodyParserErrorResponse(error: unknown): { status: number; message: string } | null {
+  if (typeof error !== "object" || error === null) return null;
 
-function isPayloadTooLargeError(error: unknown): boolean {
-  return typeof error === "object"
-    && error !== null
-    && (
-      ("type" in error && error.type === "entity.too.large")
-      || ("status" in error && error.status === 413)
-    );
+  const type = "type" in error && typeof error.type === "string" ? error.type : undefined;
+  if (type === "entity.parse.failed"
+    || (error instanceof SyntaxError && "status" in error && error.status === 400 && "body" in error)) {
+    return { status: 400, message: "Invalid JSON payload" };
+  }
+  if ("status" in error && error.status === 400 && "body" in error) {
+    return { status: 400, message: "Invalid request body" };
+  }
+  if (type === "entity.too.large" || ("status" in error && error.status === 413)) {
+    return { status: 413, message: "Request payload is too large" };
+  }
+  if (type === "charset.unsupported" || type === "encoding.unsupported") {
+    return { status: 415, message: "Unsupported request encoding" };
+  }
+  if (type === "request.size.invalid" || type === "request.aborted") {
+    return { status: 400, message: "Invalid request body" };
+  }
+  if ("code" in error && (error.code === "Z_DATA_ERROR" || error.code === "Z_BUF_ERROR")) {
+    return { status: 400, message: "Invalid request body" };
+  }
+  if (type === "entity.verify.failed") {
+    return { status: 403, message: "Request body verification failed" };
+  }
+
+  return null;
 }
 
 export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
@@ -80,13 +94,9 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     }
   }
 
-  if (isMalformedJsonError(error)) {
-    sendErrorResponse(res, "Invalid JSON payload", 400);
-    return;
-  }
-
-  if (isPayloadTooLargeError(error)) {
-    sendErrorResponse(res, "Request payload is too large", 413);
+  const bodyParserError = getBodyParserErrorResponse(error);
+  if (bodyParserError) {
+    sendErrorResponse(res, bodyParserError.message, bodyParserError.status);
     return;
   }
 

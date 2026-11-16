@@ -11,6 +11,11 @@ const classQuery = {
     class: z.string()
 };
 
+const positiveIntegerQuery = z.string()
+    .regex(/^\d+$/, "Expected a positive integer")
+    .refine((value) => Number.isSafeInteger(Number(value)) && Number(value) > 0, "Expected a positive safe integer");
+const binaryQuery = z.enum(["0", "1"]);
+
 export default class ProjectHandler {
     static async submitProject(req: Request, res: Response, next: NextFunction) {
         try {
@@ -32,7 +37,10 @@ export default class ProjectHandler {
                 major_id: z.number(),
                 gallery: z.array(z.string()),
                 group_members: z.array(z.string()).optional(),
-                technology_ids: z.array(z.number()),
+                technology_ids: z.array(z.number()).refine(
+                    (ids) => new Set(ids).size === ids.length,
+                    "Duplicate technology IDs are not allowed"
+                ),
                 group: z.number()
             });
 
@@ -52,9 +60,9 @@ export default class ProjectHandler {
         try {
             const schema = z.object({
                 search: z.string().optional(),
-                categoryFilter: z.string().optional(),
-                majorFilter: z.string().optional(),
-                technologyFilter: z.string().optional(),
+                categoryFilter: positiveIntegerQuery.optional(),
+                majorFilter: positiveIntegerQuery.optional(),
+                technologyFilter: positiveIntegerQuery.optional(),
                 semester_id: z.string().optional()
             });
 
@@ -71,7 +79,7 @@ export default class ProjectHandler {
 
     static async getProject(req: Request, res: Response, next: NextFunction) {
         try {
-            const validationResult = validateSchema(z.object({ id: z.string() }), req.query);
+            const validationResult = validateSchema(z.object({ id: positiveIntegerQuery }), req.query);
             if (validationResult.error) {
                 return sendErrorResponse(res, validationResult.message);
             }
@@ -84,7 +92,7 @@ export default class ProjectHandler {
 
     static async toggleProjectDisabled(req: Request, res: Response, next: NextFunction) {
         try {
-            const validationResult = validateSchema(z.object({ project_id: z.string() }), req.query);
+            const validationResult = validateSchema(z.object({ project_id: positiveIntegerQuery }), req.query);
             if (validationResult.error) {
                 return sendErrorResponse(res, validationResult.message);
             }
@@ -159,8 +167,8 @@ export default class ProjectHandler {
         try {
             const schema = z.object({
                 search: z.string().optional(),
-                majorFilter: z.string().optional(),
-                categoryFilter: z.string().optional(),
+                majorFilter: positiveIntegerQuery.optional(),
+                categoryFilter: positiveIntegerQuery.optional(),
                 semester_id: z.string().optional()
             });
 
@@ -178,9 +186,9 @@ export default class ProjectHandler {
     static async getHopDashboard(req: Request, res: Response, next: NextFunction) {
         try {
             const schema = z.object({
-                major_id: z.string(),
+                major_id: positiveIntegerQuery,
                 semester_id: z.string(),
-                is_outstanding: z.string().optional(),
+                is_outstanding: binaryQuery.optional(),
                 search: z.string().optional()
             });
 
@@ -198,9 +206,9 @@ export default class ProjectHandler {
     static async getSccDashboard(req: Request, res: Response, next: NextFunction) {
         try {
             const schema = z.object({
-                major_id: z.string().optional(),
+                major_id: positiveIntegerQuery.optional(),
                 semester_id: z.string(),
-                is_recommended: z.string().optional(),
+                is_recommended: binaryQuery.optional(),
                 search: z.string().optional()
             });
 

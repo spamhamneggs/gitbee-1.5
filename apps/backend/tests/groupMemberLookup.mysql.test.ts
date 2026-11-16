@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import express from "express";
 import request from "supertest";
+import { errorHandler } from "../api/middlewares/errorMiddleware.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 process.env.DATABASE_URL = databaseUrl ?? "mysql://test:test@127.0.0.1:3306/test";
@@ -18,6 +19,7 @@ const app = express();
 app.use(express.json());
 app.use("/api/group", groupRoutes);
 app.use("/api/class", classRoutes);
+app.use(errorHandler);
 
 const suffix = randomBytes(5).toString("hex");
 const semesterId = `sem-${suffix}`;

@@ -5,6 +5,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import request from "supertest";
+import { errorHandler } from "../api/middlewares/errorMiddleware.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 process.env.DATABASE_URL = databaseUrl ?? "mysql://test:test@127.0.0.1:3306/test";
@@ -18,6 +19,7 @@ const app = express();
 app.use(express.json(), cookieParser());
 app.use("/api/project", projectRoutes);
 app.use("/api/group", groupRoutes);
+app.use(errorHandler);
 
 const suffix = randomBytes(6).toString("hex");
 const lecturerId = `D-${suffix}`;

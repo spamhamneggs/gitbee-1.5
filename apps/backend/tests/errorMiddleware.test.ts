@@ -7,6 +7,9 @@ import { z } from "zod";
 import { AppError, errorHandler, notFoundHandler } from "../api/middlewares/errorMiddleware.js";
 import type { NextFunction, Request, Response } from "express";
 
+process.env.DATABASE_URL ??= "mysql://test:test@127.0.0.1:3306/test";
+const { default: ProjectHandler } = await import("../api/handlers/project/projectHandler.js");
+
 const originalConsoleError = console.error;
 
 afterEach(() => {
@@ -15,8 +18,12 @@ afterEach(() => {
 
 function createApp() {
   const app = express();
-  app.use(express.json({ limit: "100b" }));
+  app.use(express.json({ limit: "10kb" }));
   app.get("/app-error", (_req, _res, next) => next(new AppError(403, "Access denied")));
+  app.get("/project-detail", ProjectHandler.getProject);
+  app.get("/project-explore", ProjectHandler.listExploreProjects);
+  app.get("/project-dashboard", ProjectHandler.getHopDashboard);
+  app.post("/project-submit", ProjectHandler.submitProject);
   app.get("/zod-error", (_req, _res, next) => {
     const result = z.object({ name: z.string() }).safeParse({});
     if (!result.success) next(result.error);
@@ -59,6 +66,47 @@ describe("central error middleware", () => {
 
     assert.equal(response.status, 403);
     assert.equal(response.body.errors, "Access denied");
+  });
+
+  it("rejects invalid project IDs and numeric filters before reaching Prisma", async () => {
+    const app = createApp();
+    const invalidId = await request(app).get("/project-detail?id=abc");
+    const unsafeId = await request(app).get("/project-detail?id=9007199254740992");
+    const invalidFilter = await request(app).get("/project-explore?categoryFilter=abc");
+    const invalidDashboardFlag = await request(app)
+      .get("/project-dashboard?major_id=1&semester_id=test&is_outstanding=2");
+
+    for (const response of [invalidId, unsafeId, invalidFilter, invalidDashboardFlag]) {
+      assert.equal(response.status, 400);
+      assert.equal(response.body.status, false);
+      assert.ok(response.body.errors);
+    }
+  });
+
+  it("rejects duplicate technology IDs as invalid project input", async () => {
+    const response = await request(createApp()).post("/project-submit").send({
+      lecturer_id: "D1",
+      student_leader_id: "S1",
+      title: "Test",
+      semester_id: "semester",
+      course_id: "course",
+      class: "class",
+      github_link: "https://github.com/example/repo",
+      project_link: "https://example.com",
+      documentation: "https://example.com/doc",
+      video_link: "https://example.com/video",
+      thumbnail: "https://example.com/image",
+      description: "Test project",
+      status_id: 1,
+      category_id: 1,
+      major_id: 1,
+      gallery: [],
+      technology_ids: [1, 1],
+      group: 1,
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.status, false);
   });
 
   it("returns field-level Zod validation issues", async () => {
@@ -120,10 +168,40 @@ describe("central error middleware", () => {
     assert.equal(response.body.errors, "Invalid JSON payload");
   });
 
+  it("maps unsupported JSON charsets and encodings to sanitized 415 responses", async () => {
+    const unsupportedCharset = await request(createApp())
+      .post("/unexpected-error")
+      .set("Content-Type", "application/json; charset=iso-8859-1")
+      .send("{}");
+    const unsupportedEncoding = await request(createApp())
+      .post("/unexpected-error")
+      .set("Content-Type", "application/json")
+      .set("Content-Encoding", "compress")
+      .send("{}");
+
+    for (const response of [unsupportedCharset, unsupportedEncoding]) {
+      assert.equal(response.status, 415);
+      assert.equal(response.body.errors, "Unsupported request encoding");
+    }
+  });
+
+  it("maps invalid compressed JSON to a sanitized 400", async () => {
+    console.error = () => {};
+    const response = await request(createApp())
+      .post("/unexpected-error")
+      .set("Content-Type", "application/json")
+      .set("Content-Encoding", "gzip")
+      .send("not gzip");
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.status, false);
+    assert.equal(response.body.errors, "Invalid request body");
+  });
+
   it("returns oversized JSON bodies as a sanitized 413", async () => {
     const response = await request(createApp())
       .post("/unexpected-error")
-      .send({ value: "x".repeat(200) });
+      .send({ value: "x".repeat(20_000) });
 
     assert.equal(response.status, 413);
     assert.equal(response.body.errors, "Request payload is too large");
