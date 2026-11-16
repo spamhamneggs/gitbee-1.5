@@ -27,6 +27,9 @@ describe("API route table", () => {
       "POST /auth/login-dev",
       "POST /auth/login-local",
       "POST /auth/login-local/role",
+      "GET /auth/session",
+      "POST /auth/session/role",
+      "POST /auth/logout",
 
       "GET /category/all",
       "POST /category/admin/insert",

@@ -62,12 +62,12 @@ describe("local RoleMiddleware access", () => {
     assert.equal((await request(app).get("/Admin").set("Cookie", cookieFor(valid))).status, 401);
   });
 
-  it("uses current database membership and credential version rather than stale claims", async () => {
+  it("rejects sessions with stale membership or credential versions", async () => {
     const oldToken = createLocalToken(account).token;
     user = { ...account, role: "Student", user_type: "student" };
-    assert.equal((await request(app).get("/Admin").set("Cookie", cookieFor(oldToken))).status, 403);
-    assert.equal((await request(app).get("/Lecturer").set("Cookie", cookieFor(oldToken))).status, 403);
-    assert.equal((await request(app).get("/Student").set("Cookie", cookieFor(oldToken))).status, 200);
+    assert.equal((await request(app).get("/Admin").set("Cookie", cookieFor(oldToken))).status, 401);
+    assert.equal((await request(app).get("/Lecturer").set("Cookie", cookieFor(oldToken))).status, 401);
+    assert.equal((await request(app).get("/Student").set("Cookie", cookieFor(oldToken))).status, 401);
     user.credential_version += 1;
     assert.equal((await request(app).get("/session").set("Cookie", cookieFor(oldToken))).status, 401);
     assert.equal((await request(app).get("/Student").set("Cookie", cookieFor(oldToken))).status, 401);

@@ -56,7 +56,7 @@ const victimAdmin = {
 };
 const adminToken = createLocalToken(adminAccount).token;
 const microsoftAdminToken = createToken(
-  "D5000", "B5000", "Admin", "admin@example.com", ["Admin"], "microsoft-token",
+  "D5000", "B5000", "Admin", "admin@example.com", ["Admin", "Lecturer"], "microsoft-token",
   "", "Admin", adminAccount.id, adminAccount.credential_version
 ).token;
 const lecturerToken = createLocalToken(lecturerAccount).token;
@@ -495,9 +495,9 @@ describe("admin local credentials", () => {
         password: "initial-password",
       });
 
-    assert.equal(reset.status, 403);
-    assert.equal(roleChange.status, 403);
-    assert.equal(create.status, 403);
+    assert.equal(reset.status, 401);
+    assert.equal(roleChange.status, 401);
+    assert.equal(create.status, 401);
     assert.equal(writes, 0);
   });
 

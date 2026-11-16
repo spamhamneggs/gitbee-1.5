@@ -8,22 +8,23 @@ import { useAuth } from "@/app/context/AuthContext";
 import { dashboardPathForRole, SSO_BYPASS_ENABLED } from "@/lib/auth";
 
 const Page = () => {
-  const { session, setSession } = useAuth();
+  const { session, setSession, loading } = useAuth();
   const { instance, inProgress, accounts } = useMsal();
   const router = useRouter();
-  // proxy.tsx also sends signed-in users here when their role doesn't match,
-  // so only use the dev account when there's no session to replace. The
-  // effect re-runs as MSAL's state changes; the bypass must only fire once.
-  const bypassRef = useRef<"skip" | "ready" | "started">(
-    SSO_BYPASS_ENABLED && !session ? "ready" : "skip"
-  );
+  const bypassStartedRef = useRef(false);
   const [bypassError, setBypassError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleRedirect = async () => {
-      if (bypassRef.current !== "skip") {
-        if (bypassRef.current === "started") return;
-        bypassRef.current = "started";
+      if (loading) return;
+      // A role mismatch can send an already signed-in user here.
+      if (session) {
+        router.push(dashboardPathForRole(session.activeRole) ?? "/");
+        return;
+      }
+      if (SSO_BYPASS_ENABLED) {
+        if (bypassStartedRef.current) return;
+        bypassStartedRef.current = true;
         const result = await loginDevBypass();
         if (result.success) {
           setSession(result.data);
@@ -67,7 +68,7 @@ const Page = () => {
     };
 
     handleRedirect();
-  }, [instance, accounts, inProgress, router, setSession]);
+  }, [instance, accounts, inProgress, router, setSession, session, loading]);
 
   if (bypassError) {
     return (

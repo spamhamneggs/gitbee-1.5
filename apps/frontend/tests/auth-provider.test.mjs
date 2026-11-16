@@ -10,6 +10,7 @@ const { outputText } = ts.transpileModule(source, {
 });
 
 // Run the provider's real effect and render output with controlled requests.
+/* eslint-disable @eslint-react/no-unnecessary-use-prefix -- These hooks are deterministic test doubles. */
 function providerHarness(getSession) {
   const state = [];
   const setters = [];
@@ -17,6 +18,7 @@ function providerHarness(getSession) {
   let effect;
   let dependencies;
   let cleanup;
+  let context;
   function nextState(initial) {
     const index = cursor++;
     if (!(index in state)) {
@@ -41,7 +43,8 @@ function providerHarness(getSession) {
   }
   const react = {
     createContext: () => ({}),
-    use() {},
+    use: () => context,
+    useRef: (initial) => nextState({ current: initial })[0],
     useState: nextState,
     useCallback: memoizeCallback,
     useEffect: registerEffect,
@@ -61,6 +64,7 @@ function providerHarness(getSession) {
     render() {
       cursor = 0;
       const tree = exports.AuthProvider({ children: "application" });
+      context = tree.props.value;
       if (effect) {
         cleanup?.();
         cleanup = effect();
@@ -68,9 +72,11 @@ function providerHarness(getSession) {
       }
       return tree;
     },
+    protectedContent() { return exports.SessionContent({ children: "private" }); },
     unmount() { cleanup?.(); },
   };
 }
+/* eslint-enable @eslint-react/no-unnecessary-use-prefix */
 
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements);
@@ -82,13 +88,15 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 test("failed bootstrap keeps public content available and can retry session restoration", async () => {
   const calls = [];
   const harness = providerHarness((signal) => new Promise((resolve, reject) => calls.push({ signal, resolve, reject })));
-  assert.ok(elements(harness.render()).some((node) => node.props.role === "status"));
+  const pending = harness.render();
+  assert.equal(pending.props.value.loading, true);
+  assert.ok(pending.props.children.includes("application"));
   calls[0].reject(new DOMException("Timed out", "TimeoutError"));
   await settle();
   const failed = harness.render();
   assert.equal(failed.props.value.loading, false);
   assert.ok(elements(failed).some((node) => node.props.role === "alert"));
-  assert.ok(failed.props.children.props.children.includes("application"));
+  assert.ok(failed.props.children.includes("application"));
   const retry = elements(failed).find((node) => node.type === "button");
   retry.props.onClick();
   harness.render();
@@ -137,11 +145,37 @@ test("successful sign-in clears a bootstrap error and keeps the session setter s
   assert.equal(authenticated.props.value.setSession, setSession);
   assert.ok(!elements(authenticated).some((node) => node.props.role === "alert"));
   assert.ok(!elements(authenticated).some((node) => node.props.role === "status"));
-  assert.ok(authenticated.props.children.props.children.includes("application"));
+  assert.ok(authenticated.props.children.includes("application"));
 
   setSession(null);
   const signedOut = harness.render();
   assert.equal(signedOut.props.value.session, null);
   assert.equal(signedOut.props.value.setSession, setSession);
   harness.unmount();
+});
+
+
+test("installing or clearing a session cancels pending bootstrap and ignores its late result", async () => {
+  for (const session of [{ nim: "signed-in", activeRole: "Admin", authMethod: "local" }, null]) {
+    let finish;
+    let signal;
+    const harness = providerHarness((requestSignal) => {
+      signal = requestSignal;
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    const initial = harness.render();
+    assert.ok(elements(harness.protectedContent()).some((node) => node.props.role === "status"));
+    initial.props.value.setSession(session);
+    const installed = harness.render();
+    assert.equal(signal.aborted, true);
+    assert.equal(installed.props.value.session, session);
+    assert.equal(installed.props.value.loading, false);
+    const protectedContent = harness.protectedContent();
+    if (session) assert.equal(protectedContent, "private");
+    else assert.ok(elements(protectedContent).some((node) => node.type === "a" && node.props.href === "/login/microsoft"));
+    finish({ nim: "old-bootstrap", activeRole: "Student" });
+    await settle();
+    assert.equal(harness.render().props.value.session, session);
+    harness.unmount();
+  }
 });

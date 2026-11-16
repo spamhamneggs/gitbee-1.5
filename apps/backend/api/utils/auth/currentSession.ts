@@ -1,6 +1,7 @@
 import { prisma } from "../../prisma/client.js";
+import { getLocalNim, getLocalRoles } from "./auth.js";
 
-export type SessionUser = {
+type SessionUser = {
   id: number;
   email: string;
   role: string;
@@ -69,6 +70,22 @@ export async function resolveCurrentSession(payload: unknown): Promise<CurrentSe
     tokenVersion < 0 ||
     user.credential_version !== tokenVersion
   ) {
+    return { status: "invalid" };
+  }
+
+  const roles = getLocalRoles(user);
+  const tokenRoles = "role" in payload ? payload.role : undefined;
+  const authMethod = "authMethod" in payload ? payload.authMethod : undefined;
+  const isSso = authMethod === "sso" ||
+    (authMethod === undefined && "microsoftToken" in payload && Boolean(payload.microsoftToken));
+  // Only SSO bound to this database ID can keep an upstream email alias.
+  const allowsEmailAlias = isSso && hasUserId;
+  if (!("nim" in payload) || payload.nim !== getLocalNim(user) ||
+    (!allowsEmailAlias && email !== user.email.toLowerCase()) ||
+    !Array.isArray(tokenRoles) || roles.length === 0 ||
+    roles.length !== tokenRoles.length || roles.some((role) => !tokenRoles.includes(role)) ||
+    ("activeRole" in payload && payload.activeRole !== undefined &&
+      (typeof payload.activeRole !== "string" || !roles.includes(payload.activeRole)))) {
     return { status: "invalid" };
   }
 

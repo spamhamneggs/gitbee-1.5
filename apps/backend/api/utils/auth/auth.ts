@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv"
-import { getErrorMessage } from "../response/response.js"
+import type { Request, Response } from "express"
+import { getErrorMessage, sendErrorResponse } from "../response/response.js"
 dotenv.config()
 const secret = process.env.JWT_SECRET
 if (!secret) {
@@ -129,6 +130,14 @@ export const verifyToken = (token: string) : {
         }
     }
 }
+
+export const rejectSession = (req: Request, res: Response) => {
+    const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
+    if (req.cookies?.[cookieName] !== undefined) {
+        res.clearCookie(cookieName, { path: "/" });
+    }
+    return sendErrorResponse(res, "Unauthorized", 401);
+};
 
 // Only use claims from a verified session. Choosing a role keeps its original expiry.
 export const createRoleToken = (

@@ -5,18 +5,27 @@ type LoginResult =
   | { success: false; message: string };
 
 export const getSession = async (signal?: AbortSignal): Promise<Session | null> => {
-  const deadline = AbortSignal.timeout(10_000);
-  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}auth/session`, {
-    credentials: "include",
-    cache: "no-store",
-    signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
-  });
-  if (response.status === 401) return null;
-  const result = await response.json() as { status?: boolean; data?: Session; errors?: string };
-  if (!response.ok || !result.status || !result.data) {
-    throw new Error(result.errors ?? "Couldn't load the session.");
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  const timeout = setTimeout(() => controller.abort(new DOMException("Session request timed out", "TimeoutError")), 10_000);
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}auth/session`, {
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (response.status === 401) return null;
+    const result = await response.json() as { status?: boolean; data?: Session; errors?: string };
+    if (!response.ok || !result.status || !result.data) {
+      throw new Error(result.errors ?? "Couldn't load the session.");
+    }
+    return result.data;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
   }
-  return result.data;
 };
 
 // The session comes from the response that sets the cookie, so a second request
@@ -112,9 +121,16 @@ export const loginDevBypass = async (): Promise<LoginResult> => {
 };
 
 export const logout = async (): Promise<void> => {
-  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}auth/logout`, {
-    method: "POST",
-    credentials: "include",
-  });
-  if (!response.ok) throw new Error("Couldn't sign out. Please try again.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API}auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error("Couldn't sign out. Please try again.");
+  } finally {
+    clearTimeout(timeout);
+  }
 };

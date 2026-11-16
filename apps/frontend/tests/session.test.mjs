@@ -78,18 +78,44 @@ test("legacy-only login responses cannot replace the canonical session", async (
   assert.equal((await switchRole("Lecturer")).success, false);
 });
 
-test("session bootstrap has a deadline even if the backend never responds", async (t) => {
-  const deadline = new AbortController();
-  t.mock.method(AbortSignal, "timeout", (milliseconds) => {
-    assert.equal(milliseconds, 10_000);
-    return deadline.signal;
+test("session bootstrap works without AbortSignal.any or timeout and cleans up cancellation", async (t) => {
+  const any = AbortSignal.any;
+  const timeout = AbortSignal.timeout;
+  AbortSignal.any = undefined;
+  AbortSignal.timeout = undefined;
+  t.after(() => { AbortSignal.any = any; AbortSignal.timeout = timeout; });
+  const controller = new AbortController();
+  const remove = t.mock.method(controller.signal, "removeEventListener");
+  t.mock.method(globalThis, "fetch", async (_url, { signal }) => {
+    assert.equal(signal.aborted, false);
+    return Response.json({ status: true, data: session });
   });
+  assert.deepEqual(await getSession(controller.signal), session);
+  assert.equal(remove.mock.callCount(), 1);
+  controller.abort();
+  t.mock.method(globalThis, "fetch", async (_url, { signal }) => {
+    assert.equal(signal.aborted, true);
+    throw signal.reason;
+  });
+  await assert.rejects(getSession(controller.signal), { name: "AbortError" });
+});
+
+test("session bootstrap has a ten-second deadline and clears its timer", async (t) => {
+  let expire;
+  const timer = t.mock.method(globalThis, "setTimeout", (callback, milliseconds) => {
+    assert.equal(milliseconds, 10_000);
+    expire = callback;
+    return 42;
+  });
+  const clear = t.mock.method(globalThis, "clearTimeout", (handle) => assert.equal(handle, 42));
   t.mock.method(globalThis, "fetch", (_url, { signal }) => new Promise((_resolve, reject) => {
     signal.addEventListener("abort", () => reject(signal.reason), { once: true });
   }));
   const pending = assert.rejects(getSession(), { name: "TimeoutError" });
-  deadline.abort(new DOMException("Timed out", "TimeoutError"));
+  expire();
   await pending;
+  assert.equal(timer.mock.callCount(), 1);
+  assert.equal(clear.mock.callCount(), 1);
 });
 
 test("logout asks the backend to clear its cookie and reports failure", async (t) => {
@@ -103,4 +129,22 @@ test("logout asks the backend to clear its cookie and reports failure", async (t
   await logout();
   status = 500;
   await assert.rejects(logout(), /Couldn't sign out/);
+});
+
+
+test("logout times out a stalled backend request and clears its timer", async (t) => {
+  let expire;
+  t.mock.method(globalThis, "setTimeout", (callback, milliseconds) => {
+    assert.equal(milliseconds, 10_000);
+    expire = callback;
+    return 42;
+  });
+  const clear = t.mock.method(globalThis, "clearTimeout", (handle) => assert.equal(handle, 42));
+  t.mock.method(globalThis, "fetch", (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  }));
+  const pending = assert.rejects(logout(), { name: "AbortError" });
+  expire();
+  await pending;
+  assert.equal(clear.mock.callCount(), 1);
 });

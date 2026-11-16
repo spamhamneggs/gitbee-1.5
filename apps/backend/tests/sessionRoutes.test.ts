@@ -10,6 +10,9 @@ process.env.DATABASE_URL = "mysql://test:test@127.0.0.1:3306/test";
 process.env.COOKIE_NAME = "session_route_test";
 const { prisma } = await import("../api/prisma/client.js");
 const { default: authRoutes } = await import("../api/routes/auth/authRoutes.js");
+const { AuthMiddleware } = await import("../api/middlewares/authMiddleware.js");
+const { RoleMiddleware } = await import("../api/middlewares/roleMiddleware.js");
+const { currentAdminMiddleware } = await import("../api/middlewares/currentAdminMiddleware.js");
 const { createLocalToken, createToken } = await import("../api/utils/auth/auth.js");
 
 const account = {
@@ -21,6 +24,10 @@ let user: typeof account | null;
 const app = express();
 app.use(express.json(), cookieParser());
 app.use("/auth", authRoutes);
+app.get("/protected/auth", AuthMiddleware(), (_req, res) => res.sendStatus(200));
+app.get("/protected/role", RoleMiddleware("Lecturer"), (_req, res) => res.sendStatus(200));
+app.get("/protected/admin", currentAdminMiddleware, (_req, res) => res.sendStatus(200));
+app.get("/cookie", (req, res) => res.json(req.cookies.session_route_test ?? null));
 const originalFindUnique = prisma.user.findUnique;
 beforeEach(() => {
   user = { ...account };
@@ -31,8 +38,113 @@ after(async () => prisma.$disconnect());
 const cookieFor = (token: string) => `session_route_test=${token}`;
 const claims = (token: string) => jwt.verify(token, process.env.JWT_SECRET!) as jwt.JwtPayload;
 const sign = (payload: jwt.JwtPayload) => jwt.sign(payload, process.env.JWT_SECRET!);
+const assertExpiredCookie = (response: request.Response) => {
+  assert.match(response.headers["set-cookie"]?.[0] ?? "", /^session_route_test=; Path=\/; Expires=Thu, 01 Jan 1970/);
+};
 
 describe("backend session identity", () => {
+
+  it("round-trips every issued SSO session across role and user-type variants", async (t) => {
+    const { default: AtlantisService } = await import("../api/services/atlantis/atlantisService.js");
+    const originalFirst = prisma.user.findFirst;
+    prisma.user.findFirst = (async () => user) as typeof originalFirst;
+    t.after(() => { prisma.user.findFirst = originalFirst; });
+    t.mock.method(AtlantisService, "getAtlantisData", async () => ({ status: true, data: { NIM: "2702000001" } }));
+    const microsoft_token = jwt.sign({ preferred_username: account.email, name: "Staff" }, "upstream-test-secret");
+    for (const [role, user_type, expectedRoles] of [
+      ["Lecturer", "lecturer", []], ["Lecturer", "Student", ["Student"]],
+      ["admin", "staff", []], ["HOP", "staff", []],
+      ["Lecturer", " STAFF ", ["Lecturer"]], ["Admin", null, ["Admin", "Lecturer"]],
+      ["Admin", " student ", ["Student"]], ["Student", "unknown", ["Student"]],
+      ["SCC", "staff", ["SCC", "Lecturer"]], ["HoP", "staff", ["HoP", "Lecturer"]],
+    ] as const) {
+      user = { ...account, role, user_type, student_id: "2702000001" };
+      const login = await request(app).post("/auth/login").send({ microsoft_token });
+      assert.equal(login.status, expectedRoles.length ? 200 : 403, `${role}/${user_type}`);
+      if (!expectedRoles.length) {
+        assert.equal(login.headers["set-cookie"], undefined);
+        continue;
+      }
+      assert.deepEqual(login.body.data.session.roles, expectedRoles);
+      assert.equal(login.body.data.session.nim, expectedRoles.some((role) => role === "Student") ? user.student_id : user.lecturer_code);
+      let cookie = login.headers["set-cookie"]![0]!.split(";")[0]!;
+      const restored = await request(app).get("/auth/session").set("Cookie", cookie);
+      assert.equal(restored.status, 200);
+      assert.deepEqual(restored.body.data, login.body.data.session);
+      for (const role of expectedRoles) {
+        const switched = await request(app).post("/auth/session/role").set("Cookie", cookie).send({ role });
+        assert.equal(switched.status, 200);
+        cookie = switched.headers["set-cookie"]![0]!.split(";")[0]!;
+        const restored = await request(app).get("/auth/session").set("Cookie", cookie);
+        assert.equal(restored.status, 200);
+        assert.deepEqual(restored.body.data, switched.body.data.session);
+      }
+      const forbidden = await request(app).post("/auth/login").send({ microsoft_token, role: "unassigned" });
+      assert.equal(forbidden.status, 403);
+      assert.equal(forbidden.headers["set-cookie"], undefined);
+    }
+    user = null;
+    const login = await request(app).post("/auth/login").send({ microsoft_token });
+    assert.equal(login.status, 200);
+    const restored = await request(app).get("/auth/session").set("Cookie", login.headers["set-cookie"]![0]!.split(";")[0]!);
+    assert.equal(restored.status, 200);
+    assert.equal(restored.body.data.nim, "2702000001");
+    assert.deepEqual(restored.body.data, login.body.data.session);
+  });
+
+  it("rejects stale identity and membership consistently in every session guard", async () => {
+    const cookie = cookieFor(createLocalToken(account).token);
+    for (const changed of [
+      { ...account, email: "changed@example.com" },
+      { ...account, lecturer_code: "D5002" },
+      { ...account, role: "Lecturer" },
+    ]) {
+      user = changed;
+      for (const path of ["/auth/session", "/protected/auth", "/protected/role", "/protected/admin"]) {
+        assert.equal((await request(app).get(path).set("Cookie", cookie)).status, 401, path);
+      }
+      const response = await request(app).post("/auth/change-password").set("Cookie", cookie)
+        .send({ currentPassword: "old-password", newPassword: "new-password" });
+      assert.equal(response.status, 401);
+    }
+  });
+
+  it("expires rejected cookies before the next navigation, including httpOnly cookies", async () => {
+    const valid = createLocalToken(account).token;
+    const payload = claims(valid);
+    const agent = request.agent(app);
+    for (const [token, currentUser] of [
+      ["malformed", account],
+      [sign({ ...payload, exp: 1 }), account],
+      [sign({ ...payload, name: null }), account],
+      [valid, { ...account, credential_version: 1 }],
+      [valid, { ...account, role: "Lecturer" }],
+      [valid, null],
+    ] as const) {
+      user = currentUser;
+      agent.jar.setCookie(`${cookieFor(token)}; Path=/; HttpOnly`);
+      const response = await agent.get("/auth/session");
+      assert.equal(response.status, 401);
+      assertExpiredCookie(response);
+      assert.equal((await agent.get("/cookie")).body, null);
+    }
+    const anonymous = await request(app).get("/auth/session");
+    assert.equal(anonymous.status, 401);
+    assert.equal(anonymous.headers["set-cookie"], undefined);
+  });
+
+  it("keeps the original expiry on both role-switch endpoints", async () => {
+    const payload = { ...claims(createLocalToken(account).token), exp: Math.floor(Date.now() / 1000) + 60 };
+    for (const path of ["/auth/session/role", "/auth/login-local/role"]) {
+      const response = await request(app).post(path).set("Cookie", cookieFor(sign(payload))).send({ role: "Lecturer" });
+      assert.equal(response.status, 200);
+      const cookie = response.headers["set-cookie"]![0]!;
+      assert.equal(claims(cookie.split(";")[0]!.split("=")[1]!).exp, payload.exp);
+      assert.ok(cookie.includes(`Expires=${new Date(payload.exp * 1000).toUTCString()}`));
+      assert.equal(response.body.data.session.activeRole, "Lecturer");
+    }
+  });
+
   it("returns one token-free shape for local and SSO logins", async () => {
     const tokens = [
       [createLocalToken(account).token, "local"],
@@ -54,14 +166,14 @@ describe("backend session identity", () => {
   it("restores and switches SSO accounts matched by lecturer code when the local email is an alias", async (t) => {
     const principal = "staff-principal@example.com";
     user = { ...account, email: "staff-alias@example.com" };
-    const { default: GenericService } = await import("../api/services/generic/genericService.js");
+    const { default: AtlantisService } = await import("../api/services/atlantis/atlantisService.js");
     const originalFirst = prisma.user.findFirst;
     prisma.user.findFirst = (async ({ where }: { where: { OR: unknown[] } }) => {
       assert.ok(where.OR.some((identity) => JSON.stringify(identity) === JSON.stringify({ lecturer_code: account.lecturer_code })));
       return user;
     }) as typeof originalFirst;
     t.after(() => { prisma.user.findFirst = originalFirst; });
-    t.mock.method(GenericService, "getAtlantisData", async () => ({ status: true, data: { KodeDosen: account.lecturer_code } }));
+    t.mock.method(AtlantisService, "getAtlantisData", async () => ({ status: true, data: { KodeDosen: account.lecturer_code } }));
     const login = await request(app).post("/auth/login").send({
       microsoft_token: jwt.sign({ preferred_username: principal, name: "Staff" }, "upstream-test-secret"),
     });
@@ -101,7 +213,7 @@ describe("backend session identity", () => {
       assert.equal((await request(app).get("/auth/session").set("Cookie", cookie)).status, 401);
       const switched = await request(app).post("/auth/session/role").set("Cookie", cookie).send({ role: "Admin" });
       assert.equal(switched.status, 401);
-      assert.equal(switched.headers["set-cookie"], undefined);
+      assertExpiredCookie(switched);
     }
   });
 
@@ -118,7 +230,7 @@ describe("backend session identity", () => {
       assert.equal((await request(app).get("/auth/session").set("Cookie", cookie)).status, 401);
       const switched = await request(app).post("/auth/session/role").set("Cookie", cookie).send({ role: "Lecturer" });
       assert.equal(switched.status, 401);
-      assert.equal(switched.headers["set-cookie"], undefined);
+      assertExpiredCookie(switched);
     }
   });
 
@@ -209,7 +321,7 @@ describe("backend session identity", () => {
   });
 
   it("includes the cookie's canonical session in each login response while keeping legacy fields", async (t) => {
-    const { default: GenericService } = await import("../api/services/generic/genericService.js");
+    const { default: AtlantisService } = await import("../api/services/atlantis/atlantisService.js");
     const { hashPassword } = await import("../api/utils/auth/password.js");
     const originalRaw = prisma.$queryRaw;
     const originalFirst = prisma.user.findFirst;
@@ -222,7 +334,7 @@ describe("backend session identity", () => {
       prisma.user.findFirst = originalFirst;
       prisma.user.upsert = originalUpsert;
     });
-    t.mock.method(GenericService, "getAtlantisData", async () => ({ status: true, data: { KodeDosen: "D5001" } }));
+    t.mock.method(AtlantisService, "getAtlantisData", async () => ({ status: true, data: { KodeDosen: "D5001" } }));
     const bypass = process.env.BYPASS_SSO;
     const nodeEnv = process.env.NODE_ENV;
     process.env.BYPASS_SSO = "true";

@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { resolveCurrentSession } from "../utils/auth/currentSession.js";
-import { verifyToken } from "../utils/auth/auth.js";
-import { sendErrorResponse } from "../utils/response/response.js";
+import { rejectSession, verifyToken } from "../utils/auth/auth.js";
 
 export const AuthMiddleware = () => {
     return async (req: Request, res: Response, next: NextFunction) => {
@@ -12,21 +11,20 @@ export const AuthMiddleware = () => {
         const token = cookieToken || bearerToken;
 
         if (!token) {
-            return sendErrorResponse(res, "Unauthorized", 401);
+            return rejectSession(req, res);
         }
           
         const verify = verifyToken(token);
         if (!verify.status || !verify.data) {
-            return sendErrorResponse(res, "Forbidden", 401);
+            return rejectSession(req, res);
         }
 
         try {
             const currentSession = await resolveCurrentSession(verify.data);
             if (currentSession.status === "invalid") {
-                return sendErrorResponse(res, "Unauthorized", 401);
+                return rejectSession(req, res);
             }
             res.locals.authPayload = verify.data;
-            res.locals.authUser = currentSession.status === "current" ? currentSession.user : undefined;
             next();
         } catch (error) {
             next(error);
