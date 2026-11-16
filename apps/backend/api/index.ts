@@ -5,6 +5,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import qs from "qs";
 import { DEV_BYPASS_USER, isSsoBypassEnabled } from "./utils/auth/devBypass.js";
+import { errorHandler, notFoundHandler } from "./middlewares/errorMiddleware.js";
 dotenv.config();
 
 if (process.env.NODE_ENV === "development") {
@@ -35,6 +36,8 @@ app.set('query parser', function (str: string) {
 })
 
 app.use("/api", routes)
+app.use("/api", notFoundHandler);
+app.use(errorHandler);
 
 app.listen(port, () => {
   console.log(`Application is running on port ${port}.`);

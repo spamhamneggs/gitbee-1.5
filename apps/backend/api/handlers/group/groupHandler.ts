@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import validateSchema from "../../utils/validator/validateSchema.js";
-import { sendErrorResponse, sendServiceError, sendSuccessResponse } from "../../utils/response/response.js";
+import { sendErrorResponse, sendSuccessResponse } from "../../utils/response/response.js";
 import GroupService from "../../services/group/groupService.js";
 
 const classQuery = {
@@ -11,7 +11,7 @@ const classQuery = {
 };
 
 export default class GroupHandler {
-    static async createGroup(req: Request, res: Response) {
+    static async createGroup(req: Request, res: Response, next: NextFunction) {
         try {
             const schema = z.object({
                 ...classQuery,
@@ -27,11 +27,11 @@ export default class GroupHandler {
             const studentIds = Array.isArray(student_ids) ? student_ids : [student_ids];
             sendSuccessResponse(res, await GroupService.createGroup(classRef, studentIds));
         } catch (error) {
-            sendServiceError(res, error, "Insert Failed");
+            next(error);
         }
     }
 
-    static async getStudentGroup(req: Request, res: Response) {
+    static async getStudentGroup(req: Request, res: Response, next: NextFunction) {
         try {
             const validationResult = validateSchema(z.object({ ...classQuery, student_id: z.string() }), req.query);
             if (validationResult.error) {
@@ -41,11 +41,11 @@ export default class GroupHandler {
             const { student_id, ...classRef } = validationResult.data;
             sendSuccessResponse(res, await GroupService.getStudentGroup(classRef, student_id));
         } catch (error) {
-            sendServiceError(res, error, "Fetch Failed");
+            next(error);
         }
     }
 
-    static async deleteGroup(req: Request, res: Response) {
+    static async deleteGroup(req: Request, res: Response, next: NextFunction) {
         try {
             const validationResult = validateSchema(z.object({ ...classQuery, group: z.number() }), req.body);
             if (validationResult.error) {
@@ -55,7 +55,7 @@ export default class GroupHandler {
             const { group, ...classRef } = validationResult.data;
             sendSuccessResponse(res, await GroupService.deleteGroup(classRef, group));
         } catch (error) {
-            sendServiceError(res, error, "Delete Failed");
+            next(error);
         }
     }
 }
