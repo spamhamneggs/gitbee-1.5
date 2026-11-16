@@ -8,12 +8,24 @@ import { AppError, errorHandler, notFoundHandler } from "../api/middlewares/erro
 import type { NextFunction, Request, Response } from "express";
 
 process.env.DATABASE_URL ??= "mysql://test:test@127.0.0.1:3306/test";
-const { default: ProjectHandler } = await import("../api/handlers/project/projectHandler.js");
+const [{ default: ProjectHandler }, { default: ProjectService }, { default: ProjectDashboardService }] = await Promise.all([
+  import("../api/handlers/project/projectHandler.js"),
+  import("../api/services/project/projectService.js"),
+  import("../api/services/project/projectDashboardService.js"),
+]);
 
 const originalConsoleError = console.error;
+const restores: (() => void)[] = [];
+
+function stubMethod<T extends object, K extends keyof T>(target: T, key: K, value: T[K]) {
+  const original = target[key];
+  target[key] = value;
+  restores.push(() => { target[key] = original; });
+}
 
 afterEach(() => {
   console.error = originalConsoleError;
+  for (const restore of restores.splice(0).reverse()) restore();
 });
 
 function createApp() {
@@ -23,6 +35,8 @@ function createApp() {
   app.get("/project-detail", ProjectHandler.getProject);
   app.get("/project-explore", ProjectHandler.listExploreProjects);
   app.get("/project-dashboard", ProjectHandler.getHopDashboard);
+  app.get("/admin-dashboard", ProjectHandler.getAdminDashboard);
+  app.get("/scc-dashboard", ProjectHandler.getSccDashboard);
   app.post("/project-submit", ProjectHandler.submitProject);
   app.get("/zod-error", (_req, _res, next) => {
     const result = z.object({ name: z.string() }).safeParse({});
@@ -73,14 +87,71 @@ describe("central error middleware", () => {
     const invalidId = await request(app).get("/project-detail?id=abc");
     const unsafeId = await request(app).get("/project-detail?id=9007199254740992");
     const invalidFilter = await request(app).get("/project-explore?categoryFilter=abc");
+    const invalidSccMajor = await request(app).get("/scc-dashboard?major_id=abc&semester_id=test");
     const invalidDashboardFlag = await request(app)
       .get("/project-dashboard?major_id=1&semester_id=test&is_outstanding=2");
 
-    for (const response of [invalidId, unsafeId, invalidFilter, invalidDashboardFlag]) {
+    for (const response of [invalidId, unsafeId, invalidFilter, invalidSccMajor, invalidDashboardFlag]) {
       assert.equal(response.status, 400);
       assert.equal(response.body.status, false);
       assert.ok(response.body.errors);
     }
+  });
+
+  it("accepts default and partially selected Explore, Admin, and SCC filters", async () => {
+    const exploreCalls: unknown[] = [];
+    const adminCalls: unknown[] = [];
+    const sccCalls: unknown[] = [];
+    stubMethod(ProjectService, "listExploreProjects", async (params) => {
+      exploreCalls.push(params);
+      return [];
+    });
+    stubMethod(ProjectDashboardService, "getAdminDashboard", async (params) => {
+      adminCalls.push(params);
+      return {
+        "count submitted": 0,
+        "count graded": 0,
+        "count reviewed": 0,
+        "count outstanding": 0,
+        submitted: [],
+        graded: [],
+        reviewed: [],
+        outstanding: [],
+      };
+    });
+    stubMethod(ProjectDashboardService, "getSccDashboard", async (params) => {
+      sccCalls.push(params);
+      return {
+        "count reviewed": 0,
+        "count not reviewed": 0,
+        reviewed: [],
+        "not reviewed": [],
+      };
+    });
+
+    const app = createApp();
+    const exploreDefault = await request(app)
+      .get("/project-explore?search=&categoryFilter=&majorFilter=&technologyFilter=");
+    const exploreOneFilter = await request(app)
+      .get("/project-explore?search=&categoryFilter=2&majorFilter=&technologyFilter=");
+    const adminDefault = await request(app)
+      .get("/admin-dashboard?search=&categoryFilter=&majorFilter=&semester_id=");
+    const adminOneFilter = await request(app)
+      .get("/admin-dashboard?search=&categoryFilter=2&majorFilter=&semester_id=");
+    const sccDefault = await request(app)
+      .get("/scc-dashboard?search=&major_id=&semester_id=semester-1");
+
+    for (const response of [exploreDefault, exploreOneFilter, adminDefault, adminOneFilter, sccDefault]) {
+      assert.equal(response.status, 200);
+      assert.equal(response.body.status, true);
+    }
+    assert.equal((exploreCalls[0] as { categoryFilter?: string }).categoryFilter, undefined);
+    assert.equal((exploreCalls[1] as { categoryFilter?: string }).categoryFilter, "2");
+    assert.equal((exploreCalls[1] as { majorFilter?: string }).majorFilter, undefined);
+    assert.equal((adminCalls[0] as { categoryFilter?: string }).categoryFilter, undefined);
+    assert.equal((adminCalls[1] as { categoryFilter?: string }).categoryFilter, "2");
+    assert.equal((adminCalls[1] as { majorFilter?: string }).majorFilter, undefined);
+    assert.equal((sccCalls[0] as { major_id?: string }).major_id, undefined);
   });
 
   it("rejects duplicate technology IDs as invalid project input", async () => {
@@ -192,6 +263,19 @@ describe("central error middleware", () => {
       .set("Content-Type", "application/json")
       .set("Content-Encoding", "gzip")
       .send("not gzip");
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.status, false);
+    assert.equal(response.body.errors, "Invalid request body");
+  });
+
+  it("maps malformed Brotli JSON to a sanitized 400", async () => {
+    console.error = () => {};
+    const response = await request(createApp())
+      .post("/unexpected-error")
+      .set("Content-Type", "application/json")
+      .set("Content-Encoding", "br")
+      .send("not compressed data");
 
     assert.equal(response.status, 400);
     assert.equal(response.body.status, false);

@@ -14,6 +14,10 @@ const classQuery = {
 const positiveIntegerQuery = z.string()
     .regex(/^\d+$/, "Expected a positive integer")
     .refine((value) => Number.isSafeInteger(Number(value)) && Number(value) > 0, "Expected a positive safe integer");
+const optionalPositiveIntegerQuery = z.preprocess(
+    (value: unknown) => value === "" ? undefined : value,
+    positiveIntegerQuery.optional()
+);
 const binaryQuery = z.enum(["0", "1"]);
 
 export default class ProjectHandler {
@@ -60,9 +64,9 @@ export default class ProjectHandler {
         try {
             const schema = z.object({
                 search: z.string().optional(),
-                categoryFilter: positiveIntegerQuery.optional(),
-                majorFilter: positiveIntegerQuery.optional(),
-                technologyFilter: positiveIntegerQuery.optional(),
+                categoryFilter: optionalPositiveIntegerQuery,
+                majorFilter: optionalPositiveIntegerQuery,
+                technologyFilter: optionalPositiveIntegerQuery,
                 semester_id: z.string().optional()
             });
 
@@ -167,8 +171,8 @@ export default class ProjectHandler {
         try {
             const schema = z.object({
                 search: z.string().optional(),
-                majorFilter: positiveIntegerQuery.optional(),
-                categoryFilter: positiveIntegerQuery.optional(),
+                majorFilter: optionalPositiveIntegerQuery,
+                categoryFilter: optionalPositiveIntegerQuery,
                 semester_id: z.string().optional()
             });
 
@@ -206,7 +210,7 @@ export default class ProjectHandler {
     static async getSccDashboard(req: Request, res: Response, next: NextFunction) {
         try {
             const schema = z.object({
-                major_id: positiveIntegerQuery.optional(),
+                major_id: optionalPositiveIntegerQuery,
                 semester_id: z.string(),
                 is_recommended: binaryQuery.optional(),
                 search: z.string().optional()

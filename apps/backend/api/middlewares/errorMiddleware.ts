@@ -34,6 +34,10 @@ function getBodyParserErrorResponse(error: unknown): { status: number; message: 
   if ("status" in error && error.status === 400 && "body" in error) {
     return { status: 400, message: "Invalid request body" };
   }
+  if ("status" in error && error.status === 400
+    && "expose" in error && error.expose === true) {
+    return { status: 400, message: "Invalid request body" };
+  }
   if (type === "entity.too.large" || ("status" in error && error.status === 413)) {
     return { status: 413, message: "Request payload is too large" };
   }
