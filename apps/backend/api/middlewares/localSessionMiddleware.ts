@@ -19,6 +19,7 @@ export const localSessionMiddleware: RequestHandler = async (req, res, next) => 
             return sendErrorResponse(res, "Unauthorized", 401);
         }
         res.locals.localUserId = currentSession.user.id;
+        res.locals.authPayload = payload;
         res.locals.localActiveRole =
             "activeRole" in payload && typeof payload.activeRole === "string"
                 ? payload.activeRole

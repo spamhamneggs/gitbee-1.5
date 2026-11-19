@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { NextFunction, Request, Response } from "express";
-import { createLocalToken, createToken, getLocalNim, getLocalRoles, parseJwt } from "../../utils/auth/auth.js";
+import { createLocalToken, createRoleToken, createToken, getLocalNim, getLocalRoles, parseJwt, rejectSession } from "../../utils/auth/auth.js";
 import { getErrorMessage, sendSuccessResponse, sendErrorResponse, ServiceError } from "../../utils/response/response.js";
 import { isSsoBypassEnabled } from "../../utils/auth/devBypass.js";
 import AuthService from "../../services/auth/authService.js";
@@ -9,14 +9,13 @@ type LocalUser = NonNullable<Awaited<ReturnType<typeof AuthService.findLocalUser
 
 const cookieName = () => process.env.COOKIE_NAME ?? "gitbee_token";
 
-/** The login payload the frontend stores for a local (non-SSO) session. */
-const localSession = (user: LocalUser, roles: string[], activeRole: string | undefined) => ({
+const localSession = (user: LocalUser, roles: string[], activeRole = roles[0]!) => ({
     nim: getLocalNim(user),
-    Name: user.name.toUpperCase(),
-    Email: user.email,
-    Role: roles,
-    ActiveRole: activeRole,
-    MicrosoftToken: "",
+    name: user.name.toUpperCase(),
+    email: user.email.toLowerCase(),
+    roles,
+    activeRole,
+    authMethod: "local" as const,
 });
 
 const sessionCookie = (token: { token: string; expires: Date }) => ({
@@ -25,7 +24,78 @@ const sessionCookie = (token: { token: string; expires: Date }) => ({
     expires: token.expires,
 });
 
+const sessionSchema = z.object({
+    exp: z.number(),
+    nim: z.string(),
+    name: z.string(),
+    email: z.string(),
+    userId: z.number().int().positive().optional(),
+    role: z.array(z.string()).min(1),
+    activeRole: z.string().optional(),
+    authMethod: z.enum(["sso", "local"]).optional(),
+    microsoftToken: z.string().optional(),
+});
+
+function readSession(claims: unknown) {
+    const parsed = sessionSchema.safeParse(claims);
+    if (!parsed.success) return null;
+    const payload = parsed.data;
+    const authMethod = payload.authMethod ?? (payload.microsoftToken ? "sso" : "local");
+    const roles = payload.role;
+    const activeRole = payload.activeRole ?? roles[0];
+    if (!activeRole || !roles.includes(activeRole)) return null;
+    return {
+        nim: payload.nim,
+        name: payload.name,
+        email: payload.email,
+        activeRole,
+        roles,
+        authMethod,
+    };
+}
+
+function sendSessionResponse(
+    res: Response,
+    session: NonNullable<ReturnType<typeof readSession>>,
+    token: { token: string; expires: Date },
+    legacyData: Record<string, unknown> = {},
+) {
+    res.set("Cache-Control", "no-store");
+    return sendSuccessResponse(res, {
+        nim: session.nim,
+        Name: session.name,
+        Email: session.email,
+        Role: session.roles,
+        ActiveRole: session.activeRole,
+        MicrosoftToken: "",
+        ...legacyData,
+        session,
+    }, sessionCookie(token));
+}
+
 export default class AuthHandler {
+    static session(req: Request, res: Response) {
+        const session = readSession(res.locals.authPayload);
+        if (!session) return rejectSession(req, res);
+        return sendSuccessResponse(res, session);
+    }
+
+    static changeSessionRole(req: Request, res: Response) {
+        const valid = z.object({ role: z.string().min(1) }).safeParse(req.body);
+        if (!valid.success) return sendErrorResponse(res, "Invalid role", 400);
+        const session = readSession(res.locals.authPayload);
+        if (!session) return rejectSession(req, res);
+        if (!session.roles.includes(valid.data.role)) return sendErrorResponse(res, "Forbidden", 403);
+        const token = createRoleToken(res.locals.authPayload, valid.data.role, session.authMethod);
+        return sendSessionResponse(res, { ...session, activeRole: valid.data.role }, token);
+    }
+
+    static logout(_req: Request, res: Response) {
+        res.clearCookie(process.env.COOKIE_NAME ?? "gitbee_token", { path: "/" });
+        res.set("Cache-Control", "no-store");
+        return sendSuccessResponse(res, { message: "Signed out" });
+    }
+
     static async loginLocal(req: Request, res: Response, next: NextFunction) {
         try {
             const schema = z.object({
@@ -47,7 +117,7 @@ export default class AuthHandler {
                 return sendErrorResponse(res, "Invalid local account role", 403);
             }
             const token = createLocalToken(user);
-            return sendSuccessResponse(res, {
+            return sendSessionResponse(res, localSession(user, roles), token, {
                 user: {
                     id: user.id,
                     email: user.email,
@@ -55,8 +125,7 @@ export default class AuthHandler {
                     role: user.role,
                     user_type: user.user_type,
                 },
-                ...localSession(user, roles, roles[0] ?? user.role),
-            }, sessionCookie(token));
+            });
         } catch (error) {
             return next(error);
         }
@@ -94,25 +163,6 @@ export default class AuthHandler {
         }
     }
 
-    static async changeLocalRole(req: Request, res: Response, next: NextFunction) {
-        try {
-            const valid = z.object({ role: z.string().min(1) }).safeParse(req.body);
-            if (!valid.success) {
-                return sendErrorResponse(res, "Invalid role", 400);
-            }
-            const user = await AuthService.findLocalUser(res.locals.localUserId as number);
-            if (!user) return sendErrorResponse(res, "Unauthorized", 401);
-            const roles = getLocalRoles(user);
-            if (!roles.includes(valid.data.role)) {
-                return sendErrorResponse(res, "Forbidden", 403);
-            }
-            const token = createLocalToken(user, valid.data.role);
-            return sendSuccessResponse(res, localSession(user, roles, valid.data.role), sessionCookie(token));
-        } catch (error) {
-            return next(error);
-        }
-    }
-
     static async loginDevBypass(_req: Request, res: Response) {
         if (!isSsoBypassEnabled()) {
             return sendErrorResponse(res, "Not found", 404);
@@ -124,7 +174,7 @@ export default class AuthHandler {
                 return sendErrorResponse(res, "Invalid local account role", 403);
             }
             const token = createLocalToken(user);
-            return sendSuccessResponse(res, localSession(user, roles, roles[0]), sessionCookie(token));
+            return sendSessionResponse(res, localSession(user, roles), token);
         } catch (error) {
             // Dev-only route, so hand the cause (e.g. an unmigrated database)
             // to the login page as JSON rather than Express's HTML 500.
@@ -163,6 +213,8 @@ export default class AuthHandler {
                 // Only allow switching to a role this user actually has.
                 if (roles.includes(valid.data.role)) {
                     activeRole = valid.data.role;
+                } else {
+                    return sendErrorResponse(res, "Forbidden", 403);
                 }
             } else {
                 activeRole = isStaff ? "Lecturer" : "Student";
@@ -181,23 +233,20 @@ export default class AuthHandler {
                 user?.credential_version ?? 0,
             );
 
-            const ssoCookieName = process.env.COOKIE_NAME;
-            if (!ssoCookieName) {
+            if (!process.env.COOKIE_NAME) {
                 return sendErrorResponse(res, "Cookie name is not configured", 500);
             }
 
-            return sendSuccessResponse(res, {
-                nim: nim,
+            return sendSessionResponse(res, {
+                nim,
+                name: name.toUpperCase(),
+                email: email.toLowerCase(),
+                roles,
+                activeRole,
+                authMethod: "sso",
+            }, token, {
                 BinusianId: username,
-                Name: name.toUpperCase(),
-                Email: email.toLowerCase(),
-                Role: roles,
-                ActiveRole: activeRole,
                 MicrosoftToken: microsoftToken
-            }, {
-                name: ssoCookieName,
-                value: token.token,
-                expires: token.expires,
             });
         } catch (error) {
             if (error instanceof ServiceError) {

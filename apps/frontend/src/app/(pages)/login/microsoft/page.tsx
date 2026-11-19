@@ -3,38 +3,42 @@ import { useMsal } from "@azure/msal-react";
 import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, loginDevBypass } from "../actions";
+import { getSession, login, loginDevBypass } from "../actions";
 import { useAuth } from "@/app/context/AuthContext";
 import { dashboardPathForRole, SSO_BYPASS_ENABLED } from "@/lib/auth";
 
 const Page = () => {
-  const { userData, setUserData } = useAuth();
+  const { session, setSession, loading } = useAuth();
   const { instance, inProgress, accounts } = useMsal();
   const router = useRouter();
-  // proxy.tsx also sends signed-in users here when their role doesn't match,
-  // so only use the dev account when there's no session to replace. The
-  // effect re-runs as MSAL's state changes; the bypass must only fire once.
-  const bypassRef = useRef<"skip" | "ready" | "started">(
-    SSO_BYPASS_ENABLED && !userData ? "ready" : "skip"
-  );
+  const bypassStartedRef = useRef(false);
   const [bypassError, setBypassError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loading) return;
+    // Another tab can remove the cookie while this tab keeps its identity.
+    if (session) {
+      const controller = new AbortController();
+      getSession(controller.signal)
+        .then((current) => {
+          if (controller.signal.aborted) return;
+          if (current) router.push(dashboardPathForRole(current.activeRole) ?? "/");
+          else setSession(null);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) router.push("/");
+        });
+      return () => controller.abort();
+    }
+
     const handleRedirect = async () => {
-      if (bypassRef.current !== "skip") {
-        if (bypassRef.current === "started") return;
-        bypassRef.current = "started";
+      if (SSO_BYPASS_ENABLED) {
+        if (bypassStartedRef.current) return;
+        bypassStartedRef.current = true;
         const result = await loginDevBypass();
         if (result.success) {
-          setUserData({
-            nim: result.data.nim,
-            name: result.data.Name,
-            email: result.data.Email,
-            role: result.data.ActiveRole,
-            listRole: result.data.Role,
-            microsoftToken: result.data.MicrosoftToken,
-          });
-          router.push(dashboardPathForRole(result.data.ActiveRole) ?? "/");
+          setSession(result.data);
+          router.push(dashboardPathForRole(result.data.activeRole) ?? "/");
         } else {
           // Stay here with the reason: sending the developer home just makes
           // the next login attempt fail the same way, unexplained.
@@ -58,19 +62,10 @@ const Page = () => {
             throw new Error("Token acquisition failed");
           }
 
-          const idToken = accounts[0]?.idToken ? accounts[0].idToken : "";
-          const result = await login(idToken);
+          const result = await login(response.idToken);
           if (result?.success) {
-            setUserData({
-              nim: result.data.nim,
-              name: result.data.Name,
-              email: result.data.Email,
-              role: result.data.ActiveRole,
-              listRole: result.data.Role,
-              microsoftToken: result.data.MicrosoftToken,
-            });
-
-            router.push(dashboardPathForRole(result.data.ActiveRole) ?? "/");
+            setSession(result.data);
+            router.push(dashboardPathForRole(result.data.activeRole) ?? "/");
           } else {
             router.push("/");
           }
@@ -83,7 +78,7 @@ const Page = () => {
     };
 
     handleRedirect();
-  }, [instance, accounts, inProgress, router, setUserData]);
+  }, [instance, accounts, inProgress, router, setSession, session, loading]);
 
   if (bypassError) {
     return (

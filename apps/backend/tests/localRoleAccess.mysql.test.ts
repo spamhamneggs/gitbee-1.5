@@ -85,9 +85,11 @@ describe("local role flows against MySQL", {
     const agent = request.agent(app);
     assert.equal((await agent.post("/api/auth/login-local").send({ email: emailFor("Admin"), password })).status, 200);
     await prisma.user.update({ where: { email: emailFor("Admin") }, data: { role: "Lecturer" } });
-    assert.equal((await agent.get("/Admin")).status, 403);
+    assert.equal((await agent.get("/Admin")).status, 401);
+    assert.equal((await agent.get("/Lecturer")).status, 401);
+    assert.equal((await agent.post("/api/auth/login-local/role").send({ role: "Admin" })).status, 401);
+    assert.equal((await agent.post("/api/auth/login-local").send({ email: emailFor("Admin"), password })).status, 200);
     assert.equal((await agent.get("/Lecturer")).status, 200);
-    assert.equal((await agent.post("/api/auth/login-local/role").send({ role: "Admin" })).status, 403);
     await prisma.user.update({ where: { email: emailFor("Admin") }, data: { credential_version: { increment: 1 } } });
     assert.equal((await agent.get("/Lecturer")).status, 401);
     assert.equal((await agent.post("/api/auth/login-local/role").send({ role: "Lecturer" })).status, 401);

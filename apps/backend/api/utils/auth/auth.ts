@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv"
-import { getErrorMessage } from "../response/response.js"
+import type { Request, Response } from "express"
+import { getErrorMessage, sendErrorResponse } from "../response/response.js"
 dotenv.config()
 const secret = process.env.JWT_SECRET
 if (!secret) {
@@ -34,6 +35,7 @@ export const createToken = (
         email: email.toLowerCase(),
         messier_id: messier_id,
         activeRole: activeRole,
+        authMethod: "sso",
         ...(userId !== undefined ? { userId, credentialVersion } : {}),
         microsoftToken: microsoftToken
     }, secret);
@@ -102,6 +104,7 @@ export const createLocalToken = (user: {
             email: user.email.toLowerCase(),
             role: roles,
             activeRole: activeRole ?? roles[0],
+            authMethod: "local",
             credentialVersion: user.credential_version ?? 0,
             microsoftToken: "",
             user_type: user.user_type,
@@ -127,6 +130,24 @@ export const verifyToken = (token: string) : {
         }
     }
 }
+
+export const rejectSession = (req: Request, res: Response) => {
+    const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
+    if (req.cookies?.[cookieName] !== undefined) {
+        res.clearCookie(cookieName, { path: "/" });
+    }
+    return sendErrorResponse(res, "Unauthorized", 401);
+};
+
+// Only use claims from a verified session. Choosing a role keeps its original expiry.
+export const createRoleToken = (
+    payload: jwt.JwtPayload & { exp: number },
+    role: string,
+    authMethod: "sso" | "local",
+) => ({
+    token: jwt.sign({ ...payload, activeRole: role, authMethod }, secret),
+    expires: new Date(payload.exp * 1000),
+});
 
 export interface MicrosoftTokenPayload {
     preferred_username?: string;

@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from "../../utils/auth/password.js";
 import { DEV_BYPASS_USER } from "../../utils/auth/devBypass.js";
 import { ServiceError } from "../../utils/response/response.js";
 import AtlantisService, { type AtlantisAccountData } from "../atlantis/atlantisService.js";
+import { getLocalNim, getLocalRoles } from "../../utils/auth/auth.js";
 
 const DUMMY_PASSWORD_HASH = "scrypt$16384$8$1$Z2l0YmVlLWxvY2FsLWxvZ2luLWR1bW15LXNhbHQ=$wFAFffXSmSnjf95eUXNLQGx6IOgpXcbt/0yauPvSta/wt3Y85e6A9x17lhMJV8LyAqARq+3zt0t6doSwyqIfeA==";
 
@@ -134,31 +135,15 @@ export default class AuthService {
             },
         });
 
-        // Students can have user rows too (role "Student", user_type "student"),
-        // so a matched row alone doesn't make someone staff.
-        const isStaff = user != null && user.role !== "Student" && user.user_type !== "student";
-
-        const roles = isStaff
-            ? user.role === "Lecturer"
-                ? ["Lecturer"]
-                : [user.role, "Lecturer"]
-            : ["Student"];
-
-        let nim: string;
-        if (isStaff) {
-            nim = user?.lecturer_code ?? "";
-        } else if (user) {
-            // A student account must carry its NIM. binusian_id is NOT a NIM and
-            // cannot substitute for it: downstream student class/group queries
-            // match on the NIM, so a wrong value silently returns no data.
-            if (!user.student_id) {
-                throw new ServiceError("Student account is missing its student_id (NIM). Please contact an administrator.", 401);
-            }
-            nim = user.student_id;
-        } else {
-            // No local user row yet (students are not guaranteed one): fall back to
-            // Atlantis until every student account has been backfilled with a student_id.
-            nim = atlantisAccount?.NIM ?? "";
+        const roles = user ? getLocalRoles(user) : ["Student"];
+        if (roles.length === 0) {
+            throw new ServiceError("Invalid account role", 403);
+        }
+        const isStaff = !roles.includes("Student");
+        // Unprovisioned students still use the NIM from Atlantis.
+        const nim = user ? getLocalNim(user) : atlantisAccount?.NIM ?? "";
+        if (user && !isStaff && !nim) {
+            throw new ServiceError("Student account is missing its student_id (NIM). Please contact an administrator.", 401);
         }
 
         return { user, isStaff, roles, nim, username };

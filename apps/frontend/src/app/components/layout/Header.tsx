@@ -15,24 +15,25 @@ import { FaUser } from "react-icons/fa";
 import { IoLogOut } from "react-icons/io5";
 import { MdSupportAgent } from "react-icons/md";
 import { useRouter } from "next/navigation";
-import { switchRole } from "@/app/(pages)/login/actions";
+import { logout, switchRole } from "@/app/(pages)/login/actions";
 import {
   dashboardPathForRole,
-  SESSION_COOKIE_NAME,
   SSO_BYPASS_ENABLED,
+  SESSION_COOKIE_NAME,
 } from "@/lib/auth";
 import Loading from "../Loading";
 
 const Header = () => {
   const router = useRouter();
-  const { userData, setUserData } = useAuth();
-  const { instance, inProgress, accounts } = useMsal();
+  const { session, setSession, loading: restoringSession } = useAuth();
+  const { instance } = useMsal();
   const { scrollYProgress } = useScroll();
   const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [onTop, setOnTop] = useState(true);
   const [loading, setLoading] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [openHamburger, setOpenHamburger] = useState(false);
 
   useEffect(() => {
@@ -95,37 +96,47 @@ const Header = () => {
     });
   };
 
-  const logoutMircosoft = async () => {
-    Cookies.remove(SESSION_COOKIE_NAME, { path: "/" });
-    Cookies.remove("token", { path: "/" });
-    setUserData(null);
-    if (!userData?.microsoftToken) {
-      router.push("/");
-      return;
-    }
-    await instance.logoutRedirect().catch((error: unknown) => {
+  const logoutMicrosoft = async () => {
+    setLoading(true);
+    setLogoutError(null);
+    let appSignedOut = false;
+    try {
+      try {
+        await logout();
+      } catch (error) {
+        // Until 5.9, a readable cookie can still be removed while offline.
+        if (!Cookies.get(SESSION_COOKIE_NAME)) throw error;
+        Cookies.remove(SESSION_COOKIE_NAME, { path: "/" });
+        if (Cookies.get(SESSION_COOKIE_NAME)) throw error;
+      }
+      setSession(null);
+      appSignedOut = true;
+      if (session?.authMethod === "sso") {
+        await instance.logoutRedirect();
+      } else {
+        router.push("/");
+      }
+    } catch (error) {
       console.error("Logout failed:", error);
-    });
+      setLogoutError(appSignedOut
+        ? "You are signed out of GitBee, but Microsoft sign-out failed. Please sign out of your Microsoft account separately."
+        : "Couldn't sign out. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const changeRole = async (role: string) => {
-    if (!userData) return;
+    if (!session) return;
     setLoading(true);
     setRoleError(null);
     try {
-      const result = await switchRole(userData.microsoftToken, role);
+      const result = await switchRole(role);
       if (result.success) {
         const data = result.data;
-        setUserData({
-          nim: data.nim,
-          name: data.Name,
-          email: data.Email,
-          role: data.ActiveRole,
-          listRole: data.Role,
-          microsoftToken: data.MicrosoftToken,
-        });
+        setSession(data);
 
-        const dashboard = dashboardPathForRole(data.ActiveRole);
+        const dashboard = dashboardPathForRole(data.activeRole);
         if (dashboard) router.push(dashboard);
       } else {
         setRoleError(result.message);
@@ -183,7 +194,7 @@ const Header = () => {
           <ul
             className={`top-0 absolute right-0 lg:relative flex justify-center items-center gap-5 h-full w-full lg:w-auto pt-20 overflow-auto sm:pt-28 lg:pt-0 -z-10 lg:z-0`}
           >
-            {!userData && (
+            {!session && (
               <ul
                 className={`${
                   openHamburger
@@ -211,7 +222,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role === "Student" && (
+            {session && session.activeRole === "Student" && (
               <ul
                 className={`${
                   openHamburger
@@ -239,7 +250,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role === "Lecturer" && (
+            {session && session.activeRole === "Lecturer" && (
               <ul
                 className={`${
                   openHamburger
@@ -267,7 +278,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role.toLowerCase() === "scc" && (
+            {session && session.activeRole.toLowerCase() === "scc" && (
               <ul
                 className={`${
                   openHamburger
@@ -295,7 +306,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role.toLowerCase() === "hop" && (
+            {session && session.activeRole.toLowerCase() === "hop" && (
               <ul
                 className={`${
                   openHamburger
@@ -323,7 +334,7 @@ const Header = () => {
                 </Link>
               </ul>
             )}
-            {userData && userData.role === "Admin" && (
+            {session && session.activeRole === "Admin" && (
               <ul
                 className={`${
                   openHamburger
@@ -379,7 +390,9 @@ const Header = () => {
               </ul>
             )}
           </ul>
-          {!userData ? (
+          {restoringSession ? (
+            <p role="status" className="text-sm text-primary-binus">Restoring your session...</p>
+          ) : !session ? (
             <button
               onClick={() => loginMicrosoft()}
               className="relative isolate whitespace-nowrap shrink-0 border border-primary-orange bg-transparent ml-1 px-5 py-1.5 lg:py-2.5 text-primary-orange transition-colors before:absolute before:left-0 before:top-0 before:-z-10 before:h-full before:w-full before:origin-bottom-right before:scale-y-0 before:scale-x-0 before:bg-primary-orange before:transition-transform before:duration-300 before:content-[''] hover:text-white before:hover:scale-y-100 before:hover:scale-x-100 rounded-md before:rounded-sm overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-orange"
@@ -406,17 +419,17 @@ const Header = () => {
                     </div>
                     <div className="text-end">
                       <h1 className="truncate w-32 capitalize">
-                        {userData.name.toLowerCase()}
+                        {session.name.toLowerCase()}
                       </h1>
                       <h3 className="truncate w-32 text-sm text-primary-orange">
-                        {userData.nim}
+                        {session.nim}
                       </h3>
                     </div>
                   </div>
                   <div className="bg-gray-50 py-2 px-2 rounded-md my-3">
                     <ul className="flex flex-col justify-center items-center gap-1">
-                      {userData?.listRole
-                        ?.filter((role) => role !== userData.role)
+                      {session?.roles
+                        ?.filter((role) => role !== session.activeRole)
                         .map((role) => (
                           <div
                             key={role}
@@ -429,7 +442,7 @@ const Header = () => {
                             </li>
                           </div>
                         ))}
-                      {userData && userData.role === "Student" && (
+                      {session && session.activeRole === "Student" && (
                         <Link
                           className="py-10 lg:py-0 w-full border-b lg:border-none  flex justify-end items-center pl-auto lg:pl-0"
                           href="/profile"
@@ -442,7 +455,7 @@ const Header = () => {
                       )}
                       <li
                         className="hover:bg-white/90 rounded-md w-full cursor-pointer py-2 flex justify-between items-center px-3 hover:text-primary-orange group "
-                        onClick={() => logoutMircosoft()}
+                        onClick={() => logoutMicrosoft()}
                       >
                         <IoLogOut className="w-5 h-5 group-hover:fill-primary-orange" />
                         Logout
@@ -485,6 +498,7 @@ const Header = () => {
           </button>
         </div>
       </div>
+      {logoutError && <p role="alert" className="pointer-events-auto absolute left-0 top-full w-full bg-white p-4 text-center text-red-600">{logoutError}</p>}
       {loading && <Loading />}
     </div>
   );
