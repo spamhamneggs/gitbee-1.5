@@ -428,18 +428,20 @@ const Page = () => {
                       )}
                   </div>
                   <div className="w-full lg:w-1/3">
-                    <Image
-                      src={projectDetail[0]?.projectDetail?.thumbnail}
-                      width={960}
-                      height={384}
-                      alt="Project thumbnail"
-                      unoptimized
-                      className="w-full rounded-md border h-96 object-cover"
-                    />
+                    {projectDetail[0]?.projectDetail?.thumbnail ? (
+                      <Image
+                        src={projectDetail[0]?.projectDetail?.thumbnail}
+                        width={960}
+                        height={384}
+                        alt="Project thumbnail"
+                        unoptimized
+                        className="w-full rounded-md border h-96 object-cover"
+                      />
+                    ) : null}
                   </div>
                 </div>
                 <div className="w-full h-96 my-3 flex overflow-auto gap-3">
-                  {projectDetail[0]?.galleries?.map(
+                  {projectDetail[0]?.galleries?.filter((file: any) => file?.image).map(
                     (file: any, index: number) => (
                       <Image
                         key={file?.image}
@@ -453,10 +455,12 @@ const Page = () => {
                     )
                   )}
                 </div>
-                <iframe
-                  src={projectDetail[0]?.projectDetail?.documentation}
-                  className="w-full h-96"
-                />
+                {projectDetail[0]?.projectDetail?.documentation ? (
+                  <iframe
+                    src={projectDetail[0]?.projectDetail?.documentation}
+                    className="w-full h-96"
+                  />
+                ) : null}
               </div>
             </motion.div>
           </div>

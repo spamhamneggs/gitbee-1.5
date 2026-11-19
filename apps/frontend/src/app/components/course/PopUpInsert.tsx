@@ -906,7 +906,7 @@ function PopUpInsert(props: PopUpInsertProps) {
               <h1 className="mt-10">
                 {documentation?.name} ~ {documentation?.size}
               </h1>
-              <iframe src={pdfUrl} className="w-full h-96" />
+              {pdfUrl ? <iframe src={pdfUrl} className="w-full h-96" /> : null}
             </div>
           </motion.div>
           <button
