@@ -7,6 +7,11 @@ export const SSO_BYPASS_ENABLED =
   process.env.NEXT_PUBLIC_BYPASS_SSO === "true" &&
   process.env.NODE_ENV !== "production";
 
+// Shown in dev/test builds; production builds redirect /login to /login/microsoft.
+export const LOCAL_LOGIN_ENABLED =
+  process.env.NODE_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_ENABLE_LOCAL_LOGIN !== "false";  
+
 const DASHBOARD_BY_ROLE: Record<string, string> = {
   student: "/dashboard",
   lecturer: "/dashboard-lecturer",

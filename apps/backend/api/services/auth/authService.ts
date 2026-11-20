@@ -20,15 +20,32 @@ const localUserSelect = {
 
 export default class AuthService {
     /**
-     * The account for a local email/password login, or null. Unknown accounts
-     * and accounts without a password still pay for one hash, so response time
-     * doesn't reveal which emails exist.
+     * The account for a local credential login (email, NIM, or lecturer code),
+     * or null. Unknown accounts and accounts without a password still pay for
+     * one hash, so response time doesn't reveal which identifiers exist.
      */
-    static async verifyLocalLogin(email: string, password: string) {
-        const user = await prisma.user.findUnique({
-            where: { email },
-            select: localUserSelect,
-        });
+    static async verifyLocalLogin(identifier: string, password: string) {
+        const trimmed = identifier.trim();
+        if (!trimmed) {
+            await verifyPassword(password, DUMMY_PASSWORD_HASH);
+            return null;
+        }
+
+        const user = trimmed.includes("@")
+            ? await prisma.user.findUnique({
+                  where: { email: trimmed.toLowerCase() },
+                  select: localUserSelect,
+              })
+            : await prisma.user.findFirst({
+                  where: {
+                      OR: [
+                          { student_id: trimmed },
+                          { lecturer_code: trimmed.toUpperCase() },
+                      ],
+                  },
+                  select: localUserSelect,
+              });
+
         if (!user) {
             await verifyPassword(password, DUMMY_PASSWORD_HASH);
             return null;
@@ -36,7 +53,7 @@ export default class AuthService {
 
         // The shared Prisma client masks User.password in query results.
         const credentials = await prisma.$queryRaw<Array<{ password: string | null }>>`
-            SELECT password FROM user WHERE email = ${user.email} LIMIT 1
+            SELECT password FROM user WHERE id = ${user.id} LIMIT 1
         `;
         const passwordHash = credentials[0]?.password;
         if (!passwordHash) {

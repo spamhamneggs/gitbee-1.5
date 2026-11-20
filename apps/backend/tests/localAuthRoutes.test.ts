@@ -29,7 +29,7 @@ let passwordWrites = 0;
 let claimedId = 0;
 const app = express();
 app.set("trust proxy", true);
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use("/auth", authRoutes);
 app.get("/lecturer", RoleMiddleware("Lecturer"), (_req, res) => res.sendStatus(200));
@@ -85,6 +85,34 @@ describe("local authentication routes", () => {
       assert.equal(typeof claims, "object");
       assert.equal((claims as jwt.JwtPayload).activeRole, "Student");
       assert.equal((await request(app).get("/lecturer").set("Cookie", cookie)).status, 403);
+    }
+  });
+
+  it("rejects oversized identifiers quickly without stalling when local login is disabled in production", async () => {
+    const env = process.env as Record<string, string | undefined>;
+    const prevNodeEnv = env.NODE_ENV;
+    const prevEnableLocal = env.ENABLE_LOCAL_LOGIN;
+    const oversizedIdentifier = "1".repeat(2 * 1024 * 1024);
+
+    try {
+      env.NODE_ENV = "production";
+      delete env.ENABLE_LOCAL_LOGIN;
+
+      const startedAt = performance.now();
+      const response = await request(app)
+        .post("/auth/login-local")
+        .set("X-Forwarded-For", "198.51.100.251")
+        .send({ identifier: oversizedIdentifier, password: originalPassword });
+      const elapsedMs = performance.now() - startedAt;
+
+      assert.equal(response.status, 404);
+      assert.equal(credentialReads, 0);
+      assert.ok(elapsedMs < 500, `Expected fast rejection, took ${elapsedMs.toFixed(1)}ms`);
+    } finally {
+      if (prevNodeEnv === undefined) delete env.NODE_ENV;
+      else env.NODE_ENV = prevNodeEnv;
+      if (prevEnableLocal === undefined) delete env.ENABLE_LOCAL_LOGIN;
+      else env.ENABLE_LOCAL_LOGIN = prevEnableLocal;
     }
   });
 
@@ -209,5 +237,80 @@ describe("local authentication routes", () => {
     stub(prisma.user, "findUnique", async () => null);
     assert.equal((await request(app).post("/auth/login-local/role").set("Cookie", session()).send({ role: "Lecturer" })).status, 401);
     assert.equal(credentialReads, 0);
+  });
+
+  it("limits password guesses by account across IPs when credentials are sent as identifier", async () => {
+    user = { ...staff, id: 40, email: "throttled@example.com", lecturer_code: "D5040" };
+    stub(prisma.user, "findFirst", async () => ({ ...user, credential_version: credentialVersion }));
+
+    // 1. Email supplied via `identifier` shares the same normalized bucket as `email`
+    for (let index = 0; index < 5; index += 1) {
+      const attempt = await request(app)
+        .post("/auth/login-local")
+        .set("X-Forwarded-For", `198.51.100.${index + 10}`)
+        .send({ identifier: "  Throttled@Example.COM ", password: "wrong-password" });
+      assert.equal(attempt.status, 401);
+    }
+    const blockedEmail = await request(app)
+      .post("/auth/login-local")
+      .set("X-Forwarded-For", "198.51.100.99")
+      .send({ email: user.email, password: originalPassword });
+    assert.equal(blockedEmail.status, 429);
+    assert.ok(Number(blockedEmail.headers["retry-after"]) > 0);
+    assert.equal(credentialReads, 5);
+
+    // 2. Non-email identifiers (NIM and case-insensitive lecturer code) are also throttled per account across IPs
+    credentialReads = 0;
+    for (let index = 0; index < 5; index += 1) {
+      const attempt = await request(app)
+        .post("/auth/login-local")
+        .set("X-Forwarded-For", `203.0.113.${index + 10}`)
+        .send({ identifier: index % 2 === 0 ? "D5040" : " d5040 ", password: "wrong-password" });
+      assert.equal(attempt.status, 401);
+    }
+    const blockedCode = await request(app)
+      .post("/auth/login-local")
+      .set("X-Forwarded-For", "203.0.113.99")
+      .send({ identifier: "D5040", password: originalPassword });
+    assert.equal(blockedCode.status, 429);
+    assert.ok(Number(blockedCode.headers["retry-after"]) > 0);
+    assert.equal(credentialReads, 5);
+  });
+
+  it("rejects non-ASCII digit spellings and shares the normalized lockout bucket", async () => {
+    user = { ...staff, id: 50, email: "student50@example.com", student_id: "2702000050" };
+    stub(prisma.user, "findFirst", async () => ({ ...user, credential_version: credentialVersion }));
+
+    // 1. Non-ASCII digit spellings are rejected before querying the database
+    for (const nonAscii of [
+      "\u0662\u0667\u0660\u0662\u0660\u0660\u0660\u0660\u0665\u0661",
+      "\u0968\u096d\u0966\u0968\u0966\u0966\u0966\u0966\u096b\u0961",
+      "student\u0665\u0661@example.com",
+    ]) {
+      const bad = await request(app)
+        .post("/auth/login-local")
+        .set("X-Forwarded-For", "198.51.100.201")
+        .send({ identifier: nonAscii, password: originalPassword });
+      assert.equal(bad.status, 400);
+    }
+    assert.equal(credentialReads, 0);
+
+    // 2. Five failures on the ASCII NIM also block non-ASCII digit spellings in the rate limiter
+    for (let index = 0; index < 5; index += 1) {
+      const attempt = await request(app)
+        .post("/auth/login-local")
+        .set("X-Forwarded-For", `198.51.100.${index + 210}`)
+        .send({ identifier: "2702000050", password: "wrong-password" });
+      assert.equal(attempt.status, 401);
+    }
+    const bypassAttempt = await request(app)
+      .post("/auth/login-local")
+      .set("X-Forwarded-For", "198.51.100.250")
+      .send({
+        identifier: "\u0662\u0667\u0660\u0662\u0660\u0660\u0660\u0660\u0665\u0660",
+        password: originalPassword,
+      });
+    assert.equal(bypassAttempt.status, 429);
+    assert.equal(credentialReads, 5);
   });
 });

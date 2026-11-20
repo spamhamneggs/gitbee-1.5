@@ -4,6 +4,9 @@
 export const isSsoBypassEnabled = (env: NodeJS.ProcessEnv = process.env): boolean =>
     env.BYPASS_SSO === "true" && env.NODE_ENV !== "production";
 
+export const isLocalLoginEnabled = (env: NodeJS.ProcessEnv = process.env): boolean =>
+    env.NODE_ENV !== "production" && env.ENABLE_LOCAL_LOGIN !== "false";
+
 // No password, so this account can't be used through /auth/login-local.
 export const DEV_BYPASS_USER = {
     email: "dev-bypass@gitbee.local",

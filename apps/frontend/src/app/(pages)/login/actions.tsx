@@ -11,6 +11,56 @@ type LoginResult =
   | { success: true; data: LoginData }
   | { success: false; message: string };
 
+export const loginLocal = async (
+  identifier: string,
+  password: string
+): Promise<LoginResult> => {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_API}auth/login-local`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ identifier, password }),
+      }
+    );
+
+    const result = (await response.json().catch(() => null)) as {
+      status?: boolean;
+      data?: LoginData;
+      errors?: string;
+      message?: string;
+    } | null;
+
+    if (response.ok && result?.status && result.data) {
+      return { success: true, data: result.data };
+    }
+
+    if (response.status === 404) {
+      return {
+        success: false,
+        message: "Credential login is disabled in production builds.",
+      };
+    }
+
+    return {
+      success: false,
+      message:
+        result?.errors ??
+        result?.message ??
+        "Invalid NIM, email, lecturer code, or password.",
+    };
+  } catch {
+    return {
+      success: false,
+      message: `Couldn't reach the backend at ${process.env.NEXT_PUBLIC_BACKEND_API}. Is it running?`,
+    };
+  }
+};
+
 export const login = async (microsoftToken: string, role?: string): Promise<LoginResult> => {
   try {
     const responselogin = await fetch(
