@@ -56,7 +56,10 @@ function ImportCsv(props: ImportCsvProps) {
   };
 
   const applySelection = (selection: CsvSelection) => {
-    clearResult();
+    // A rejected drop resolves back to the current file. Keep the existing
+    // import report then, and just show the drop error; only a real selection
+    // change makes the previous report stale.
+    if (selection.file !== selectedFile) clearResult();
     if (selection.error) setError(selection.error);
     setSelectedFile(selection.file);
   };

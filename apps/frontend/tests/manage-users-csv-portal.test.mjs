@@ -92,6 +92,24 @@ test("only a .csv filename is accepted; the MIME type alone is not enough", () =
   assert.equal(selectCsvFile(file(".csv")).file, null);
 });
 
+test("a .csv suffix is accepted even when the stem holds a line separator", () => {
+  assert.equal(
+    isCsvFile(file("report\u2028.csv")),
+    true,
+    "a Unicode line separator in the stem must not be mistaken for a rejected suffix"
+  );
+  assert.equal(isCsvFile(file("Staff.CSV")), true, "the suffix match is case-insensitive");
+  assert.equal(isCsvFile(file(".CSV")), false, "a bare extension stays invalid in any case");
+});
+
+test("a rejected drop keeps the import report when the selection stays the same", () => {
+  assert.match(
+    importCsv,
+    /if \(selection\.file !== selectedFile\) clearResult\(\)/,
+    "the report is cleared only when the selection actually changes"
+  );
+});
+
 test("a text-only drop leaves the selection and the import report alone", () => {
   assert.match(
     importCsv,
