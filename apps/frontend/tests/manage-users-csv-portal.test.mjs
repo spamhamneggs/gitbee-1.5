@@ -127,6 +127,11 @@ test("a denied bulk deletion is surfaced and does not refresh the list", () => {
     /return \{\s*success: false,\s*message: "Couldn't reach the server/,
     "the action returns a failure instead of nothing"
   );
+  assert.match(
+    deleteAction,
+    /typeof result\.errors === "string"/,
+    "the failure message surfaces the API's error, not the generic \\\"failed\\\""
+  );
   assert.match(page, /const result = await deleteAllUser\(\)/, "the page reads the deletion result");
   assert.match(
     page,

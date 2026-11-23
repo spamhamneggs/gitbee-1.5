@@ -124,9 +124,12 @@ export const deleteAllUser = async () => {
 
     if (result.status) {
       return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
     }
+    return {
+      success: false,
+      message:
+        typeof result.errors === "string" ? result.errors : "Delete failed.",
+    };
   } catch (error: any) {
     console.error("API call failed:", error.message);
     return {
