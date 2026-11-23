@@ -116,6 +116,12 @@ test("a rejected drop keeps the import report when the selection stays the same"
   assert.match(rejected.error, /single CSV file/, "the drop error is shown");
   assert.equal(rejected.resetReport, false, "the import report is kept");
 
+  // A single rejected file clears the selection, but the report must still survive.
+  const invalid = resolveSelection(current, selectCsvFile(file("staff.xlsx")));
+  assert.equal(invalid.file, null, "the rejected file is not selected");
+  assert.ok(invalid.error, "the validation error is shown");
+  assert.equal(invalid.resetReport, false, "the report survives a rejected file too");
+
   // Choosing a different file genuinely changes the selection, so the report resets.
   const replaced = resolveSelection(current, selectCsvFile(file("b.csv")));
   assert.equal(replaced.file?.name, "b.csv");
