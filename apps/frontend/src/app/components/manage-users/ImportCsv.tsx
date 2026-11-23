@@ -4,8 +4,13 @@ import {
   type UserCsvType,
 } from "@/app/(pages)/(admin)/manage-users/actions";
 import Link from "next/link";
-import { useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import { LuDownload } from "react-icons/lu";
+import {
+  selectCsvFile,
+  selectDroppedCsvFiles,
+  type CsvSelection,
+} from "./csvSelection";
 
 interface ImportCsvProps {
   setOpenImportCsv: (value: boolean) => void;
@@ -34,11 +39,6 @@ const csvTypes: Record<
 // first; "Show all" reveals the rest.
 const INITIAL_LISTED_LINES = 50;
 
-// Browsers ignore the input's accept="" for dropped files, so reject anything
-// that isn't a CSV before sending it to the importer.
-const isCsvFile = (file: File) =>
-  file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
-
 function ImportCsv(props: ImportCsvProps) {
   const [type, setType] = useState<UserCsvType>("staff");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -47,6 +47,7 @@ function ImportCsv(props: ImportCsvProps) {
   const [showAllLines, setShowAllLines] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const clearResult = () => {
     setReport(null);
@@ -54,21 +55,20 @@ function ImportCsv(props: ImportCsvProps) {
     setError(null);
   };
 
-  const selectFile = (file: File | null) => {
+  const applySelection = (selection: CsvSelection) => {
     clearResult();
-    if (file && !isCsvFile(file)) {
-      setSelectedFile(null);
-      setError("Please choose a CSV file (.csv).");
-      return;
-    }
-    setSelectedFile(file);
+    if (selection.error) setError(selection.error);
+    setSelectedFile(selection.file);
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragActive(false);
     if (uploading) return;
-    selectFile(event.dataTransfer.files?.[0] ?? null);
+    applySelection(selectDroppedCsvFiles(selectedFile, event.dataTransfer.files));
+    // Drop bypasses the picker, so clear it too — otherwise the picker keeps
+    // showing an older file and re-picking that file raises no change event.
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleUpload = async () => {
@@ -164,10 +164,17 @@ function ImportCsv(props: ImportCsvProps) {
           <input
             className="block w-full text-sm text-gray-900 border border-gray-300 cursor-pointer bg-gray-50"
             id="csv_file_input"
+            ref={fileInputRef}
             disabled={uploading}
             type="file"
             accept=".csv,text/csv"
-            onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => {
+              const input = event.target;
+              applySelection(selectCsvFile(input.files?.[0] ?? null));
+              // Read the file, then clear the native value so the picker's
+              // selection and the React state can never disagree.
+              input.value = "";
+            }}
           />
           {selectedFile && (
             <p className="mt-2 text-sm text-gray-700">

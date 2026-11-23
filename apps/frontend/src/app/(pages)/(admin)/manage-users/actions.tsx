@@ -117,6 +117,7 @@ export const deleteAllUser = async () => {
       `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/remove-user-excel`,
       {
         method: "PATCH",
+        credentials: "include",
       }
     );
     const result = await response.json();

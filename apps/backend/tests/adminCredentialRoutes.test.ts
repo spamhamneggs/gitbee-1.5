@@ -246,9 +246,35 @@ describe("admin local credentials", () => {
       actions.indexOf("export const getAllUsers"),
       actions.indexOf("export const updateUserRole")
     );
+    const deleteAction = actions.slice(actions.indexOf("export const deleteAllUser"));
 
     assert.ok(updateRoleAction.includes('credentials: "include"'));
     assert.ok(getUsersAction.includes('credentials: "include"'));
+    assert.ok(deleteAction.includes('credentials: "include"'));
+  });
+
+  it("requires current administrator authorization to delete every lecturer", async () => {
+    let deletes = 0;
+    stub(prisma.user, "deleteMany", async () => {
+      deletes += 1;
+      return { count: 0 };
+    });
+
+    const unauthenticated = await request(app).patch("/api/user/admin/remove-user-excel");
+    const lecturer = await request(app)
+      .patch("/api/user/admin/remove-user-excel")
+      .set("Authorization", `Bearer ${lecturerToken}`);
+
+    assert.equal(unauthenticated.status, 401);
+    assert.equal(lecturer.status, 403);
+    assert.equal(deletes, 0);
+
+    const admin = await request(app)
+      .patch("/api/user/admin/remove-user-excel")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    assert.equal(admin.status, 200);
+    assert.equal(deletes, 1);
   });
 
   it("accepts only positive integer JSON numbers for the target user ID", async () => {

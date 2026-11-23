@@ -1,12 +1,27 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import ts from "typescript";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 const importCsv = await read("../src/app/components/manage-users/ImportCsv.tsx");
 const actions = await read("../src/app/(pages)/(admin)/manage-users/actions.tsx");
 const page = await read("../src/app/(pages)/(admin)/manage-users/page.tsx");
+
+// The selection rules live in a plain module so the picker/drop behaviour can
+// be driven directly, without a DOM.
+const selectionSource = await read(
+  "../src/app/components/manage-users/csvSelection.ts"
+);
+const { outputText } = ts.transpileModule(selectionSource, {
+  compilerOptions: { module: ts.ModuleKind.ESNext },
+});
+const { isCsvFile, selectCsvFile, selectDroppedCsvFiles } = await import(
+  "data:text/javascript;base64," + Buffer.from(outputText).toString("base64")
+);
+
+const file = (name, type = "") => ({ name, type });
 
 test("the staff CSV portal links drag & drop to the tested CSV importer", () => {
   assert.match(importCsv, /onDrop=\{handleDrop\}/, "drop handler is wired");
@@ -17,8 +32,9 @@ test("the staff CSV portal links drag & drop to the tested CSV importer", () => 
 });
 
 test("files dropped onto the portal are validated before upload", () => {
-  assert.match(importCsv, /isCsvFile/, "checks the dropped file is a CSV");
-  assert.match(importCsv, /Please choose a CSV file/, "shows a reason for a rejected file");
+  assert.match(importCsv, /selectDroppedCsvFiles/, "the drop route validates the dropped file");
+  assert.match(selectionSource, /isCsvFile/, "checks the file is a CSV");
+  assert.match(selectionSource, /Please choose a CSV file/, "shows a reason for a rejected file");
 });
 
 test("the page no longer posts to the legacy Excel endpoint (AR-11)", () => {
@@ -26,4 +42,65 @@ test("the page no longer posts to the legacy Excel endpoint (AR-11)", () => {
   assert.doesNotMatch(actions, /uploadExcelUsers/, "Excel upload action is gone");
   assert.doesNotMatch(page, /ImportExcel/, "the Excel importer is no longer rendered");
   assert.doesNotMatch(page, /Import Excel Lecturer/, "the Excel import button is removed");
+});
+
+test("the portal sends the last pick or drop, not an earlier one", () => {
+  const first = file("a.csv");
+  const second = file("b.csv");
+
+  // Pick a.csv, drop b.csv, then pick a.csv again.
+  let selection = selectCsvFile(first);
+  assert.equal(selection.file, first, "picker selects the first file");
+
+  selection = selectDroppedCsvFiles(selection.file, [second]);
+  assert.equal(selection.file, second, "drop replaces the picker's file");
+
+  selection = selectCsvFile(first);
+  assert.equal(selection.file, first, "re-picking the first file sends it again");
+  assert.equal(selection.error, null);
+});
+
+test("a multi-file drop is rejected and keeps the current selection", () => {
+  const current = file("a.csv");
+  const selection = selectDroppedCsvFiles(current, [file("b.csv"), file("c.csv")]);
+
+  assert.equal(selection.file, current, "the current selection is preserved");
+  assert.match(selection.error, /single CSV file/, "says why the drop was rejected");
+});
+
+test("a drop with no files keeps the current selection without an error", () => {
+  const current = file("a.csv");
+  const selection = selectDroppedCsvFiles(current, []);
+
+  assert.equal(selection.file, current, "the current selection is preserved");
+  assert.equal(selection.error, null);
+});
+
+test("only a .csv filename is accepted; the MIME type alone is not enough", () => {
+  assert.equal(isCsvFile(file("staff.csv")), true);
+  assert.equal(
+    isCsvFile(file("staff.txt", "text/csv")),
+    false,
+    "a CSV MIME type does not excuse a rejected extension"
+  );
+  assert.equal(selectCsvFile(file("staff.txt", "text/csv")).file, null);
+});
+
+test("the portal routes the picker and drops through the tested selector", () => {
+  assert.match(
+    importCsv,
+    /selectDroppedCsvFiles\(selectedFile, event\.dataTransfer\.files\)/,
+    "the drop handler routes its files through the tested selector"
+  );
+  assert.match(
+    importCsv,
+    /selectCsvFile\(input\.files/,
+    "the picker routes its file through the tested selector"
+  );
+  assert.match(importCsv, /input\.value = ""/, "the native input is cleared after reading it");
+  assert.match(
+    importCsv,
+    /uploadUsersCsv\(selectedFile, type\)/,
+    "Import sends the React-state selection"
+  );
 });
