@@ -17,9 +17,10 @@ const selectionSource = await read(
 const { outputText } = ts.transpileModule(selectionSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext },
 });
-const { isCsvFile, selectCsvFile, selectDroppedCsvFiles } = await import(
-  "data:text/javascript;base64," + Buffer.from(outputText).toString("base64")
-);
+const { isCsvFile, selectCsvFile, selectDroppedCsvFiles, resolveSelection } =
+  await import(
+    "data:text/javascript;base64," + Buffer.from(outputText).toString("base64")
+  );
 
 const file = (name, type = "") => ({ name, type });
 
@@ -103,10 +104,29 @@ test("a .csv suffix is accepted even when the stem holds a line separator", () =
 });
 
 test("a rejected drop keeps the import report when the selection stays the same", () => {
+  const current = file("a.csv");
+
+  // After a successful import, dropping two files is rejected but resolves back
+  // to the current file — the report must survive.
+  const rejected = resolveSelection(
+    current,
+    selectDroppedCsvFiles(current, [file("b.csv"), file("c.csv")])
+  );
+  assert.equal(rejected.file, current, "the selection is unchanged");
+  assert.match(rejected.error, /single CSV file/, "the drop error is shown");
+  assert.equal(rejected.resetReport, false, "the import report is kept");
+
+  // Choosing a different file genuinely changes the selection, so the report resets.
+  const replaced = resolveSelection(current, selectCsvFile(file("b.csv")));
+  assert.equal(replaced.file?.name, "b.csv");
+  assert.equal(replaced.resetReport, true, "a new file resets the report");
+});
+
+test("the portal applies selections through the tested resolver", () => {
   assert.match(
     importCsv,
-    /if \(selection\.file !== selectedFile\) clearResult\(\)/,
-    "the report is cleared only when the selection actually changes"
+    /resolveSelection\(selectedFile, selection\)/,
+    "the drop and picker paths both route through resolveSelection"
   );
 });
 

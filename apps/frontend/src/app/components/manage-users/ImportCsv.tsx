@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRef, useState, type DragEvent } from "react";
 import { LuDownload } from "react-icons/lu";
 import {
+  resolveSelection,
   selectCsvFile,
   selectDroppedCsvFiles,
   type CsvSelection,
@@ -56,12 +57,12 @@ function ImportCsv(props: ImportCsvProps) {
   };
 
   const applySelection = (selection: CsvSelection) => {
-    // A rejected drop resolves back to the current file. Keep the existing
-    // import report then, and just show the drop error; only a real selection
-    // change makes the previous report stale.
-    if (selection.file !== selectedFile) clearResult();
-    if (selection.error) setError(selection.error);
-    setSelectedFile(selection.file);
+    const next = resolveSelection(selectedFile, selection);
+    // A rejected drop resolves back to the current file, so its import report is
+    // still relevant: keep it and just show the drop error.
+    if (next.resetReport) clearResult();
+    if (next.error) setError(next.error);
+    setSelectedFile(next.file);
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {

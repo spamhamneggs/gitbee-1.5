@@ -33,3 +33,25 @@ export function selectDroppedCsvFiles(
   }
   return selectCsvFile(files[0] ?? null);
 }
+
+export interface ResolvedSelection {
+  file: File | null;
+  error: string | null;
+  // Whether the previous import report is no longer relevant. Only a real file
+  // change makes it stale: a rejected drop resolves back to the current file,
+  // so its report must be kept.
+  resetReport: boolean;
+}
+
+// Applies a picker/drop selection on top of the current one, deciding whether
+// the existing import report still applies.
+export function resolveSelection(
+  current: File | null,
+  selection: CsvSelection,
+): ResolvedSelection {
+  return {
+    file: selection.file,
+    error: selection.error,
+    resetReport: selection.file !== current,
+  };
+}
