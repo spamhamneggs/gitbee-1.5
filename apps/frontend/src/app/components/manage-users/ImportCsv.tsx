@@ -7,10 +7,9 @@ import Link from "next/link";
 import { useRef, useState, type DragEvent } from "react";
 import { LuDownload } from "react-icons/lu";
 import {
-  resolveSelection,
-  selectCsvFile,
-  selectDroppedCsvFiles,
-  type CsvSelection,
+  dropCsvFiles,
+  pickCsvFile,
+  type SelectionOutcome,
 } from "./csvSelection";
 
 interface ImportCsvProps {
@@ -50,29 +49,27 @@ function ImportCsv(props: ImportCsvProps) {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const clearResult = () => {
+  const resetReport = () => {
     setReport(null);
     setShowAllLines(false);
-    setError(null);
   };
 
-  const applySelection = (selection: CsvSelection) => {
-    const next = resolveSelection(selectedFile, selection);
-    // A rejected selection (multi-file or wrong type) is not a real change, so
-    // its import report is still relevant: keep it and just show the error.
-    if (next.resetReport) clearResult();
-    if (next.error) setError(next.error);
-    setSelectedFile(next.file);
+  const applySelection = (outcome: SelectionOutcome) => {
+    if (outcome.kind === "ignored") return;
+    // A rejected selection keeps the previous import report on screen; only a
+    // newly chosen valid file makes it stale.
+    if (outcome.kind === "selected") resetReport();
+    setError(outcome.kind === "rejected" ? outcome.error : null);
+    setSelectedFile(outcome.file);
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragActive(false);
     if (uploading) return;
-    // A drop with no files (e.g. plain text) changes nothing — leave the
-    // current selection and the import report untouched.
-    if (event.dataTransfer.files.length === 0) return;
-    applySelection(selectDroppedCsvFiles(selectedFile, event.dataTransfer.files));
+    // A drop with no files (e.g. plain text) resolves to "ignored", so the
+    // selection, the error and the import report are all left untouched.
+    applySelection(dropCsvFiles(selectedFile, event.dataTransfer.files));
     // Drop bypasses the picker, so clear it too — otherwise the picker keeps
     // showing an older file and re-picking that file raises no change event.
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -85,13 +82,16 @@ function ImportCsv(props: ImportCsvProps) {
     }
 
     setUploading(true);
-    clearResult();
+    setError(null);
     const result = await uploadUsersCsv(selectedFile, type);
     setUploading(false);
     if (result.success) {
       setReport(result.data);
+      setShowAllLines(false);
       props.fetchData(type);
     } else {
+      // Only a successful import replaces the report; a failure leaves the last
+      // one visible alongside its reason.
       setError(result.message);
     }
   };
@@ -127,7 +127,8 @@ function ImportCsv(props: ImportCsvProps) {
               aria-checked={type === option}
               onClick={() => {
                 setType(option);
-                clearResult();
+                resetReport();
+                setError(null);
               }}
               className={`flex-1 py-2 px-4 rounded-sm border ${
                 type === option
@@ -177,7 +178,7 @@ function ImportCsv(props: ImportCsvProps) {
             accept=".csv,text/csv"
             onChange={(event) => {
               const input = event.target;
-              applySelection(selectCsvFile(input.files?.[0] ?? null));
+              applySelection(pickCsvFile(input.files?.[0] ?? null));
               // Read the file, then clear the native value so the picker's
               // selection and the React state can never disagree.
               input.value = "";
@@ -208,7 +209,11 @@ function ImportCsv(props: ImportCsvProps) {
           </button>
         </div>
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-red-500">
+            {error}
+          </p>
+        )}
 
         {report && (
           <div className="text-sm flex flex-col gap-2" aria-live="polite">

@@ -7,51 +7,44 @@
 export const isCsvFile = (file: File) =>
   file.name.length > 4 && file.name.slice(-4).toLowerCase() === ".csv";
 
-export interface CsvSelection {
-  file: File | null;
-  error: string | null;
-}
+const notCsvError = "Please choose a CSV file (.csv).";
+const multiDropError = "Please drop a single CSV file.";
 
-// A file chosen from the picker, or the single file of a drop.
-export function selectCsvFile(file: File | null): CsvSelection {
-  if (file && !isCsvFile(file)) {
-    return { file: null, error: "Please choose a CSV file (.csv)." };
+/**
+ * The outcome of a pick or a drop. Keeping the previous import report is a
+ * property of the event itself, not of a file-identity comparison:
+ *  - "ignored"  the event changes nothing (empty or text-only drop, cancelled picker)
+ *  - "rejected" the choice is invalid: show `error` and keep the import report
+ *  - "selected" a valid new file replaces both the selection and the report
+ */
+export type SelectionOutcome =
+  | { kind: "ignored" }
+  | { kind: "rejected"; file: File | null; error: string }
+  | { kind: "selected"; file: File };
+
+function chooseFile(file: File | null): SelectionOutcome {
+  if (!file) return { kind: "ignored" };
+  if (!isCsvFile(file)) {
+    return { kind: "rejected", file: null, error: notCsvError };
   }
-  return { file, error: null };
+  return { kind: "selected", file };
 }
 
-// A drop can carry any number of files. Keep the current selection when the
-// drop is empty, reject multi-file drops instead of silently importing just the
+// The picker offers a single file.
+export function pickCsvFile(file: File | null): SelectionOutcome {
+  return chooseFile(file);
+}
+
+// A drop can carry any number of files. Keep the current selection when the drop
+// is empty, reject multi-file drops instead of silently importing just the
 // first, and otherwise treat the drop like a pick.
-export function selectDroppedCsvFiles(
+export function dropCsvFiles(
   current: File | null,
   files: ArrayLike<File>,
-): CsvSelection {
-  if (files.length === 0) return { file: current, error: null };
+): SelectionOutcome {
+  if (files.length === 0) return { kind: "ignored" };
   if (files.length > 1) {
-    return { file: current, error: "Please drop a single CSV file." };
+    return { kind: "rejected", file: current, error: multiDropError };
   }
-  return selectCsvFile(files[0] ?? null);
-}
-
-export interface ResolvedSelection {
-  file: File | null;
-  error: string | null;
-  // Whether the previous import report is no longer relevant. Only a genuinely
-  // new valid file makes it stale: a rejected selection carries a validation
-  // error (and may clear the file), so its report must be kept.
-  resetReport: boolean;
-}
-
-// Applies a picker/drop selection on top of the current one, deciding whether
-// the existing import report still applies.
-export function resolveSelection(
-  current: File | null,
-  selection: CsvSelection,
-): ResolvedSelection {
-  return {
-    file: selection.file,
-    error: selection.error,
-    resetReport: selection.error === null && selection.file !== current,
-  };
+  return chooseFile(files[0] ?? null);
 }

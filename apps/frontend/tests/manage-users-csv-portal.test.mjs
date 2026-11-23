@@ -17,10 +17,9 @@ const selectionSource = await read(
 const { outputText } = ts.transpileModule(selectionSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext },
 });
-const { isCsvFile, selectCsvFile, selectDroppedCsvFiles, resolveSelection } =
-  await import(
-    "data:text/javascript;base64," + Buffer.from(outputText).toString("base64")
-  );
+const { isCsvFile, pickCsvFile, dropCsvFiles } = await import(
+  "data:text/javascript;base64," + Buffer.from(outputText).toString("base64")
+);
 
 const file = (name, type = "") => ({ name, type });
 
@@ -33,7 +32,7 @@ test("the staff CSV portal links drag & drop to the tested CSV importer", () => 
 });
 
 test("files dropped onto the portal are validated before upload", () => {
-  assert.match(importCsv, /selectDroppedCsvFiles/, "the drop route validates the dropped file");
+  assert.match(importCsv, /dropCsvFiles/, "the drop route validates the dropped file");
   assert.match(selectionSource, /isCsvFile/, "checks the file is a CSV");
   assert.match(selectionSource, /Please choose a CSV file/, "shows a reason for a rejected file");
 });
@@ -50,31 +49,36 @@ test("the portal sends the last pick or drop, not an earlier one", () => {
   const second = file("b.csv");
 
   // Pick a.csv, drop b.csv, then pick a.csv again.
-  let selection = selectCsvFile(first);
-  assert.equal(selection.file, first, "picker selects the first file");
+  let outcome = pickCsvFile(first);
+  assert.equal(outcome.kind, "selected", "picker selects the first file");
+  assert.equal(outcome.file, first);
 
-  selection = selectDroppedCsvFiles(selection.file, [second]);
-  assert.equal(selection.file, second, "drop replaces the picker's file");
+  outcome = dropCsvFiles(outcome.file, [second]);
+  assert.equal(outcome.kind, "selected", "drop replaces the picker's file");
+  assert.equal(outcome.file, second);
 
-  selection = selectCsvFile(first);
-  assert.equal(selection.file, first, "re-picking the first file sends it again");
-  assert.equal(selection.error, null);
+  outcome = pickCsvFile(first);
+  assert.equal(outcome.kind, "selected", "re-picking the first file sends it again");
+  assert.equal(outcome.file, first);
 });
 
 test("a multi-file drop is rejected and keeps the current selection", () => {
   const current = file("a.csv");
-  const selection = selectDroppedCsvFiles(current, [file("b.csv"), file("c.csv")]);
+  const outcome = dropCsvFiles(current, [file("b.csv"), file("c.csv")]);
 
-  assert.equal(selection.file, current, "the current selection is preserved");
-  assert.match(selection.error, /single CSV file/, "says why the drop was rejected");
+  assert.equal(outcome.kind, "rejected", "a multi-file drop is not a selection");
+  assert.equal(outcome.file, current, "the current selection is preserved");
+  assert.match(outcome.error, /single CSV file/, "says why the drop was rejected");
 });
 
-test("a drop with no files keeps the current selection without an error", () => {
-  const current = file("a.csv");
-  const selection = selectDroppedCsvFiles(current, []);
+test("a drop with no files changes nothing", () => {
+  const outcome = dropCsvFiles(file("a.csv"), []);
 
-  assert.equal(selection.file, current, "the current selection is preserved");
-  assert.equal(selection.error, null);
+  assert.equal(
+    outcome.kind,
+    "ignored",
+    "a text-only drop is not a selection change, so the report survives"
+  );
 });
 
 test("only a .csv filename is accepted; the MIME type alone is not enough", () => {
@@ -84,13 +88,13 @@ test("only a .csv filename is accepted; the MIME type alone is not enough", () =
     false,
     "a CSV MIME type does not excuse a rejected extension"
   );
-  assert.equal(selectCsvFile(file("staff.txt", "text/csv")).file, null);
+  assert.equal(pickCsvFile(file("staff.txt", "text/csv")).kind, "rejected");
   assert.equal(
     isCsvFile(file(".csv")),
     false,
     "a bare extension has no filename stem, so the API would reject it"
   );
-  assert.equal(selectCsvFile(file(".csv")).file, null);
+  assert.equal(pickCsvFile(file(".csv")).kind, "rejected");
 });
 
 test("a .csv suffix is accepted even when the stem holds a line separator", () => {
@@ -103,56 +107,66 @@ test("a .csv suffix is accepted even when the stem holds a line separator", () =
   assert.equal(isCsvFile(file(".CSV")), false, "a bare extension stays invalid in any case");
 });
 
-test("a rejected drop keeps the import report when the selection stays the same", () => {
+test("a rejected selection keeps the import report", () => {
   const current = file("a.csv");
 
-  // After a successful import, dropping two files is rejected but resolves back
-  // to the current file — the report must survive.
-  const rejected = resolveSelection(
-    current,
-    selectDroppedCsvFiles(current, [file("b.csv"), file("c.csv")])
-  );
-  assert.equal(rejected.file, current, "the selection is unchanged");
-  assert.match(rejected.error, /single CSV file/, "the drop error is shown");
-  assert.equal(rejected.resetReport, false, "the import report is kept");
+  // After a successful import, dropping two files is rejected: the outcome is
+  // "rejected", which the portal renders without touching the report.
+  const multi = dropCsvFiles(current, [file("b.csv"), file("c.csv")]);
+  assert.equal(multi.kind, "rejected", "a multi-file drop is rejected");
+  assert.equal(multi.file, current, "the selection is unchanged");
+  assert.match(multi.error, /single CSV file/, "the drop error is shown");
 
-  // A single rejected file clears the selection, but the report must still survive.
-  const invalid = resolveSelection(current, selectCsvFile(file("staff.xlsx")));
+  // A single wrong-type file clears the selection, but the outcome is still
+  // "rejected", so the report survives there too.
+  const invalid = pickCsvFile(file("staff.xlsx"));
+  assert.equal(invalid.kind, "rejected", "a wrong-type file is rejected, not selected");
   assert.equal(invalid.file, null, "the rejected file is not selected");
   assert.ok(invalid.error, "the validation error is shown");
-  assert.equal(invalid.resetReport, false, "the report survives a rejected file too");
 
-  // Choosing a different file genuinely changes the selection, so the report resets.
-  const replaced = resolveSelection(current, selectCsvFile(file("b.csv")));
+  // Choosing a different valid file is "selected", so the report resets.
+  const replaced = pickCsvFile(file("b.csv"));
+  assert.equal(replaced.kind, "selected", "a new valid file is a selection");
   assert.equal(replaced.file?.name, "b.csv");
-  assert.equal(replaced.resetReport, true, "a new file resets the report");
 });
 
-test("the portal applies selections through the tested resolver", () => {
+test("the portal resets the report only for a selected file", () => {
+  const apply = importCsv.slice(importCsv.indexOf("const applySelection"));
   assert.match(
-    importCsv,
-    /resolveSelection\(selectedFile, selection\)/,
-    "the drop and picker paths both route through resolveSelection"
+    apply,
+    /if \(outcome\.kind === "selected"\) resetReport\(\)/,
+    "only a newly selected file makes the report stale"
+  );
+  assert.match(
+    apply,
+    /if \(outcome\.kind === "ignored"\) return;/,
+    "an ignored outcome leaves the selection, error and report untouched"
   );
 });
 
-test("a text-only drop leaves the selection and the import report alone", () => {
+test("a failed upload keeps the last import report", () => {
+  const upload = importCsv.slice(importCsv.indexOf("const handleUpload"));
   assert.match(
-    importCsv,
-    /if \(event\.dataTransfer\.files\.length === 0\) return;[\s\S]*?applySelection\(/,
-    "an empty drop returns before applySelection can clear the report"
+    upload,
+    /if \(result\.success\) \{[\s\S]*?setReport\(result\.data\)[\s\S]*?\} else \{[\s\S]*?setError\(result\.message\)/,
+    "only a successful import replaces the report; a failure shows the reason"
+  );
+  assert.doesNotMatch(
+    upload,
+    /else \{[\s\S]*?setReport\(null\)/,
+    "a failure must not clear the previous report"
   );
 });
 
 test("the portal routes the picker and drops through the tested selector", () => {
   assert.match(
     importCsv,
-    /selectDroppedCsvFiles\(selectedFile, event\.dataTransfer\.files\)/,
+    /dropCsvFiles\(selectedFile, event\.dataTransfer\.files\)/,
     "the drop handler routes its files through the tested selector"
   );
   assert.match(
     importCsv,
-    /selectCsvFile\(input\.files/,
+    /pickCsvFile\(input\.files/,
     "the picker routes its file through the tested selector"
   );
   assert.match(importCsv, /input\.value = ""/, "the native input is cleared after reading it");
@@ -161,6 +175,10 @@ test("the portal routes the picker and drops through the tested selector", () =>
     /uploadUsersCsv\(selectedFile, type\)/,
     "Import sends the React-state selection"
   );
+});
+
+test("portal messages are announced to assistive tech", () => {
+  assert.match(importCsv, /role="alert"/, "the validation error is exposed as an alert");
 });
 
 test("a denied bulk deletion is surfaced and does not refresh the list", () => {
