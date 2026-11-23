@@ -26,7 +26,6 @@ userRoutes.post("/admin/upload-staff-csv", AuthMiddleware(), RoleMiddleware("Adm
 // Read back the accounts the CSV imports create (paged; ?search=&page=&pageSize=)
 userRoutes.get("/admin/get-student-accounts", currentAdminMiddleware, UserHandler.listStudentAccounts);
 userRoutes.get("/admin/get-staff-accounts", currentAdminMiddleware, UserHandler.listStaffAccounts);
-userRoutes.post("/admin/upload-user-excel", uploadExcel, UserHandler.importLecturersExcel);
 userRoutes.patch("/admin/remove-user-excel", UserHandler.deleteAllLecturers);
 
 // Class transactions (which lecturer teaches which class)

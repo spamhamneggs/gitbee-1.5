@@ -240,7 +240,7 @@ describe("admin local credentials", () => {
     );
     const updateRoleAction = actions.slice(
       actions.indexOf("export const updateUserRole"),
-      actions.indexOf("export const uploadExcelUsers")
+      actions.indexOf("export type UserCsvType")
     );
     const getUsersAction = actions.slice(
       actions.indexOf("export const getAllUsers"),

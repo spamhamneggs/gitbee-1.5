@@ -81,7 +81,6 @@ describe("API route table", () => {
       "POST /user/admin/upload-student-csv",
       "POST /user/admin/upload-student-excel",
       "POST /user/admin/upload-transaction-excel",
-      "POST /user/admin/upload-user-excel",
     ].sort());
   });
 
@@ -89,8 +88,9 @@ describe("API route table", () => {
     for (const removed of [
       "GET /user/get-name", "GET /user/get-role", "GET /class/lecturer/check-finalize",
       "GET /reviewed-project/all", "GET /outstanding-project/all", "GET /status/all",
-      "GET /technology/data", "POST /major/insert", "GET /group/lecturer/class-group",
-      "GET /group/lecturer/class-list", "GET /deadline/check",
+      "GET /technology/data", "POST /major/insert", "GET /group/lecturer/class-list",
+      "GET /group/lecturer/class-group", "GET /deadline/check",
+      "POST /user/admin/upload-user-excel",
     ]) {
       assert.ok(!routeTable.includes(removed), `${removed} is still routed`);
     }

@@ -4,7 +4,7 @@ import {
   type UserCsvType,
 } from "@/app/(pages)/(admin)/manage-users/actions";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type DragEvent } from "react";
 import { LuDownload } from "react-icons/lu";
 
 interface ImportCsvProps {
@@ -34,6 +34,11 @@ const csvTypes: Record<
 // first; "Show all" reveals the rest.
 const INITIAL_LISTED_LINES = 50;
 
+// Browsers ignore the input's accept="" for dropped files, so reject anything
+// that isn't a CSV before sending it to the importer.
+const isCsvFile = (file: File) =>
+  file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
+
 function ImportCsv(props: ImportCsvProps) {
   const [type, setType] = useState<UserCsvType>("staff");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -41,11 +46,29 @@ function ImportCsv(props: ImportCsvProps) {
   const [report, setReport] = useState<UserCsvReport | null>(null);
   const [showAllLines, setShowAllLines] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const clearResult = () => {
     setReport(null);
     setShowAllLines(false);
     setError(null);
+  };
+
+  const selectFile = (file: File | null) => {
+    clearResult();
+    if (file && !isCsvFile(file)) {
+      setSelectedFile(null);
+      setError("Please choose a CSV file (.csv).");
+      return;
+    }
+    setSelectedFile(file);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+    if (uploading) return;
+    selectFile(event.dataTransfer.files?.[0] ?? null);
   };
 
   const handleUpload = async () => {
@@ -114,12 +137,29 @@ function ImportCsv(props: ImportCsvProps) {
           Columns: {csvTypes[type].columns}
         </p>
 
-        <div className="flex flex-col">
+        <div
+          className={`flex flex-col rounded-md border-2 border-dashed p-4 transition-colors ${
+            dragActive ? "border-primary-binus bg-blue-50" : "border-gray-300"
+          }`}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            if (!uploading) setDragActive(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            if (!uploading) setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+          }}
+          onDrop={handleDrop}
+        >
           <label
             className="block mb-2 text-sm font-medium text-gray-900"
             htmlFor="csv_file_input"
           >
-            CSV file
+            CSV file — drag &amp; drop here, or choose a file
           </label>
           <input
             className="block w-full text-sm text-gray-900 border border-gray-300 cursor-pointer bg-gray-50"
@@ -127,11 +167,13 @@ function ImportCsv(props: ImportCsvProps) {
             disabled={uploading}
             type="file"
             accept=".csv,text/csv"
-            onChange={(event) => {
-              setSelectedFile(event.target.files?.[0] ?? null);
-              clearResult();
-            }}
+            onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
           />
+          {selectedFile && (
+            <p className="mt-2 text-sm text-gray-700">
+              Selected: {selectedFile.name}
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2">

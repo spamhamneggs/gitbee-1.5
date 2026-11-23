@@ -12,7 +12,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Link from "next/link";
-import ImportExcel from "@/app/components/manage-users/ImportExcel";
 import ImportCsv from "@/app/components/manage-users/ImportCsv";
 import PopUpUsers from "@/app/components/manage-users/PopUpUsers";
 import { getAccounts, type Account, type StaffRole } from "@/lib/accountApi";
@@ -33,7 +32,6 @@ const Page = () => {
   const [revision, setRevision] = useState(0);
   const requestRef = useRef<AbortController | null>(null);
   const pageSize = 20;
-  const [openImportExcel, setOpenImportExcel] = useState(false);
   const [openImportCsv, setOpenImportCsv] = useState(false);
   const [openPopUpUsers, setOpenPopUpUsers] = useState(false);
   const [selectedUserToUpdate, setSelectedUserToUpdate] = useState<Account>();
@@ -181,12 +179,6 @@ const Page = () => {
         <div className="relative min-w-fit flex justify-end items-center h-full bg-white border rounded-md py-2 px-2 gap-2">
           <button
             className="w-full whitespace-nowrap cursor-pointer text-xs sm:text-base py-1 px-2 md:py-2 md:px-3 relative text-primary-binus rounded-sm"
-            onClick={() => setOpenImportExcel(true)}
-          >
-            Import Excel Lecturer
-          </button>
-          <button
-            className="w-full whitespace-nowrap cursor-pointer text-xs sm:text-base py-1 px-2 md:py-2 md:px-3 relative text-primary-binus rounded-sm border-l"
             onClick={() => setOpenImportCsv(true)}
           >
             Import CSV
@@ -302,12 +294,6 @@ const Page = () => {
           Next accounts page
         </button>
       </div>
-      {openImportExcel && (
-        <ImportExcel
-          setOpenImportExcel={setOpenImportExcel}
-          fetchData={refreshAccounts}
-        />
-      )}
       {openImportCsv && (
         <ImportCsv
           setOpenImportCsv={setOpenImportCsv}

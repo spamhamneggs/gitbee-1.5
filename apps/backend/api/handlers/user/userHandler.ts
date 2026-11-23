@@ -180,17 +180,6 @@ export default class UserHandler {
         }
     }
 
-    static async importLecturersExcel(req: Request, res: Response) {
-        try {
-            if (!req.file) {
-                return sendErrorResponse(res, "No file uploaded.");
-            }
-            sendSuccessResponse(res, await UserService.importLecturersFromExcel(req.file.buffer));
-        } catch (error) {
-            sendServiceError(res, error, "Failed to process the Excel file.");
-        }
-    }
-
     static async deleteAllLecturers(_req: Request, res: Response) {
         try {
             sendSuccessResponse(res, await UserService.deleteAllLecturers());

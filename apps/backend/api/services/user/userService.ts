@@ -1,10 +1,8 @@
-import { z } from "zod";
 import { prisma } from "../../prisma/client.js";
 import { Prisma } from "../../prisma/generated/prisma/client.js";
 import { isStaffAccount, isStudentAccount, roleIs } from "../../utils/auth/localAccountSql.js";
 import { hashPassword } from "../../utils/auth/password.js";
 import type { staffRoles } from "../../utils/csv/csvParser.js";
-import { readFirstSheetRows } from "../../utils/excel/excelSheet.js";
 import { ServiceError } from "../../utils/response/response.js";
 
 const userListSelect = {
@@ -281,36 +279,6 @@ export default class UserService {
         }
 
         return updatedUserRole;
-    }
-
-    /** Lecturer accounts from the class-transaction Excel export (name in column B, code in column C). */
-    static async importLecturersFromExcel(buffer: Buffer) {
-        const schema = z.object({
-            lecturer_code: z.string(),
-            name: z.string(),
-            email: z.string(),
-            role: z.string(),
-        });
-
-        const rows = readFirstSheetRows(buffer);
-        const validatedUsers = rows.flatMap((row) => {
-            const parsed = schema.safeParse({
-                lecturer_code: row[2],
-                name: row[1],
-                email: row[1],
-                role: "Lecturer",
-            });
-            return parsed.success ? [parsed.data] : [];
-        });
-
-        if (validatedUsers.length === 0) {
-            throw new ServiceError("No valid rows found in the file.");
-        }
-
-        return prisma.user.createMany({
-            data: validatedUsers,
-            skipDuplicates: true,
-        });
     }
 
     /** Deletes every Lecturer account that isn't a student's. */
