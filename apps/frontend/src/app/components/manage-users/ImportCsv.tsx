@@ -58,8 +58,8 @@ function ImportCsv(props: ImportCsvProps) {
 
   const applySelection = (selection: CsvSelection) => {
     const next = resolveSelection(selectedFile, selection);
-    // A rejected drop resolves back to the current file, so its import report is
-    // still relevant: keep it and just show the drop error.
+    // A rejected selection (multi-file or wrong type) is not a real change, so
+    // its import report is still relevant: keep it and just show the error.
     if (next.resetReport) clearResult();
     if (next.error) setError(next.error);
     setSelectedFile(next.file);
