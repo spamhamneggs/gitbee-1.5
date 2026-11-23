@@ -12,11 +12,13 @@ interface BluejackSemester {
 /** The Bluejack semester whose description matches the term code, or a 400. */
 async function findSemesterByTermCode(raw: unknown) {
     const semesterName = semesterNameFromTermCode(raw);
-    const semesterData = await SemesterService.getAllSemesterData();
-    const semesters: unknown = semesterData.data;
-    const semester = Array.isArray(semesters)
+    const findIn = (semesters: unknown) => Array.isArray(semesters)
         ? semesters.find((candidate: BluejackSemester) => candidate.Description === semesterName)
         : undefined;
+    // The semester list is cached for an hour, so a semester Bluejack added
+    // since then gets one fresh look before the file is rejected.
+    const semester = findIn((await SemesterService.getAllSemesterData()).data)
+        ?? (semesterName ? findIn((await SemesterService.getAllSemesterData({ fresh: true })).data) : undefined);
     if (!semester) {
         throw new ServiceError("Invalid semester information.");
     }

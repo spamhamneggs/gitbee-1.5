@@ -84,6 +84,8 @@ if (isStaff) {
 2. **Require** `user.student_id` for every account with `role = 'Student'` (or `user_type = 'student'`). The code above enforces this at the boundary with an explicit error, so incomplete data fails loudly instead of silently yielding a wrong NIM.
 3. **Only after** (1) and (2) are complete may the Atlantis dependency be removed — until then, the no-user-row path still relies on `atlantisAccount.NIM`.
 
+**Follow-up (task 5.6):** the `?? ""` above meant an Atlantis lookup that failed (unreachable, not configured, or, since 5.6, slower than 5 s) or that returned no NIM (or only spaces) still issued a student session keyed on `""`. `AuthService.resolveSsoAccount` now refuses those sign-ins without a cookie: 503 ("try again") when the lookup failed, 403 when Atlantis answered without a NIM. An Atlantis NIM is trimmed before use. Matched user rows are unaffected. The check is pinned in `tests/sessionRoutes.test.ts`.
+
 ---
 
 ### 2.2 userHandler.ts

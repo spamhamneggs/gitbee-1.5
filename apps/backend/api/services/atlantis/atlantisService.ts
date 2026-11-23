@@ -1,12 +1,9 @@
-import axios from "axios";
-import dotenv from "dotenv";
 import validateSchema from "../../utils/validator/validateSchema.js";
 import { defaultResponse } from "../../models/generic/response.js";
 import type { APIResponse } from "../../models/generic/response.js";
 import { atlantisSchema } from "../../models/generic/generic.js";
 import { getErrors } from "../../utils/response/response.js";
-
-dotenv.config();
+import { externalApi } from "../../utils/http/externalApi.js";
 
 export interface AtlantisAccountData {
     NIM?: string;
@@ -16,7 +13,8 @@ export interface AtlantisAccountData {
     email?: { Email?: string }[];
 }
 
-// Atlantis is BINUS's identity API; Microsoft SSO login still resolves accounts through it.
+// Atlantis is BINUS's identity API. Its only caller is Microsoft SSO login
+// (AuthService.resolveSsoAccount); everything else reads the local user table.
 export default class AtlantisService {
     static async getAtlantisData(credential: string): Promise<APIResponse> {
         try {
@@ -24,7 +22,7 @@ export default class AtlantisService {
             if (!atlantisApi) {
                 throw new Error("ATLANTIS_API is not configured");
             }
-            const res = await axios.get(atlantisApi, {
+            const res = await externalApi().get(atlantisApi, {
                 params: {
                     input: credential,
                 },

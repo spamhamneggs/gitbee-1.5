@@ -73,6 +73,7 @@ const backendLines = [
   `COOKIE_NAME=${values.COOKIE_NAME || "gitbee_token"}`,
   `BLUEJACK_API=${values.BLUEJACK_API || ""}`,
   `ATLANTIS_API=${values.ATLANTIS_API || ""}`,
+  `EXTERNAL_API_CA_FILE=${values.EXTERNAL_API_CA_FILE || ""}`,
   `SEED_DUMMY_STUDENTS=${values.SEED_DUMMY_STUDENTS || "0"}`,
   `SEED_DUMMY_STAFF=${values.SEED_DUMMY_STAFF || "0"}`,
   `BYPASS_SSO=${values.BYPASS_SSO || "false"}`,

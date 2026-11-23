@@ -6,12 +6,12 @@ import cookieParser from "cookie-parser";
 import qs from "qs";
 import { DEV_BYPASS_USER, isSsoBypassEnabled } from "./utils/auth/devBypass.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorMiddleware.js";
+import { externalApi } from "./utils/http/externalApi.js";
 dotenv.config();
 
-if (process.env.NODE_ENV === "development") {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-  console.log(process.env.NODE_ENV, `RejectUnauthorized is disabled.`)
-}
+// TLS certificates are always verified (GB-09). Creating the external API
+// client now makes a bad EXTERNAL_API_CA_FILE stop startup with a clear error.
+externalApi();
 
 if (isSsoBypassEnabled()) {
   console.warn(`BYPASS_SSO is on: POST /api/auth/login-dev signs anyone in as ${DEV_BYPASS_USER.email}.`)

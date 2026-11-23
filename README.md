@@ -151,6 +151,7 @@ Use the root `.env` as the shared source of truth for this monorepo.
 - Run `pnpm env:sync` after changing the root `.env`.
 - The script generates `apps/backend/.env` and `apps/frontend/.env.local`.
 - Backend CORS trusts `WEB_URL`.
+- Calls to Bluejack (`BLUEJACK_API`) and Atlantis (`ATLANTIS_API`, Microsoft sign-in only) share one client that gives up on any call after 5 seconds. Semester lookups are cached for an hour, but only answers that look like semesters; an Excel import whose semester isn't in the cached list asks Bluejack once more. TLS certificates are always verified; if a dev instance uses a private CA, point `EXTERNAL_API_CA_FILE` at its certificate (PEM or DER) to trust it for those calls only. The backend won't start if that file has no usable certificate.
 - Frontend calls `${NEXT_PUBLIC_BACKEND_API}…`; the trailing slash is required.
 - `NEXT_PUBLIC_*` values are baked in at frontend build time, so rebuild the frontend image after changing them for Docker.
 
@@ -159,7 +160,7 @@ Use the root `.env` as the shared source of truth for this monorepo.
 The root `.env.example` includes the shared settings for the full stack:
 
 - database: `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_PORT`
-- backend: `BACKEND_PORT`, `BACKEND_CONTAINER_PORT`, `DATABASE_URL`, `DATABASE_URL_DOCKER`, `WEB_URL`, `JWT_SECRET`, `COOKIE_NAME`, `BLUEJACK_API`, `ATLANTIS_API`
+- backend: `BACKEND_PORT`, `BACKEND_CONTAINER_PORT`, `DATABASE_URL`, `DATABASE_URL_DOCKER`, `WEB_URL`, `JWT_SECRET`, `COOKIE_NAME`, `BLUEJACK_API`, `ATLANTIS_API`, `EXTERNAL_API_CA_FILE`
 - frontend: `FRONTEND_PORT`, `NEXT_PUBLIC_BACKEND_API`, `NEXT_PUBLIC_CLIENT_ID`, `NEXT_PUBLIC_TENANT_ID`, `NEXT_PUBLIC_REDIRECT_URI`, `NEXT_PUBLIC_POST_LOGOUT_REDIRECT_URI`, `NEXT_PUBLIC_STORE_AUTH_STATE_IN_COOKIE`, `NEXT_PUBLIC_CACHE_LOCATION`
 - docker behavior: `SEED_ON_BOOT`
 - seed: `SEED_DUMMY_STUDENTS`, `SEED_DUMMY_STAFF` (extra generated users, default 0)

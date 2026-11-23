@@ -20,7 +20,10 @@ credential version, checks current role membership for known users, and returns 
 identity fields. All session guards reject stale membership, selected roles,
 NIMs and local email addresses with 401, so the user must sign in again. SSO and
 local login use the same role and NIM rules for matched database accounts;
-unrecognized account roles return 403 without issuing a cookie. The backend
+unrecognized account roles return 403 without issuing a cookie. An SSO login
+with no matching database account takes its NIM from Atlantis; if the lookup
+fails or times out (503) or returns no NIM (403), no cookie is issued, rather
+than a session with an empty NIM. The backend
 does not combine a new role with the old identity. A missing or invalid session
 also returns 401. Every rejection from `/auth/session` expires any presented
 session cookie, including httpOnly cookies. SSO sessions bound to a verified

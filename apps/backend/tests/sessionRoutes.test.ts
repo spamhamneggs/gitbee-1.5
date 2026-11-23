@@ -92,6 +92,39 @@ describe("backend session identity", () => {
     assert.deepEqual(restored.body.data, login.body.data.session);
   });
 
+  it("refuses SSO sign-in without a GitBee account when Atlantis gives no NIM", async (t) => {
+    const { default: AtlantisService } = await import("../api/services/atlantis/atlantisService.js");
+    const originalFirst = prisma.user.findFirst;
+    prisma.user.findFirst = (async () => null) as unknown as typeof originalFirst;
+    t.after(() => { prisma.user.findFirst = originalFirst; });
+    const microsoft_token = jwt.sign({ preferred_username: "new.student@example.com", name: "New Student" }, "upstream-test-secret");
+
+    for (const [atlantis, status, message] of [
+      // Unreachable, timed out, not configured, or no account returned.
+      [{ status: false, data: null, errors: "timeout of 5000ms exceeded" }, 503, /try again in a few minutes/],
+      // Atlantis knows the person but has no NIM (e.g. staff with no GitBee account).
+      [{ status: true, data: { NIM: "", KodeDosen: "D9999" } }, 403, /no GitBee account/],
+      [{ status: true, data: { NIM: "   " } }, 403, /no GitBee account/],
+    ] as const) {
+      const lookup = t.mock.method(AtlantisService, "getAtlantisData", async () => atlantis);
+      for (const role of [undefined, "Student"]) {
+        const login = await request(app).post("/auth/login").send({ microsoft_token, role });
+
+        assert.equal(login.status, status, JSON.stringify(atlantis));
+        assert.match(login.body.errors, message);
+        assert.equal(login.headers["set-cookie"], undefined, "no session with an empty NIM");
+      }
+      lookup.mock.restore();
+    }
+
+    // Padding around an Atlantis NIM isn't part of the NIM.
+    const lookup = t.mock.method(AtlantisService, "getAtlantisData", async () => ({ status: true, data: { NIM: " 2799999998 " } }));
+    const login = await request(app).post("/auth/login").send({ microsoft_token });
+    assert.equal(login.status, 200);
+    assert.equal(login.body.data.session.nim, "2799999998");
+    lookup.mock.restore();
+  });
+
   it("rejects stale identity and membership consistently in every session guard", async () => {
     const cookie = cookieFor(createLocalToken(account).token);
     for (const changed of [
