@@ -84,6 +84,20 @@ test("only a .csv filename is accepted; the MIME type alone is not enough", () =
     "a CSV MIME type does not excuse a rejected extension"
   );
   assert.equal(selectCsvFile(file("staff.txt", "text/csv")).file, null);
+  assert.equal(
+    isCsvFile(file(".csv")),
+    false,
+    "a bare extension has no filename stem, so the API would reject it"
+  );
+  assert.equal(selectCsvFile(file(".csv")).file, null);
+});
+
+test("a text-only drop leaves the selection and the import report alone", () => {
+  assert.match(
+    importCsv,
+    /if \(event\.dataTransfer\.files\.length === 0\) return;[\s\S]*?applySelection\(/,
+    "an empty drop returns before applySelection can clear the report"
+  );
 });
 
 test("the portal routes the picker and drops through the tested selector", () => {
@@ -103,4 +117,21 @@ test("the portal routes the picker and drops through the tested selector", () =>
     /uploadUsersCsv\(selectedFile, type\)/,
     "Import sends the React-state selection"
   );
+});
+
+test("a denied bulk deletion is surfaced and does not refresh the list", () => {
+  const deleteAction = actions.slice(actions.indexOf("export const deleteAllUser"));
+
+  assert.match(
+    deleteAction,
+    /return \{\s*success: false,\s*message: "Couldn't reach the server/,
+    "the action returns a failure instead of nothing"
+  );
+  assert.match(page, /const result = await deleteAllUser\(\)/, "the page reads the deletion result");
+  assert.match(
+    page,
+    /if \(!result\?\.success\) \{[\s\S]*?return;[\s\S]*?\}[\s\S]*?refreshAccounts\(\)/,
+    "the list refreshes only after a successful deletion"
+  );
+  assert.match(page, /setError\(result\?\.message/, "the failure reason is displayed on the page");
 });

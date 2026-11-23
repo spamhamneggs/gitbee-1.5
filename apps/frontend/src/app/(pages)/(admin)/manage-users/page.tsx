@@ -83,8 +83,15 @@ const Page = () => {
 
   const handleDeleteAllLecturer = async () => {
     setLoading(true);
-    await deleteAllUser();
+    setError("");
+    const result = await deleteAllUser();
+    setLoading(false);
     setOpenPopUpConfirmation(false);
+    if (!result?.success) {
+      // Surface the denial (e.g. 401) instead of refreshing to an empty list.
+      setError(result?.message ?? "Could not delete lecturers.");
+      return;
+    }
     refreshAccounts();
   };
 

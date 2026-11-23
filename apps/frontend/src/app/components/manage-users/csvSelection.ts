@@ -1,6 +1,8 @@
 // Browsers ignore the input's accept="" for dropped files, so the portal
 // enforces the .csv extension itself and lets the server validate the contents.
-export const isCsvFile = (file: File) => file.name.toLowerCase().endsWith(".csv");
+// The stem is required too: a bare ".csv" name has an empty extension, which the
+// server's path.extname() would reject.
+export const isCsvFile = (file: File) => /^.+\.csv$/i.test(file.name);
 
 export interface CsvSelection {
   file: File | null;

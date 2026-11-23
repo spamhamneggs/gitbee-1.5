@@ -65,6 +65,9 @@ function ImportCsv(props: ImportCsvProps) {
     event.preventDefault();
     setDragActive(false);
     if (uploading) return;
+    // A drop with no files (e.g. plain text) changes nothing — leave the
+    // current selection and the import report untouched.
+    if (event.dataTransfer.files.length === 0) return;
     applySelection(selectDroppedCsvFiles(selectedFile, event.dataTransfer.files));
     // Drop bypasses the picker, so clear it too — otherwise the picker keeps
     // showing an older file and re-picking that file raises no change event.

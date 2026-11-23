@@ -129,5 +129,9 @@ export const deleteAllUser = async () => {
     }
   } catch (error: any) {
     console.error("API call failed:", error.message);
+    return {
+      success: false,
+      message: "Couldn't reach the server. Please try again.",
+    };
   }
 };
