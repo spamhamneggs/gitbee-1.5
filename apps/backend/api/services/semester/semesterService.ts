@@ -25,7 +25,8 @@ interface CacheEntry {
 // an odd answer such as a proxy's HTML page or an empty list, is passed on
 // once (as before caching) and the next request asks Bluejack again. A cached
 // answer stays in place while a refresh runs, and only a usable answer
-// replaces it. After the hour it is still used whenever a refresh fails.
+// replaces it. After the hour it is used only while calls to Bluejack fail:
+// the next answer Bluejack sends replaces it, or drops it if not usable.
 const cache = new Map<string, CacheEntry>();
 // At most one Bluejack call per URL at a time; everyone who needs it shares it.
 const inFlight = new Map<string, Promise<APIResponse>>();
@@ -68,8 +69,15 @@ function refresh(url: string, isUsable: (data: unknown) => boolean): Promise<API
         const startedIn = generation;
         pending = fetchFromBluejack(url)
             .then((result) => {
-                if (startedIn === generation && result.status === true && isUsable(result.data)) {
-                    cache.set(url, { expiresAt: Date.now() + SEMESTER_CACHE_TTL_MS, response: result });
+                if (startedIn === generation && result.status === true) {
+                    const cached = cache.get(url);
+                    if (isUsable(result.data)) {
+                        cache.set(url, { expiresAt: Date.now() + SEMESTER_CACHE_TTL_MS, response: result });
+                    } else if (cached && cached.expiresAt <= Date.now()) {
+                        // Bluejack has moved on from the hour-old answer, so a
+                        // later outage mustn't bring it back.
+                        cache.delete(url);
+                    }
                 }
                 return result;
             })
@@ -88,11 +96,12 @@ async function getSemesters(path: string, isUsable: (data: unknown) => boolean, 
         return { ...cached.response, fromCache: true, usable: true };
     }
     const result = await refresh(url, isUsable);
-    if (result.status === true && isUsable(result.data)) {
-        return { ...result, fromCache: false, usable: true };
+    if (result.status === true) {
+        // Bluejack answered: pass that on, usable or not, as before caching.
+        return { ...result, fromCache: false, usable: isUsable(result.data) };
     }
-    // Bluejack failed or sent something unusable. An hour-old list still beats
-    // an error, except for a fresh lookup, whose caller needs to know.
+    // The call failed. An hour-old answer still beats an error, except for a
+    // fresh lookup, whose caller needs to know.
     const stale = cache.get(url);
     if (!fresh && stale) {
         return { ...stale.response, fromCache: true, usable: true };

@@ -191,7 +191,7 @@ describe("semester lookups", () => {
         assert.equal(hits[ACTIVE], 2);
     });
 
-    it("keep using an hour-old answer while Bluejack fails or sends something unusable", async (t) => {
+    it("keep using an hour-old answer while Bluejack can't be reached", async (t) => {
         t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
         await request(app).get("/api/semester/all");
         await request(app).get("/api/semester/current");
@@ -205,15 +205,37 @@ describe("semester lookups", () => {
         assert.equal(current.status, 200);
         assert.deepEqual(current.body.data, activeSemester);
 
-        rawAnswer = { status: 200, body: "<html>Please sign in to the proxy</html>", type: "text/html" };
-        assert.deepEqual((await request(app).get("/api/semester/all")).body.data, initialSemesters);
-
         // Once Bluejack answers properly again, its answer replaces the old one.
-        rawAnswer = null;
         semesters = [...initialSemesters, addedSemester];
         assert.deepEqual((await request(app).get("/api/semester/all")).body.data, semesters);
         assert.deepEqual((await request(app).get("/api/semester/all")).body.data, semesters);
-        assert.equal(hits[LIST], 5, "fill, 503 and retry, the proxy page, the recovery; then cached");
+        assert.equal(hits[LIST], 4, "fill, 503 and retry, the recovery; then cached");
+    });
+
+    it("pass on what Bluejack answers after the hour, and not bring the old answer back later", async (t) => {
+        t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+        for (const [path, answer] of [
+            ["/api/semester/current", '{"message":"no active semester"}'],
+            ["/api/semester/all", "[]"],
+        ] as const) {
+            SemesterService.clearCache();
+            rawAnswer = null;
+            assert.equal((await request(app).get(path)).status, 200, `${path} is cached`);
+            t.mock.timers.tick(SEMESTER_CACHE_TTL_MS + 1);
+
+            // Between semesters, say: Bluejack answered, so the old answer doesn't replace it.
+            rawAnswer = { status: 200, body: answer };
+            const answered = await request(app).get(path);
+            assert.equal(answered.status, 200, path);
+            assert.deepEqual(answered.body.data, JSON.parse(answer), path);
+
+            // Bluejack has moved on from the old answer, so an outage doesn't bring it back.
+            rawAnswer = null;
+            failNext = 2;
+            const down = await request(app).get(path);
+            assert.equal(down.status, 400, path);
+            assert.deepEqual(down.body.errors, { message: "Bluejack is down" }, path);
+        }
     });
 
     it("pass odd answers on as before, without caching them", async () => {
@@ -325,6 +347,14 @@ describe("semester lookups", () => {
         await assert.rejects(ClassRosterService.importStudentEnrolmentsFromExcel(studentSheet(2610)),
             unavailable(/^Couldn't load the semester list from Bluejack\. Please try again/));
 
+        // Only a short, one-line JSON message is shown as the reason.
+        for (const message of ["x".repeat(201), "Bluejack is down\n    at SemesterController.Active"]) {
+            rawAnswer = { status: 503, body: JSON.stringify({ message }) };
+            await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(classSheet(2610)),
+                unavailable(/^Couldn't load the semester list from Bluejack\. Please try again in a few minutes\.$/));
+        }
+        rawAnswer = null;
+
         // A term code that can't be read is the file's fault either way, and needs no lookup.
         hits = {};
         await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(classSheet(1999)),
@@ -396,11 +426,18 @@ describe("Excel upload endpoints", () => {
 
         it(`POST /api/user/admin/${endpoint} answers 503 when Bluejack is down`, async (t) => {
             const inserted = captureInserts(t);
-            failNext = 2;
-            const response = await request(app).post(`/api/user/admin/${endpoint}`).attach("file", sheet(2610), "rows.xlsx");
+            const upload = () => request(app).post(`/api/user/admin/${endpoint}`).attach("file", sheet(2610), "rows.xlsx");
 
-            assert.equal(response.status, 503);
-            assert.match(response.body.errors, /^Couldn't load the semester list from Bluejack \(Bluejack is down\)\./);
+            failNext = 2;
+            const down = await upload();
+            assert.equal(down.status, 503);
+            assert.match(down.body.errors, /^Couldn't load the semester list from Bluejack \(Bluejack is down\)\./);
+
+            // A proxy's error page stays out of the message.
+            rawAnswer = { status: 502, body: "<html><head><title>502 Bad Gateway</title></head><body>nginx</body></html>", type: "text/html" };
+            const proxied = await upload();
+            assert.equal(proxied.status, 503);
+            assert.equal(proxied.body.errors, "Couldn't load the semester list from Bluejack. Please try again in a few minutes.");
             assert.deepEqual(inserted[model], []);
         });
     }

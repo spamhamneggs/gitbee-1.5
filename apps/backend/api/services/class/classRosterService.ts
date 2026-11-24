@@ -9,12 +9,20 @@ interface BluejackSemester {
     SemesterID: string;
 }
 
-/** A 503 with Bluejack's reason, for a semester list that couldn't be loaded. */
+const MAX_REASON_LENGTH = 200;
+
+/**
+ * A 503 for a semester list that couldn't be loaded. `errors` is the raw
+ * response body, which can be a proxy's whole HTML error page, so Bluejack's
+ * reason is added only when it's a short, one-line JSON `message`.
+ */
 function bluejackUnavailable(lookup: SemesterResult) {
-    const errors = lookup.errors as { message?: unknown } | string | undefined;
-    const reason = typeof errors === "string" ? errors : typeof errors?.message === "string" ? errors.message : "";
+    const body = lookup.errors;
+    const message = typeof body === "object" && body !== null ? (body as { message?: unknown }).message : undefined;
+    const reason = typeof message === "string" ? message.trim() : "";
+    const showReason = reason !== "" && reason.length <= MAX_REASON_LENGTH && !/[\r\n]/.test(reason);
     return new ServiceError(
-        `Couldn't load the semester list from Bluejack${reason ? ` (${reason})` : ""}. Please try again in a few minutes.`,
+        `Couldn't load the semester list from Bluejack${showReason ? ` (${reason})` : ""}. Please try again in a few minutes.`,
         503,
     );
 }
