@@ -10,9 +10,10 @@ process.env.DATABASE_URL = "mysql://test:test@127.0.0.1:3306/test";
 process.env.COOKIE_NAME = "role_test_session";
 const { prisma } = await import("../api/prisma/client.js");
 const { default: authRoutes } = await import("../api/routes/auth/authRoutes.js");
+const { default: apiRoutes } = await import("../api/routes/Routes.js");
 const { AuthMiddleware } = await import("../api/middlewares/authMiddleware.js");
 const { RoleMiddleware } = await import("../api/middlewares/roleMiddleware.js");
-const { createLocalToken } = await import("../api/utils/auth/auth.js");
+const { createLocalToken, normalizeRoles } = await import("../api/utils/auth/auth.js");
 
 const roles = ["Student", "Lecturer", "SCC", "HoP", "Admin"];
 const account = {
@@ -29,6 +30,9 @@ for (const role of roles) {
   // Real middleware chain; the final handler has no database side effects.
   app.get(`/${role}`, AuthMiddleware(), RoleMiddleware(role), (_req, res) => res.sendStatus(200));
 }
+app.get("/multiword", AuthMiddleware(), RoleMiddleware("Head of Program"), (_req, res) => res.sendStatus(200));
+app.get("/wrong-multiword", AuthMiddleware(), RoleMiddleware("Program"), (_req, res) => res.sendStatus(200));
+app.use("/api", apiRoutes);
 const original = prisma.user.findUnique;
 beforeEach(() => {
   user = { ...account };
@@ -54,12 +58,38 @@ describe("local RoleMiddleware access", () => {
 
   it("rejects absent, forged, expired and deleted-account sessions", async () => {
     const valid = createLocalToken(account).token;
-    for (const token of ["", "not-a-jwt", jwt.sign({ userId: 1 }, "wrong-secret"), jwt.sign({ userId: 1, exp: 1 }, process.env.JWT_SECRET!)]) {
+    const incompleteClaims = [
+      jwt.sign({ userId: 1, email: account.email }, process.env.JWT_SECRET!),
+      jwt.sign({ email: account.email, role: ["Admin"] }, process.env.JWT_SECRET!),
+      jwt.sign({ userId: 1, role: ["Admin"] }, process.env.JWT_SECRET!),
+    ];
+    for (const token of ["", "not-a-jwt", jwt.sign({ userId: 1 }, "wrong-secret"), jwt.sign({ userId: 1, exp: 1 }, process.env.JWT_SECRET!), ...incompleteClaims]) {
       assert.equal((await request(app).get("/Admin").set("Cookie", cookieFor(token))).status, 401);
     }
     user = null;
     assert.equal((await request(app).get("/session").set("Cookie", cookieFor(valid))).status, 401);
     assert.equal((await request(app).get("/Admin").set("Cookie", cookieFor(valid))).status, 401);
+  });
+
+  it("preserves multi-word role claims as one role", async () => {
+    assert.deepEqual(normalizeRoles("Head of Program"), ["Head of Program"]);
+    user = null;
+    const token = jwt.sign({
+      nim: "NIM1",
+      email: "untracked@example.com",
+      role: "Head of Program",
+    }, process.env.JWT_SECRET!);
+    assert.equal((await request(app).get("/multiword").set("Cookie", cookieFor(token))).status, 200);
+    assert.equal((await request(app).get("/wrong-multiword").set("Cookie", cookieFor(token))).status, 403);
+  });
+
+  it("enforces role checks on the actual assessment route", async () => {
+    user = { ...account, role: "Student", user_type: "student" };
+    const token = createLocalToken(user).token;
+    assert.equal(
+      (await request(app).post("/api/assessment/insert").set("Cookie", cookieFor(token)).send({})).status,
+      403,
+    );
   });
 
   it("rejects sessions with stale membership or credential versions", async () => {

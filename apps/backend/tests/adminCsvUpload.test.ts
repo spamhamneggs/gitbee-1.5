@@ -52,7 +52,7 @@ const lecturerToken = createToken(
   ""
 ).token;
 const tokenWithClaims = (claims: Record<string, unknown>) =>
-  jwt.sign(claims, "admin-csv-upload-test-secret");
+  jwt.sign({ nim: "claims-user", email: "claims@example.com", ...claims }, "admin-csv-upload-test-secret");
 const adminStringToken = tokenWithClaims({ role: "Admin" });
 const pluralAdminToken = tokenWithClaims({ roles: ["Admin"] });
 const emptyRolesToken = tokenWithClaims({ role: [] });
@@ -614,7 +614,7 @@ describe("Admin CSV uploads", () => {
     assert.equal(response.status, 403);
   });
 
-  it("returns 403 for lecturers and role claims without Admin", async () => {
+  it("returns 403 for lecturers and 401 for malformed role claims", async () => {
     const lecturerResponse = await request(app)
       .post(studentCsvPath)
       .set("Cookie", `${process.env.COOKIE_NAME}=${lecturerToken}`);
@@ -629,9 +629,9 @@ describe("Admin CSV uploads", () => {
       .set("Cookie", `${process.env.COOKIE_NAME}=${missingRoleToken}`);
 
     assert.equal(lecturerResponse.status, 403);
-    assert.equal(emptyRolesResponse.status, 403);
-    assert.equal(nullRoleResponse.status, 403);
-    assert.equal(missingRoleResponse.status, 403);
+    assert.equal(emptyRolesResponse.status, 401);
+    assert.equal(nullRoleResponse.status, 401);
+    assert.equal(missingRoleResponse.status, 401);
   });
 
   it("accepts comma-delimited and plural role claims", async () => {

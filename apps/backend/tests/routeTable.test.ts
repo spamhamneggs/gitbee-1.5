@@ -2,10 +2,13 @@
 // A route added, removed or renamed shows up here as a diff to review.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import cookieParser from "cookie-parser";
+import express from "express";
+import request from "supertest";
 
 process.env.DATABASE_URL ??= "mysql://test:test@127.0.0.1:3306/test";
 process.env.JWT_SECRET ??= "route-table-test-secret";
-const { resourceRoutes } = await import("../api/routes/Routes.js");
+const { default: routes, resourceRoutes } = await import("../api/routes/Routes.js");
 
 interface RouteLayer {
   route?: { path: string; methods: Record<string, boolean> };
@@ -18,6 +21,10 @@ const routeTable = Object.entries(resourceRoutes).flatMap(([prefix, router]) =>
 );
 
 describe("API route table", () => {
+  const app = express();
+  app.use(cookieParser(), express.json());
+  app.use("/api", routes);
+
   it("serves exactly the routes the app uses", () => {
     assert.deepEqual([...routeTable].sort(), [
       "POST /assessment/insert",
@@ -96,6 +103,25 @@ describe("API route table", () => {
       "POST /user/admin/upload-user-excel",
     ]) {
       assert.ok(!routeTable.includes(removed), `${removed} is still routed`);
+    }
+  });
+
+  it("rejects unauthenticated requests on every non-public API route", async () => {
+    const publicRoutes = new Set([
+      "POST /auth/login",
+      "POST /auth/login-dev",
+      "POST /auth/login-local",
+      "POST /auth/logout",
+      "GET /project/all",
+      "GET /project/detail",
+    ]);
+
+    for (const entry of routeTable) {
+      if (publicRoutes.has(entry)) continue;
+      const [method, path] = entry.split(" ", 2);
+      const call = request(app)[method!.toLowerCase() as "get" | "post" | "patch"](`/api${path}`);
+      const response = method === "GET" ? await call : await call.send({});
+      assert.equal(response.status, 401, `${entry} accepted an unauthenticated request`);
     }
   });
 });
