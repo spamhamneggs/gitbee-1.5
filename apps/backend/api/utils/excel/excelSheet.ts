@@ -3,7 +3,11 @@ import { ServiceError } from "../response/response.js";
 
 /** Rows of the workbook's first sheet as arrays of cells, without the header row. */
 export function readFirstSheetRows(buffer: Buffer): unknown[][] {
-    const workbook = xlsx.read(buffer, { type: "buffer" });
+    // Read CSVs as UTF-8 (65001). Exports from Google Sheets, Numbers and
+    // LibreOffice omit a BOM, so without this SheetJS falls back to Latin-1 and
+    // mangles names such as "José" or "Ma’ruf". .xlsx files are UTF-8 XML and
+    // ignore this option.
+    const workbook = xlsx.read(buffer, { type: "buffer", codepage: 65001 });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
         throw new ServiceError("Excel file has no sheets.");
