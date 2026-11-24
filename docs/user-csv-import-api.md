@@ -72,7 +72,7 @@ Row rules:
 | 413 | `File size exceeds the 5MB limit.` |
 | 500 | The error's message, or `Failed to import CSV file.` |
 
-The admin "Manage Users" page calls these through `uploadUsersCsv` in `apps/frontend/src/app/(pages)/(admin)/manage-users/actions.tsx`.
+The admin "Manage Users" page calls these through `uploadUsersCsv` in `apps/frontend/src/app/(pages)/(admin)/manage-users/actions.tsx`, and the "Students" page (`/manage-student`) through `uploadStudentsCsv` in `apps/frontend/src/app/(pages)/(admin)/manage-student/actions.tsx`.
 
 ## GET get-student-accounts / get-staff-accounts
 

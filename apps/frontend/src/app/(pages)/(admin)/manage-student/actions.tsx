@@ -1,59 +1,45 @@
-export const getAllStudents = async (search: string) => {
-  try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/get-student?search=${search}`
-    );
-    const result = await response.json();
+export interface StudentCsvReport {
+  totalParsed: number;
+  createdCount: number;
+  skippedCount: number;
+  failedCount: number;
+  errors: { line: number; errors: string[] }[];
+}
 
-    if (result.status) {
-      return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
-    }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
-  }
-};
+type StudentCsvResult =
+  | { success: true; data: StudentCsvReport }
+  | { success: false; message: string };
 
-export const uploadExcelStudents = async (file: File) => {
+// Imports student accounts from a CSV file. The response reports every rejected
+// row, so the caller can show what to fix.
+export const uploadStudentsCsv = async (
+  file: File
+): Promise<StudentCsvResult> => {
   try {
     const formData = new FormData();
     formData.append("file", file);
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/upload-student-excel`,
+      `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/upload-student-csv`,
       {
         method: "POST",
+        credentials: "include",
         body: formData,
       }
     );
     const result = await response.json();
 
-    if (result.status) {
-      return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
+    if (response.ok && result.status && result.data) {
+      return { success: true, data: result.data as StudentCsvReport };
     }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
-  }
-};
-
-export const deleteAllStudents = async () => {
-  try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API}user/admin/remove-student-excel`,
-      {
-        method: "PATCH",
-      }
-    );
-    const result = await response.json();
-
-    if (result.status) {
-      return { success: true, data: result.data ? result.data : "" };
-    } else {
-      return { success: false, message: result.message };
-    }
-  } catch (error: any) {
-    console.error("API call failed:", error.message);
+    return {
+      success: false,
+      message:
+        typeof result.errors === "string" ? result.errors : "Import failed.",
+    };
+  } catch {
+    return {
+      success: false,
+      message: "Couldn't reach the server. Please try again.",
+    };
   }
 };

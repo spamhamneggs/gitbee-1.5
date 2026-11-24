@@ -32,6 +32,7 @@ const Page = () => {
   const [revision, setRevision] = useState(0);
   const requestRef = useRef<AbortController | null>(null);
   const pageSize = 20;
+  const importCsvRef = useRef<HTMLButtonElement>(null);
   const [openImportCsv, setOpenImportCsv] = useState(false);
   const [openPopUpUsers, setOpenPopUpUsers] = useState(false);
   const [selectedUserToUpdate, setSelectedUserToUpdate] = useState<Account>();
@@ -185,6 +186,7 @@ const Page = () => {
         </div>
         <div className="relative min-w-fit flex justify-end items-center h-full bg-white border rounded-md py-2 px-2 gap-2">
           <button
+            ref={importCsvRef}
             className="w-full whitespace-nowrap cursor-pointer text-xs sm:text-base py-1 px-2 md:py-2 md:px-3 relative text-primary-binus rounded-sm"
             onClick={() => setOpenImportCsv(true)}
           >
@@ -308,6 +310,7 @@ const Page = () => {
             setSelectedRole(type === "student" ? 4 : 5);
             refreshAccounts();
           }}
+          restoreFocusRef={importCsvRef}
         />
       )}
       {openPopUpUsers && (
