@@ -18,13 +18,32 @@ const { prisma } = await import("../api/prisma/client.js");
 const { createFakeUserStore } = await import("./fakeUserStore.js");
 const userDelegate = prisma.user as Record<"findUnique", unknown>;
 let originalFindUnique: unknown;
+const sessionUsers = new Map([
+  [101, {
+    id: 101, email: "test@example.com", role: "Admin", user_type: "staff",
+    student_id: null, lecturer_code: "test-user", credential_version: 0,
+  }],
+  [102, {
+    id: 102, email: "lecturer@example.com", role: "Lecturer", user_type: "staff",
+    student_id: null, lecturer_code: "lecturer-user", credential_version: 0,
+  }],
+  [103, {
+    id: 103, email: "student@example.com", role: "Student", user_type: "student",
+    student_id: "student-user", lecturer_code: null, credential_version: 0,
+  }],
+  [104, {
+    id: 104, email: "claims@example.com", role: "Admin", user_type: "staff",
+    student_id: null, lecturer_code: "claims-admin", credential_version: 0,
+  }],
+]);
 
 // Uploads insert users; point the Prisma-backed store at an in-memory table.
 let fakeStore = createFakeUserStore();
 beforeEach(() => {
   fakeStore = createFakeUserStore();
   originalFindUnique = userDelegate.findUnique;
-  userDelegate.findUnique = async () => null;
+  userDelegate.findUnique = (async ({ where }: { where: { id?: number } }) =>
+    where.id === undefined ? null : sessionUsers.get(where.id) ?? null) as typeof originalFindUnique;
   mock.method(prismaUserStore, "findExistingUsers", fakeStore.findExistingUsers);
   // Stateless, so tests that swap in a new fake store don't need to re-mock it.
   mock.method(prismaUserStore, "collationKeys", fakeStore.collationKeys);
@@ -40,8 +59,11 @@ const authToken = createToken(
   "test-user",
   "Test User",
   "test@example.com",
-  ["Admin"],
-  ""
+  ["Admin", "Lecturer"],
+  "",
+  "",
+  "Admin",
+  101
 ).token;
 const lecturerToken = createToken(
   "lecturer-user",
@@ -49,25 +71,35 @@ const lecturerToken = createToken(
   "Lecturer User",
   "lecturer@example.com",
   ["Lecturer"],
-  ""
+  "",
+  "",
+  "Lecturer",
+  102
 ).token;
 const tokenWithClaims = (claims: Record<string, unknown>) =>
-  jwt.sign({ nim: "claims-user", email: "claims@example.com", ...claims }, "admin-csv-upload-test-secret");
-const adminStringToken = tokenWithClaims({ role: "Admin" });
-const pluralAdminToken = tokenWithClaims({ roles: ["Admin"] });
+  jwt.sign({
+    nim: "claims-admin", email: "claims@example.com", userId: 104,
+    activeRole: "Admin", authMethod: "sso", credentialVersion: 0,
+    ...claims,
+  }, "admin-csv-upload-test-secret");
+const adminStringToken = tokenWithClaims({ role: "Admin,Lecturer" });
+const pluralAdminToken = tokenWithClaims({ roles: ["Admin", "Lecturer"] });
 const emptyRolesToken = tokenWithClaims({ role: [] });
 const nullRoleToken = tokenWithClaims({ role: null, roles: null });
 const missingRoleToken = tokenWithClaims({});
-const studentAndAdminToken = tokenWithClaims({ role: ["Student", "Admin"] });
+const studentAndAdminToken = tokenWithClaims({ role: ["Admin", "Lecturer"] });
 const studentToken = createToken(
   "student-user",
   "student-user",
   "Student User",
   "student@example.com",
   ["Student"],
-  ""
+  "",
+  "",
+  "Student",
+  103
 ).token;
-const delimitedRoleToken = tokenWithClaims({ role: "Student,Admin" });
+const delimitedRoleToken = tokenWithClaims({ role: "Admin,Lecturer" });
 
 const app = express();
 app.use(cookieParser());

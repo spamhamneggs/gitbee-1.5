@@ -16,6 +16,17 @@ type CurrentSessionResult =
   | { status: "invalid" }
   | { status: "untracked" };
 
+export function isUnprovisionedSsoStudent(payload: unknown): boolean {
+  return typeof payload === "object" && payload !== null && !Array.isArray(payload) &&
+    !("userId" in payload) &&
+    "authMethod" in payload && payload.authMethod === "sso" &&
+    "unprovisionedStudent" in payload && payload.unprovisionedStudent === true &&
+    "nim" in payload && typeof payload.nim === "string" && payload.nim.trim() !== "" &&
+    "role" in payload && Array.isArray(payload.role) &&
+    payload.role.length === 1 && payload.role[0] === "Student" &&
+    (!("activeRole" in payload) || payload.activeRole === undefined || payload.activeRole === "Student");
+}
+
 export async function resolveCurrentSession(payload: unknown): Promise<CurrentSessionResult> {
   if (typeof payload !== "object" || payload === null) {
     return { status: "untracked" };

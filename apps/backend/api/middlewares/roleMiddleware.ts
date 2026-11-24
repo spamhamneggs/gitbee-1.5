@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { getLocalRoles, getVerifiedAuthClaims } from "../utils/auth/auth.js";
-import { resolveCurrentSession } from "../utils/auth/currentSession.js";
+import { isUnprovisionedSsoStudent, resolveCurrentSession } from "../utils/auth/currentSession.js";
 import { sendErrorResponse } from "../utils/response/response.js";
 
 export const RoleMiddleware = (requiredRole: string) => {
@@ -11,6 +11,9 @@ export const RoleMiddleware = (requiredRole: string) => {
     try {
       const currentSession = await resolveCurrentSession(claims);
       if (currentSession.status === "invalid") {
+        return sendErrorResponse(res, "Unauthorized", 401);
+      }
+      if (currentSession.status === "untracked" && !isUnprovisionedSsoStudent(claims)) {
         return sendErrorResponse(res, "Unauthorized", 401);
       }
 

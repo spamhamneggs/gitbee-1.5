@@ -234,16 +234,43 @@ describe("backend session identity", () => {
     }
   });
 
-  it("restores legacy SSO sessions, including students without a local user row", async () => {
+  it("marks new unprovisioned SSO students and rejects unmarked legacy sessions", async (t) => {
     user = null;
-    const payload = claims(createToken("2702000001", "BN1", "Student", "student@example.com", ["Student"], "upstream-secret", "", "Student").token);
-    delete payload.authMethod;
-    const response = await request(app).get("/auth/session").set("Cookie", cookieFor(sign(payload)));
+    const { default: AtlantisService } = await import("../api/services/atlantis/atlantisService.js");
+    const originalFirst = prisma.user.findFirst;
+    prisma.user.findFirst = (async () => null) as typeof originalFirst;
+    t.after(() => { prisma.user.findFirst = originalFirst; });
+    t.mock.method(AtlantisService, "getAtlantisData", async () => ({
+      status: true,
+      data: { NIM: "2702000001" },
+    }));
+
+    const microsoftToken = jwt.sign({
+      preferred_username: "student@example.com",
+      name: "Student",
+    }, "upstream-test-secret");
+    const login = await request(app).post("/auth/login").send({ microsoft_token: microsoftToken });
+    assert.equal(login.status, 200);
+    const issuedToken = login.headers["set-cookie"]![0]!.split(";")[0]!.split("=")[1]!;
+    assert.equal(claims(issuedToken).unprovisionedStudent, true);
+    const response = await request(app).get("/auth/session").set("Cookie", cookieFor(issuedToken));
     assert.equal(response.status, 200);
     assert.deepEqual(response.body.data, {
       nim: "2702000001", name: "STUDENT", email: "student@example.com",
       activeRole: "Student", roles: ["Student"], authMethod: "sso",
     });
+
+    const legacyToken = createToken(
+      "2702000001",
+      "BN1",
+      "Student",
+      "student@example.com",
+      ["Student"],
+      "upstream-secret",
+      "",
+      "Student",
+    ).token;
+    assert.equal((await request(app).get("/auth/session").set("Cookie", cookieFor(legacyToken))).status, 401);
   });
 
   it("restores legacy local sessions and SSO sessions without an embedded Microsoft token", async () => {

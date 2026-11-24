@@ -24,6 +24,7 @@ export const createToken = (
     activeRole?: string,
     userId?: number,
     credentialVersion = 0,
+    unprovisionedStudent = false,
     ) => {
     const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
     const token = jwt.sign({
@@ -37,6 +38,7 @@ export const createToken = (
         activeRole: activeRole,
         authMethod: "sso",
         ...(userId !== undefined ? { userId, credentialVersion } : {}),
+        ...(unprovisionedStudent ? { unprovisionedStudent: true } : {}),
         microsoftToken: microsoftToken
     }, secret);
     return {
@@ -136,6 +138,8 @@ export interface AuthClaims extends jwt.JwtPayload {
     role: string[];
     userId?: number;
     nim?: string;
+    authMethod?: "sso" | "local";
+    unprovisionedStudent?: boolean;
 }
 
 export const normalizeRoles = (value: unknown): string[] | null => {
@@ -144,8 +148,11 @@ export const normalizeRoles = (value: unknown): string[] | null => {
     for (const value of values) {
         if (typeof value !== "string") return null;
         const roles = value.split(",");
-        if (roles.some((role) => role.trim() === "")) return null;
-        normalized.push(...roles.map((role) => role.trim()));
+        const trimmedRoles = roles.map((role) => role.trim());
+        if (trimmedRoles.some((role) =>
+            role === "" || role === "__proto__" || role === "constructor" || role === "prototype"
+        )) return null;
+        normalized.push(...trimmedRoles);
     }
     return normalized.length > 0 ? [...new Set(normalized)] : null;
 }

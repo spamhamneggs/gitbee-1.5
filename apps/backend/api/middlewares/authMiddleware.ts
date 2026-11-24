@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { resolveCurrentSession } from "../utils/auth/currentSession.js";
+import { isUnprovisionedSsoStudent, resolveCurrentSession } from "../utils/auth/currentSession.js";
 import { getVerifiedAuthClaims, rejectSession } from "../utils/auth/auth.js";
 
 export const AuthMiddleware = () => {
@@ -11,7 +11,8 @@ export const AuthMiddleware = () => {
 
     try {
       const currentSession = await resolveCurrentSession(claims);
-      if (currentSession.status === "invalid") {
+      if (currentSession.status === "invalid" ||
+          (currentSession.status === "untracked" && !isUnprovisionedSsoStudent(claims))) {
         return rejectSession(req, res);
       }
       res.locals.authPayload = claims;

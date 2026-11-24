@@ -262,6 +262,7 @@ export default class AuthHandler {
                 activeRole,
                 user?.id,
                 user?.credential_version ?? 0,
+                user === null,
             );
 
             if (!process.env.COOKIE_NAME) {
