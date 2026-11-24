@@ -1,11 +1,27 @@
 import { X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import https from "node:https";
+import { setTimeout as sleep } from "node:timers/promises";
 import tls from "node:tls";
 import axios, { AxiosError, type AxiosInstance } from "axios";
 
 /** How long a Bluejack or Atlantis call may take before it fails (AR-14). */
 export const EXTERNAL_API_TIMEOUT_MS = 5_000;
+
+// A GET that fails in a way that often clears up by itself gets one more try
+// (AR-14), inside the same deadline: a gateway error, or a dropped or refused
+// connection. Timeouts aren't retried, since the deadline has run out.
+const RETRY_STATUSES = new Set([502, 503, 504]);
+const RETRY_CODES = new Set(["ECONNRESET", "ECONNREFUSED", "EPIPE", "EAI_AGAIN"]);
+const RETRY_DELAY_MS = 100;
+/** Less of the deadline than this left after the pause, and the retry is skipped. */
+const MIN_RETRY_MS = 500;
+
+const isRetryable = (error: AxiosError) => {
+    if ((error.config?.method ?? "get").toLowerCase() !== "get") return false;
+    if (error.response) return RETRY_STATUSES.has(error.response.status);
+    return RETRY_CODES.has(error.code ?? "");
+};
 
 /**
  * The certificates in a CA file, as PEM. Accepts PEM (one or several
@@ -40,21 +56,36 @@ function readCaCertificates(caFile: string): string[] {
 export function createExternalApi(env: NodeJS.ProcessEnv = process.env, timeout = EXTERNAL_API_TIMEOUT_MS): AxiosInstance {
     const caFile = env.EXTERNAL_API_CA_FILE?.trim();
     const client = caFile
-        // `ca` replaces Node's default trust store, so keep the public roots too.
-        ? axios.create({ timeout, httpsAgent: new https.Agent({ ca: [...tls.rootCertificates, ...readCaCertificates(caFile)] }) })
+        // `ca` replaces the CAs Node would otherwise trust, so start from those:
+        // the bundled roots plus any added with NODE_EXTRA_CA_CERTS or the system store.
+        ? axios.create({ timeout, httpsAgent: new https.Agent({ ca: [...tls.getCACertificates("default"), ...readCaCertificates(caFile)] }) })
         : axios.create({ timeout });
 
     // axios's `timeout` only fires while the connection is idle, so a server
     // that keeps sending a byte at a time could hold a call open indefinitely.
-    // This deadline covers the whole call, body included.
+    // This deadline covers the whole call, body included, and a retry shares it.
+    const deadlines = new WeakMap<AbortSignal, { at: number; retried: boolean }>();
     client.interceptors.request.use((config) => {
-        config.signal ??= AbortSignal.timeout(timeout);
+        if (!config.signal) {
+            const signal = AbortSignal.timeout(timeout);
+            deadlines.set(signal, { at: Date.now() + timeout, retried: false });
+            config.signal = signal;
+        }
         return config;
     });
-    client.interceptors.response.use(undefined, (error: unknown) => {
-        const signal = (error as AxiosError).config?.signal as AbortSignal | undefined;
+    client.interceptors.response.use(undefined, async (error: unknown) => {
+        const config = (error as AxiosError).config;
+        const signal = config?.signal as AbortSignal | undefined;
+        const deadline = signal ? deadlines.get(signal) : undefined;
+        if (config && deadline && !deadline.retried && axios.isAxiosError(error) && isRetryable(error)
+            && deadline.at - Date.now() - RETRY_DELAY_MS >= MIN_RETRY_MS) {
+            deadline.retried = true;
+            await sleep(RETRY_DELAY_MS);
+            // Same config, so the same signal: the retry ends at the original deadline.
+            return client.request(config);
+        }
         if (axios.isCancel(error) && (signal?.reason as { name?: string } | undefined)?.name === "TimeoutError") {
-            throw new AxiosError(`timeout of ${timeout}ms exceeded`, AxiosError.ECONNABORTED, (error as AxiosError).config);
+            throw new AxiosError(`timeout of ${timeout}ms exceeded`, AxiosError.ECONNABORTED, config);
         }
         throw error;
     });

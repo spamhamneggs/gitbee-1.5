@@ -15,10 +15,14 @@ async function findSemesterByTermCode(raw: unknown) {
     const findIn = (semesters: unknown) => Array.isArray(semesters)
         ? semesters.find((candidate: BluejackSemester) => candidate.Description === semesterName)
         : undefined;
+    const listed = await SemesterService.getAllSemesterData();
+    let semester = findIn(listed.data);
     // The semester list is cached for an hour, so a semester Bluejack added
-    // since then gets one fresh look before the file is rejected.
-    const semester = findIn((await SemesterService.getAllSemesterData()).data)
-        ?? (semesterName ? findIn((await SemesterService.getAllSemesterData({ fresh: true })).data) : undefined);
+    // since then gets one fresh look before the file is rejected. A list that
+    // was just fetched for this import is already fresh.
+    if (!semester && semesterName && listed.fromCache) {
+        semester = findIn((await SemesterService.getAllSemesterData({ fresh: true })).data);
+    }
     if (!semester) {
         throw new ServiceError("Invalid semester information.");
     }

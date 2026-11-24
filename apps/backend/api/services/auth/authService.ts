@@ -174,7 +174,9 @@ export default class AuthService {
         // rather than start a session keyed on "", which matches no class,
         // group or project (see the v1.5 migration's impact-notes.md).
         if (!user && !nim) {
-            if (atlantis.status === true) {
+            // Atlantis answered: it has no NIM for this person, or no such
+            // account. Asking again won't change that.
+            if (atlantis.status === true || atlantis.notFound) {
                 throw new ServiceError("There is no GitBee account for this Microsoft account. Please ask an administrator to add you.", 403);
             }
             throw new ServiceError("Couldn't look up your account with BINUS's identity service. Please try again in a few minutes. If it keeps happening, ask an administrator to add your account.", 503);

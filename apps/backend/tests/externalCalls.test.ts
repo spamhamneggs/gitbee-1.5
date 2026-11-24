@@ -1,26 +1,41 @@
 // Bluejack (semesters) and Atlantis (Microsoft sign-in) through the shared
 // client, against a local stand-in server: semester lookups are cached
-// (AR-14), failures aren't, and Atlantis still answers the SSO lookup.
+// (AR-14) and kept while a refresh runs, failures and unusable answers aren't
+// cached, a passing failure is retried within the call, both Excel upload
+// endpoints pick up a newly added semester, and sign-in tells a missing
+// Atlantis account apart from an outage.
 import assert from "node:assert/strict";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { after, before, beforeEach, describe, it } from "node:test";
+import { after, before, beforeEach, describe, it, type TestContext } from "node:test";
 import express from "express";
 import request from "supertest";
 import xlsx from "xlsx";
 
 process.env.DATABASE_URL ??= "mysql://test:test@127.0.0.1:3306/test";
+process.env.JWT_SECRET ??= "external-calls-test-secret";
 
+const LIST = "/bluejack/Semester/GetSemestersWithActiveDate";
+const ACTIVE = "/bluejack/Semester/Active";
 const initialSemesters = [
     { SemesterID: "SEM-2520", Description: "Even Semester 2025/2026" },
     { SemesterID: "SEM-2610", Description: "Odd Semester 2026/2027" },
 ];
+const addedSemester = { SemesterID: "SEM-2620", Description: "Even Semester 2026/2027" };
+// Bluejack spells the id SemesterId for the active semester, SemesterID in the list.
+const activeSemester = { SemesterId: "SEM-2610", Description: "Odd Semester 2026/2027" };
 let semesters = initialSemesters;
 // When set, every Bluejack path answers with exactly this.
 let rawAnswer: { status: number; body: string; type?: string } | null = null;
 let hits: Record<string, number> = {};
 let failNext = 0;
 let delayMs = 0;
+
+const atlantisAccount = (email: string, extra: Record<string, unknown> = {}) => ({
+    Name: "EKA", BinusianID: "BN200000001", KodeDosen: "D5001",
+    email: [{ Email: email, isPrefEmail: "1" }],
+    ...extra,
+});
 
 const upstream = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://stub");
@@ -37,13 +52,14 @@ const upstream = http.createServer((req, res) => {
         res.writeHead(rawAnswer.status, { "Content-Type": rawAnswer.type ?? "application/json" });
         return res.end(rawAnswer.body);
     }
-    if (url.pathname === "/bluejack/Semester/GetSemestersWithActiveDate") return reply(200, semesters);
-    if (url.pathname === "/bluejack/Semester/Active") return reply(200, semesters[1]);
-    if (url.pathname === "/atlantis" && url.searchParams.get("input") === "eka@binus.edu") {
-        return reply(200, {
-            NIM: "", Name: "EKA", BinusianID: "BN200000001", KodeDosen: "D5001",
-            email: [{ Email: "eka@binus.edu", isPrefEmail: "1" }],
-        });
+    if (url.pathname === LIST) return reply(200, semesters);
+    if (url.pathname === ACTIVE) return reply(200, activeSemester);
+    if (url.pathname === "/atlantis") {
+        const input = url.searchParams.get("input") ?? "";
+        // Staff: Atlantis answers with an empty NIM, or with none at all.
+        if (input === "eka@binus.edu") return reply(200, atlantisAccount(input, { NIM: "" }));
+        if (input === "no.nim@binus.edu") return reply(200, atlantisAccount(input));
+        if (input === "down@binus.edu") return reply(503, { message: "Atlantis is down" });
     }
     return reply(404, { message: "not found" });
 });
@@ -55,12 +71,43 @@ process.env.ATLANTIS_API = `http://127.0.0.1:${port}/atlantis`;
 
 const { default: SemesterService, SEMESTER_CACHE_TTL_MS } = await import("../api/services/semester/semesterService.js");
 const { default: AtlantisService } = await import("../api/services/atlantis/atlantisService.js");
+const { default: AuthService } = await import("../api/services/auth/authService.js");
 const { default: semesterRoutes } = await import("../api/routes/semester/semesterRoutes.js");
+const { default: userRoutes } = await import("../api/routes/user/userRoutes.js");
 const { default: ClassRosterService } = await import("../api/services/class/classRosterService.js");
 const { prisma } = await import("../api/prisma/client.js");
 
 const app = express();
 app.use("/api/semester", semesterRoutes);
+app.use("/api/user", userRoutes);
+
+const workbook = (rows: unknown[][]) =>
+    xlsx.write({ SheetNames: ["S"], Sheets: { S: xlsx.utils.aoa_to_sheet(rows) } }, { type: "buffer", bookType: "xlsx" }) as Buffer;
+const classSheet = (term: number) => workbook([
+    ["term", "lecturer_name", "lecturer_code", "course_code", "course_name", "class", "location"],
+    [term, "Eka", "D5001", "COMP6100001", "Software Engineering", "LA01", "Kemanggisan"],
+]);
+const studentSheet = (term: number) => workbook([
+    ["nim", "name", "term", "course_code", "class"],
+    ["2702000001", "Student One", term, "COMP6100001", "LA01"],
+]);
+
+type InsertedRows = { semester_id: string }[];
+type InsertModel = "classTransaction" | "studentListTransaction";
+/** Replaces both roster inserts with ones that record their rows. */
+function captureInserts(t: TestContext) {
+    const inserted: Record<InsertModel, InsertedRows[]> = { classTransaction: [], studentListTransaction: [] };
+    for (const model of ["classTransaction", "studentListTransaction"] as const) {
+        const delegate = prisma[model] as unknown as { createMany: (args: { data: InsertedRows }) => Promise<{ count: number }> };
+        const original = delegate.createMany;
+        delegate.createMany = async (args) => {
+            inserted[model].push(args.data);
+            return { count: args.data.length };
+        };
+        t.after(() => { delegate.createMany = original; });
+    }
+    return inserted;
+}
 
 before(() => SemesterService.clearCache());
 beforeEach(() => {
@@ -84,15 +131,12 @@ describe("semester lookups", () => {
             const current = await request(app).get("/api/semester/current");
             assert.equal(all.status, 200);
             assert.deepEqual(all.body.data, semesters);
-            assert.deepEqual(current.body.data, semesters[1]);
+            assert.deepEqual(current.body.data, activeSemester);
         }
         // The Excel imports read the semester list through the same cache.
         assert.deepEqual((await SemesterService.getAllSemesterData()).data, semesters);
 
-        assert.deepEqual(hits, {
-            "/bluejack/Semester/GetSemestersWithActiveDate": 1,
-            "/bluejack/Semester/Active": 1,
-        });
+        assert.deepEqual(hits, { [LIST]: 1, [ACTIVE]: 1 });
     });
 
     it("share one Bluejack call between concurrent requests", async () => {
@@ -102,18 +146,27 @@ describe("semester lookups", () => {
         );
 
         assert.ok(responses.every((response) => response.status === 200));
-        assert.equal(hits["/bluejack/Semester/Active"], 1);
+        assert.equal(hits[ACTIVE], 1);
+    });
+
+    it("recover from one passing failure within the same request (AR-14)", async () => {
+        failNext = 1;
+        const response = await request(app).get("/api/semester/all");
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(response.body.data, semesters);
+        assert.equal(hits[LIST], 2, "the 503, then the retry");
     });
 
     it("don't cache a failure, so the next request asks again", async () => {
-        failNext = 1;
+        failNext = 2;
         const failed = await request(app).get("/api/semester/all");
         const retried = await request(app).get("/api/semester/all");
 
         assert.equal(failed.status, 400);
         assert.deepEqual(failed.body.errors, { message: "Bluejack is down" });
         assert.equal(retried.status, 200);
-        assert.equal(hits["/bluejack/Semester/GetSemestersWithActiveDate"], 2);
+        assert.equal(hits[LIST], 3);
     });
 
     it("ask Bluejack again once the cached answer is an hour old", async (t) => {
@@ -121,11 +174,11 @@ describe("semester lookups", () => {
         await SemesterService.getCurrentSemesterData();
         t.mock.timers.tick(SEMESTER_CACHE_TTL_MS - 1);
         await SemesterService.getCurrentSemesterData();
-        assert.equal(hits["/bluejack/Semester/Active"], 1);
+        assert.equal(hits[ACTIVE], 1);
 
         t.mock.timers.tick(2);
         await SemesterService.getCurrentSemesterData();
-        assert.equal(hits["/bluejack/Semester/Active"], 2);
+        assert.equal(hits[ACTIVE], 2);
     });
 
     it("pass odd answers on as before, without caching them", async () => {
@@ -136,6 +189,10 @@ describe("semester lookups", () => {
             { status: 200, body: '"Semester service paused"' },
             { status: 200, body: '[{"SemesterID": "SEM-2610"' },
             { status: 200, body: '[{"Description":"Odd Semester 2026/2027"}]' },
+            { status: 200, body: '[{"SemesterID":null,"Description":"Odd Semester 2026/2027"}]' },
+            { status: 200, body: '[{"SemesterID":"  ","Description":"Odd Semester 2026/2027"}]' },
+            { status: 200, body: '[{"SemesterID":"SEM-2610"}]' },
+            { status: 200, body: '[{"SemesterID":"SEM-2610","Description":"Odd Semester 2026/2027"},{"SemesterID":"SEM-2620"}]' },
         ]) {
             SemesterService.clearCache();
             hits = {};
@@ -144,14 +201,17 @@ describe("semester lookups", () => {
             await request(app).get("/api/semester/all");
 
             assert.equal(first.status, 200, answer.body);
-            assert.equal(hits["/bluejack/Semester/GetSemestersWithActiveDate"], 2, `not cached: ${answer.body}`);
+            assert.equal(hits[LIST], 2, `not cached: ${answer.body}`);
         }
     });
 
-    it("cache the active semester whichever way its id is capitalised, and nothing else", async () => {
+    it("cache the active semester only with the SemesterId and Description callers read", async () => {
         for (const [body, cached] of [
             ['{"SemesterId":"SEM-2610","Description":"Odd Semester 2026/2027"}', true],
-            ['{"SemesterID":"SEM-2610"}', true],
+            ['{"SemesterID":"SEM-2610","Description":"Odd Semester 2026/2027"}', false],
+            ['{"SemesterId":null,"Description":"Odd Semester 2026/2027"}', false],
+            ['{"SemesterId":"   ","Description":"Odd Semester 2026/2027"}', false],
+            ['{"SemesterId":"SEM-2610"}', false],
             ['{"message":"no active semester"}', false],
             ["[]", false],
         ] as const) {
@@ -161,45 +221,123 @@ describe("semester lookups", () => {
             await request(app).get("/api/semester/current");
             await request(app).get("/api/semester/current");
 
-            assert.equal(hits["/bluejack/Semester/Active"], cached ? 1 : 2, body);
+            assert.equal(hits[ACTIVE], cached ? 1 : 2, body);
         }
     });
 
-    it("skip and refresh the cache for a fresh lookup", async () => {
-        await SemesterService.getAllSemesterData();
-        semesters = [...initialSemesters, { SemesterID: "SEM-2620", Description: "Even Semester 2026/2027" }];
+    it("don't keep an answer with a blank id once Bluejack recovers", async () => {
+        rawAnswer = { status: 200, body: '{"SemesterId":null,"Description":"Odd Semester 2026/2027"}' };
+        await request(app).get("/api/semester/current");
+        rawAnswer = null;
+        const recovered = await request(app).get("/api/semester/current");
+        await request(app).get("/api/semester/current");
 
-        assert.equal(((await SemesterService.getAllSemesterData()).data as unknown[]).length, 2, "still cached");
-        assert.equal(((await SemesterService.getAllSemesterData({ fresh: true })).data as unknown[]).length, 3);
+        assert.deepEqual(recovered.body.data, activeSemester);
+        assert.equal(hits[ACTIVE], 2, "the usable answer is the one cached");
+    });
+
+    it("skip and refresh the cache for a fresh lookup", async () => {
+        assert.equal((await SemesterService.getAllSemesterData()).fromCache, false);
+        semesters = [...initialSemesters, addedSemester];
+
+        const cached = await SemesterService.getAllSemesterData();
+        assert.equal(cached.fromCache, true);
+        assert.equal((cached.data as unknown[]).length, 2, "still cached");
+        const fresh = await SemesterService.getAllSemesterData({ fresh: true });
+        assert.equal(fresh.fromCache, false);
+        assert.equal((fresh.data as unknown[]).length, 3);
         assert.equal(((await SemesterService.getAllSemesterData()).data as unknown[]).length, 3, "cache refreshed");
-        assert.equal(hits["/bluejack/Semester/GetSemestersWithActiveDate"], 2);
+        assert.equal(hits[LIST], 2);
+    });
+
+    it("keep serving the cached list while a refresh runs, and after it fails", async () => {
+        await request(app).get("/api/semester/all"); // caches the list
+        failNext = 2; // the refresh and its retry both get a 503
+        delayMs = 100;
+        const failedImport = ClassRosterService.importClassTransactionsFromExcel(classSheet(2620))
+            .then(() => null, (error: Error) => error);
+        const during = await request(app).get("/api/semester/all");
+        const failed = await failedImport;
+        const afterwards = await request(app).get("/api/semester/all");
+
+        assert.equal(during.status, 200);
+        assert.deepEqual(during.body.data, initialSemesters);
+        assert.match(String(failed?.message), /Invalid semester information/);
+        assert.equal(afterwards.status, 200);
+        assert.deepEqual(afterwards.body.data, initialSemesters);
+        assert.equal(hits[LIST], 3, "one call to fill the cache, then the refresh and its retry");
+    });
+
+    it("keep the cached list when a refresh gets an unusable answer", async () => {
+        await SemesterService.getAllSemesterData();
+        rawAnswer = { status: 200, body: '[{"SemesterID":null,"Description":"Even Semester 2026/2027"}]' };
+        await SemesterService.getAllSemesterData({ fresh: true });
+
+        assert.deepEqual((await SemesterService.getAllSemesterData()).data, initialSemesters);
     });
 
     it("let an Excel import use a semester Bluejack added after the list was cached", async (t) => {
-        const inserted: { semester_id: string }[][] = [];
-        const original = prisma.classTransaction.createMany;
-        prisma.classTransaction.createMany = (async (args: { data: { semester_id: string }[] }) => {
-            inserted.push(args.data);
-            return { count: args.data.length };
-        }) as unknown as typeof original;
-        t.after(() => { prisma.classTransaction.createMany = original; });
-        const sheet = (term: number) => xlsx.write({ SheetNames: ["S"], Sheets: { S: xlsx.utils.aoa_to_sheet([
-            ["term", "lecturer_name", "lecturer_code", "course_code", "course_name", "class", "location"],
-            [term, "Eka", "D5001", "COMP6100001", "Software Engineering", "LA01", "Kemanggisan"],
-        ]) } }, { type: "buffer", bookType: "xlsx" });
+        const inserted = captureInserts(t);
 
-        await ClassRosterService.importClassTransactionsFromExcel(sheet(2610)); // caches the list
-        semesters = [...initialSemesters, { SemesterID: "SEM-2620", Description: "Even Semester 2026/2027" }];
-        await ClassRosterService.importClassTransactionsFromExcel(sheet(2620));
+        await ClassRosterService.importClassTransactionsFromExcel(classSheet(2610)); // caches the list
+        semesters = [...initialSemesters, addedSemester];
+        await ClassRosterService.importClassTransactionsFromExcel(classSheet(2620));
 
-        assert.equal(inserted[1]?.[0]?.semester_id, "SEM-2620");
+        assert.equal(inserted.classTransaction[1]?.[0]?.semester_id, "SEM-2620");
         // A term Bluejack has never heard of still fails, after one fresh look.
-        await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(sheet(2710)), /Invalid semester information/);
+        await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(classSheet(2710)), /Invalid semester information/);
         // An unparseable term fails without asking Bluejack again.
-        const before = hits["/bluejack/Semester/GetSemestersWithActiveDate"];
-        await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(sheet(1999)), /Invalid semester information/);
-        assert.equal(hits["/bluejack/Semester/GetSemestersWithActiveDate"], before);
+        const before = hits[LIST];
+        await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(classSheet(1999)), /Invalid semester information/);
+        assert.equal(hits[LIST], before);
     });
+
+    it("share one refresh between concurrent imports of a newly added semester", async (t) => {
+        const inserted = captureInserts(t);
+        await SemesterService.getAllSemesterData(); // caches the list
+        semesters = [...initialSemesters, addedSemester];
+        delayMs = 50;
+
+        await Promise.all(Array.from({ length: 5 }, () => ClassRosterService.importClassTransactionsFromExcel(classSheet(2620))));
+
+        assert.equal(hits[LIST], 2, "one call to fill the cache, one shared refresh");
+        assert.deepEqual(inserted.classTransaction.map((rows) => rows[0]?.semester_id), Array(5).fill("SEM-2620"));
+    });
+
+    it("ask Bluejack once for an import that finds the list uncached", async (t) => {
+        const inserted = captureInserts(t);
+        semesters = [...initialSemesters, addedSemester];
+
+        await ClassRosterService.importClassTransactionsFromExcel(classSheet(2620));
+        assert.equal(hits[LIST], 1);
+        assert.equal(inserted.classTransaction[0]?.[0]?.semester_id, "SEM-2620");
+
+        SemesterService.clearCache();
+        hits = {};
+        await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(classSheet(2710)), /Invalid semester information/);
+        assert.equal(hits[LIST], 1, "a list fetched for this import is already fresh");
+    });
+});
+
+describe("Excel upload endpoints", () => {
+    for (const [endpoint, model, sheet] of [
+        ["upload-transaction-excel", "classTransaction", classSheet],
+        ["upload-student-excel", "studentListTransaction", studentSheet],
+    ] as const) {
+        it(`POST /api/user/admin/${endpoint} uses a semester Bluejack added after the list was cached`, async (t) => {
+            const inserted = captureInserts(t);
+            const upload = (term: number) =>
+                request(app).post(`/api/user/admin/${endpoint}`).attach("file", sheet(term), "rows.xlsx");
+
+            assert.equal((await upload(2610)).status, 200); // caches the list
+            semesters = [...initialSemesters, addedSemester];
+            const response = await upload(2620);
+
+            assert.equal(response.status, 200, JSON.stringify(response.body));
+            assert.deepEqual(inserted[model].map((rows) => rows[0]?.semester_id), ["SEM-2610", "SEM-2620"]);
+            assert.equal(hits[LIST], 2);
+        });
+    }
 });
 
 describe("Atlantis lookup for Microsoft sign-in", () => {
@@ -211,11 +349,28 @@ describe("Atlantis lookup for Microsoft sign-in", () => {
         assert.equal(hits["/atlantis"], 1);
     });
 
-    it("reports a missing account as a failure with no data", async () => {
+    it("reports a missing account as a definite miss", async () => {
         const result = await AtlantisService.getAtlantisData("nobody@binus.edu");
 
         assert.equal(result.status, false);
         assert.equal(result.data, null);
+        assert.equal(result.notFound, true);
+        assert.equal(hits["/atlantis"], 1, "a 404 isn't retried");
+    });
+
+    it("accepts an answer with no NIM", async () => {
+        const result = await AtlantisService.getAtlantisData("no.nim@binus.edu");
+
+        assert.equal(result.status, true);
+        assert.equal((result.data as { NIM?: string }).NIM, undefined);
+    });
+
+    it("reports an outage as a failure, not a miss", async () => {
+        const result = await AtlantisService.getAtlantisData("down@binus.edu");
+
+        assert.equal(result.status, false);
+        assert.equal(result.notFound, false);
+        assert.equal(hits["/atlantis"], 2, "retried once");
     });
 
     it("makes no call when ATLANTIS_API isn't set", async (t) => {
@@ -226,6 +381,26 @@ describe("Atlantis lookup for Microsoft sign-in", () => {
         const result = await AtlantisService.getAtlantisData("eka@binus.edu");
 
         assert.equal(result.status, false);
+        assert.equal(result.notFound, false);
         assert.equal(hits["/atlantis"], undefined);
+    });
+
+    it("lets sign-in refuse someone Atlantis has no account or NIM for, and ask for a retry only in an outage", async (t) => {
+        const original = prisma.user.findFirst;
+        prisma.user.findFirst = (async () => null) as unknown as typeof original;
+        t.after(() => { prisma.user.findFirst = original; });
+
+        for (const [email, status] of [
+            ["nobody@binus.edu", 403], // Atlantis: 404
+            ["no.nim@binus.edu", 403], // Atlantis: an account without a NIM
+            ["eka@binus.edu", 403], // Atlantis: an account with an empty NIM
+            ["down@binus.edu", 503], // Atlantis: 503 twice
+        ] as const) {
+            await assert.rejects(
+                AuthService.resolveSsoAccount(email),
+                (error: { status?: number }) => error.status === status,
+                email,
+            );
+        }
     });
 });

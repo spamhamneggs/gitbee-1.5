@@ -9,24 +9,37 @@ import { externalApi } from "../../utils/http/externalApi.js";
  */
 export const SEMESTER_CACHE_TTL_MS = 60 * 60 * 1000;
 
+/** A semester answer, and whether it came from the cache instead of a Bluejack call made for it. */
+export type SemesterResult = APIResponse & { fromCache: boolean };
+
 interface CacheEntry {
     expiresAt: number;
-    response: Promise<APIResponse>;
+    response: APIResponse;
 }
 
-// Keyed by full URL. Concurrent requests share one in-flight call. Only
-// answers that look like semesters are kept: a failure, or an odd answer such
-// as a proxy's HTML page or an empty list, is passed on once (as before
-// caching) and the next request asks Bluejack again.
+// Keyed by full URL. Only answers that callers can use are kept: a failure, or
+// an odd answer such as a proxy's HTML page or an empty list, is passed on
+// once (as before caching) and the next request asks Bluejack again. A cached
+// answer stays in place while a refresh runs, and only a usable answer
+// replaces it.
 const cache = new Map<string, CacheEntry>();
+// At most one Bluejack call per URL at a time; everyone who needs it shares it.
+const inFlight = new Map<string, Promise<APIResponse>>();
+// Bumped by clearCache, so a call that was already running can't refill the cache.
+let generation = 0;
 
-// The two endpoints spell the id differently (SemesterID in the list,
-// SemesterId for the active one), so match the key without case.
-const isSemester = (value: unknown) =>
-    typeof value === "object" && value !== null && !Array.isArray(value) &&
-    Object.keys(value).some((key) => key.toLowerCase() === "semesterid");
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+const isFilled = (value: unknown) => typeof value === "string" && value.trim() !== "";
+
+// The fields the callers read. The list spells the id SemesterID (the Excel
+// imports and the semester menu use it with Description); the active semester
+// spells it SemesterId (the dashboards use it, and the menu shows Description).
 const isSemesterList = (value: unknown) =>
-    Array.isArray(value) && value.length > 0 && value.every(isSemester);
+    Array.isArray(value) && value.length > 0 &&
+    value.every((item) => isRecord(item) && isFilled(item.SemesterID) && isFilled(item.Description));
+const isActiveSemester = (value: unknown) =>
+    isRecord(value) && isFilled(value.SemesterId) && isFilled(value.Description);
 
 async function fetchFromBluejack(url: string): Promise<APIResponse> {
     try {
@@ -45,39 +58,48 @@ async function fetchFromBluejack(url: string): Promise<APIResponse> {
     }
 }
 
-function getCached(path: string, isCacheable: (data: unknown) => boolean, fresh = false): Promise<APIResponse> {
-    const url = `${process.env.BLUEJACK_API}${path}`;
-    const now = Date.now();
-    const cached = cache.get(url);
-    if (!fresh && cached && cached.expiresAt > now) {
-        return cached.response;
+function refresh(url: string, isUsable: (data: unknown) => boolean): Promise<APIResponse> {
+    let pending = inFlight.get(url);
+    if (!pending) {
+        const startedIn = generation;
+        pending = fetchFromBluejack(url)
+            .then((result) => {
+                if (startedIn === generation && result.status === true && isUsable(result.data)) {
+                    cache.set(url, { expiresAt: Date.now() + SEMESTER_CACHE_TTL_MS, response: result });
+                }
+                return result;
+            })
+            .finally(() => {
+                if (inFlight.get(url) === pending) inFlight.delete(url);
+            });
+        inFlight.set(url, pending);
     }
+    return pending;
+}
 
-    const entry: CacheEntry = {
-        expiresAt: now + SEMESTER_CACHE_TTL_MS,
-        response: fetchFromBluejack(url).then((result) => {
-            if (!(result.status === true && isCacheable(result.data)) && cache.get(url) === entry) {
-                cache.delete(url);
-            }
-            return result;
-        }),
-    };
-    cache.set(url, entry);
-    return entry.response;
+async function getSemesters(path: string, isUsable: (data: unknown) => boolean, fresh = false): Promise<SemesterResult> {
+    const url = `${process.env.BLUEJACK_API}${path}`;
+    const cached = cache.get(url);
+    if (!fresh && cached && cached.expiresAt > Date.now()) {
+        return { ...cached.response, fromCache: true };
+    }
+    return { ...(await refresh(url, isUsable)), fromCache: false };
 }
 
 export default class SemesterService {
-    /** Every semester. `fresh` skips the cache (and refreshes it). */
-    static getAllSemesterData(options: { fresh?: boolean } = {}): Promise<APIResponse> {
-        return getCached("Semester/GetSemestersWithActiveDate", isSemesterList, options.fresh);
+    /** Every semester. `fresh` skips the cache (and refreshes it if Bluejack's answer is usable). */
+    static getAllSemesterData(options: { fresh?: boolean } = {}): Promise<SemesterResult> {
+        return getSemesters("Semester/GetSemestersWithActiveDate", isSemesterList, options.fresh);
     }
 
-    static getCurrentSemesterData(): Promise<APIResponse> {
-        return getCached("Semester/Active", isSemester);
+    static getCurrentSemesterData(): Promise<SemesterResult> {
+        return getSemesters("Semester/Active", isActiveSemester);
     }
 
     /** Forgets every cached semester response (tests, or after Bluejack changes). */
     static clearCache() {
+        generation += 1;
         cache.clear();
+        inFlight.clear();
     }
 }

@@ -1,7 +1,9 @@
 // The shared client for Bluejack and Atlantis (AR-14, GB-09): a deadline on
-// every call, certificate verification always on, and an optional extra CA
-// that applies to this client only.
+// every call, one retry for a GET that fails in a passing way, certificate
+// verification always on, and an optional extra CA that applies to this
+// client only.
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { X509Certificate } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import http from "node:http";
@@ -9,7 +11,8 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import tls from "node:tls";
-import { after, describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
+import { after, beforeEach, describe, it } from "node:test";
 import {
     createExternalApi,
     EXTERNAL_API_TIMEOUT_MS,
@@ -29,8 +32,23 @@ const tempFile = (name: string, contents: string | Buffer) => {
 
 // /silent accepts the request and never answers; /trickle answers at once,
 // then sends one byte every 100 ms for 3 s, so the connection is never idle.
+// The rest fail in a set way on their first request (`first`) or every time
+// (`always`), and answer {"ok":true} otherwise. Requests are counted per
+// method and path in `hits`.
+let hits: Record<string, number> = {};
 const upstream = http.createServer((req, res) => {
-    if (req.url === "/trickle") {
+    const url = new URL(req.url ?? "/", "http://stub");
+    const key = `${req.method} ${url.pathname}`;
+    const count = (hits[key] = (hits[key] ?? 0) + 1);
+    const ok = () => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end('{"ok":true}');
+    };
+    const status = (code: number, afterMs = 0) => setTimeout(() => {
+        res.writeHead(code, { "Content-Type": "application/json" });
+        res.end(`{"status":${code}}`);
+    }, afterMs);
+    if (url.pathname === "/trickle") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.write("[");
         let sent = 0;
@@ -40,6 +58,16 @@ const upstream = http.createServer((req, res) => {
             res.end("]");
         }, 100);
         res.on("close", () => clearInterval(timer));
+    } else if (url.pathname === "/first") {
+        // ?status=503 answers that status once; ?drop drops the first connection.
+        if (count > 1) return ok();
+        if (url.searchParams.has("drop")) return void req.socket.destroy();
+        status(Number(url.searchParams.get("status")));
+    } else if (url.pathname === "/always") {
+        status(Number(url.searchParams.get("status")), Number(url.searchParams.get("after") ?? 0));
+    } else if (url.pathname === "/first-then-silent") {
+        // A quick 503, then a retry that never gets an answer.
+        if (count === 1) status(503);
     }
 });
 await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
@@ -53,6 +81,10 @@ after(() => {
 
 const expectTimeout = (ms: number) => (error: { code?: string; message: string }) =>
     error.code === "ECONNABORTED" && error.message === `timeout of ${ms}ms exceeded`;
+const expectStatus = (status: number) => (error: { response?: { status: number } }) => error.response?.status === status;
+const fingerprints = (pems: string[]) => pems.map((pem) => new X509Certificate(pem).fingerprint256);
+
+beforeEach(() => { hits = {}; });
 
 describe("external API client", () => {
     it("gives every call a 5 second timeout and the default trust store", () => {
@@ -64,15 +96,34 @@ describe("external API client", () => {
         assert.equal(externalApi(), client, "one shared instance");
     });
 
-    it("trusts EXTERNAL_API_CA_FILE in addition to the public roots, for this client only", () => {
+    it("trusts EXTERNAL_API_CA_FILE in addition to Node's own CAs, for this client only", () => {
         const client = createExternalApi({ EXTERNAL_API_CA_FILE: fixture("test-ca.pem") });
         const options = client.defaults.httpsAgent.options;
 
         assert.equal(client.defaults.timeout, 5_000);
-        assert.deepEqual(options.ca.slice(-1), [testCa]);
-        assert.equal(options.ca.length, tls.rootCertificates.length + 1);
+        assert.deepEqual(options.ca, [...tls.getCACertificates("default"), testCa]);
         assert.notEqual(options.rejectUnauthorized, false);
         assert.equal(externalApi().defaults.httpsAgent, undefined, "the shared client is unaffected");
+    });
+
+    it("keeps a CA that Node was started with through NODE_EXTRA_CA_CERTS", () => {
+        // Node reads NODE_EXTRA_CA_CERTS only at startup, so check in a fresh process.
+        const moduleUrl = pathToFileURL(path.join(import.meta.dirname, "../api/utils/http/externalApi.ts")).href;
+        const probe = tempFile("probe.mts", [
+            `const { createExternalApi } = await import(${JSON.stringify(moduleUrl)});`,
+            `const client = createExternalApi({ EXTERNAL_API_CA_FILE: ${JSON.stringify(fixture("test-ca.pem"))} });`,
+            "console.log(JSON.stringify(client.defaults.httpsAgent.options.ca));",
+        ].join("\n"));
+        const tsx = path.join(import.meta.dirname, "../node_modules/tsx/dist/cli.mjs");
+        const result = spawnSync(process.execPath, [tsx, probe], {
+            env: { ...process.env, NODE_EXTRA_CA_CERTS: fixture("other-ca.pem") },
+            encoding: "utf8",
+        });
+        assert.equal(result.status, 0, result.stderr);
+        const trusted = fingerprints(JSON.parse(result.stdout.trim().split("\n").at(-1)!));
+
+        assert.ok(trusted.includes(fingerprints([otherCa])[0]!), "the NODE_EXTRA_CA_CERTS CA is still trusted");
+        assert.equal(trusted.at(-1), fingerprints([testCa])[0], "EXTERNAL_API_CA_FILE is added");
     });
 
     it("reads every certificate in a bundle, a DER file, and a padded path", () => {
@@ -118,6 +169,42 @@ describe("external API client", () => {
         const call = createExternalApi({}, 2_000).get(upstreamUrl("/silent"), { signal: controller.signal });
         controller.abort();
         await assert.rejects(call, (error: { code?: string }) => error.code === "ERR_CANCELED");
+    });
+
+    it("recovers a GET from one gateway error or dropped connection, in the same call", async () => {
+        const client = createExternalApi({}, 2_000);
+        for (const query of ["status=502", "status=503", "status=504", "drop"]) {
+            hits = {};
+            const response = await client.get(upstreamUrl(`/first?${query}`));
+
+            assert.deepEqual(response.data, { ok: true }, query);
+            assert.equal(hits["GET /first"], 2, query);
+        }
+    });
+
+    it("tries a failing GET only twice, and doesn't retry other failures or other methods", async () => {
+        const client = createExternalApi({}, 2_000);
+
+        await assert.rejects(client.get(upstreamUrl("/always?status=503")), expectStatus(503));
+        assert.equal(hits["GET /always"], 2);
+        await assert.rejects(client.get(upstreamUrl("/always?status=404")), expectStatus(404));
+        await assert.rejects(client.get(upstreamUrl("/always?status=500")), expectStatus(500));
+        assert.equal(hits["GET /always"], 4, "a 404 or 500 isn't retried");
+        await assert.rejects(client.post(upstreamUrl("/first?status=503")), expectStatus(503));
+        assert.equal(hits["POST /first"], 1, "only GETs are retried");
+    });
+
+    it("keeps a retry inside the original deadline", { timeout: 3_000 }, async () => {
+        const started = Date.now();
+        await assert.rejects(createExternalApi({}, 1_000).get(upstreamUrl("/first-then-silent")), expectTimeout(1_000));
+
+        assert.equal(hits["GET /first-then-silent"], 2, "retried after the 503");
+        assert.ok(Date.now() - started < 1_500, "one deadline for both tries");
+    });
+
+    it("skips the retry when too little of the deadline is left for it", async () => {
+        await assert.rejects(createExternalApi({}, 800).get(upstreamUrl("/always?status=503&after=400")), expectStatus(503));
+        assert.equal(hits["GET /always"], 1);
     });
 
     it("leaves certificate verification on everywhere in the backend", () => {

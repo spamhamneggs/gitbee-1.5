@@ -100,8 +100,10 @@ describe("backend session identity", () => {
     const microsoft_token = jwt.sign({ preferred_username: "new.student@example.com", name: "New Student" }, "upstream-test-secret");
 
     for (const [atlantis, status, message] of [
-      // Unreachable, timed out, not configured, or no account returned.
+      // Unreachable, timed out, not configured, or an unusable answer.
       [{ status: false, data: null, errors: "timeout of 5000ms exceeded" }, 503, /try again in a few minutes/],
+      // Atlantis has no such account (a 404).
+      [{ status: false, data: null, errors: { message: "not found" }, notFound: true }, 403, /no GitBee account/],
       // Atlantis knows the person but has no NIM (e.g. staff with no GitBee account).
       [{ status: true, data: { NIM: "", KodeDosen: "D9999" } }, 403, /no GitBee account/],
       [{ status: true, data: { NIM: "   " } }, 403, /no GitBee account/],
