@@ -73,7 +73,7 @@ Staff columns:
 lecturer_code,name,email,binusian_id,role,major_codes,password
 ```
 
-- UTF-8 CSV (comma or semicolon separated) or `.xlsx`; older `.xls` files must be saved as `.xlsx` first. In Excel, use CSV UTF-8 to preserve accented names. Manage Users accepts the same CSV separators.
+- UTF-8 CSV (comma or semicolon separated) or `.xlsx`; older `.xls` files must be saved as `.xlsx` first. In Excel, use CSV UTF-8 to preserve accented names. Manage Users and Students accept the same CSV separators.
 - Limit: 5 MB, 1,000 data rows per file, 4,000 total data rows per JSON batch, with no fixed file-count limit. Excel files must contain one worksheet and plain values. Formulas and encrypted files are rejected.
 - The row limit counts rows containing values, not formatting-only empty cells; reported row numbers still match the source worksheet.
 - Headers must match the template. All headers are required, but `binusian_id` cells may be blank. Keep identifiers as text or use an Excel number format that preserves leading zeroes.
@@ -179,7 +179,7 @@ The data-tools router is mounted at `/admin/data-tools` only when `DEMO_TOOLS=tr
 
 The demo Get Data section offers Students and Staff, search, staff-role filtering, and 20-row pages. After a JSON save it clears filters, returns to page one, and fetches the imported type (Students for mixed batches). Switch to Staff and click Get Data to inspect staff from a mixed batch. Requests carry the session cookie, disable caching, and cancel stale requests. Errors clear old results and allow retry.
 
-Manage Users uses the same two account routes. Its Students view is read-only; staff views retain existing update controls. CSV import success selects Students or All staff, clears search, and reloads page one. Staff Update keeps the current search, role filter, and page. The existing class-roster Students page remains separate from student login accounts.
+Manage Users uses the same two account routes. Its Students view is read-only; staff views retain existing update controls. CSV import success selects Students or All staff, clears search, and reloads page one. Staff Update keeps the current search, role filter, and page. The Students page (`/manage-student`) reads the same student account route through `getAccounts("student", …)` and imports with `uploadStudentsCsv`, so its list and imports match the Students view.
 
 Manage Users follows local login eligibility from PR #69. Legacy staff roles such as `admin` or `HoP ` do not match the exact role rules, so those accounts no longer appear here for repair. This does not alter stored roles; correcting existing records requires a separate administrative data correction.
 

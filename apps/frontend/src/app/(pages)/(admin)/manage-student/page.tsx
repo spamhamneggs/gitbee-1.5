@@ -5,36 +5,68 @@ import { CiSearch } from "react-icons/ci";
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import Link from "next/link";
-import { deleteAllStudents, getAllStudents } from "./actions";
+import ImportCsv from "@/app/components/manage-student/ImportCsv";
+import { getAccounts, type Account } from "@/lib/accountApi";
 import Loading from "@/app/components/Loading";
-import ImportExcel from "@/app/components/manage-student/ImportExcel";
-import PopUpConfirmation from "@/app/components/manage-student/PopUpConfirmation";
 
 const Page = () => {
   const { scrollYProgress } = useScroll();
   const prevScrollYRef = useRef(0);
   const [expand, setExpand] = useState(true);
   const [search, setSearch] = useState("");
-  const [students, setStudents] = useState<any>([]);
-  const [openImportExcel, setOpenImportExcel] = useState(false);
-  const [openPopUpConfirmation, setOpenPopUpConfirmation] = useState(false);
+  const [students, setStudents] = useState<Account[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const requestRef = useRef<AbortController | null>(null);
+  const pageSize = 20;
+  const [openImportCsv, setOpenImportCsv] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const resultStudents = await getAllStudents(search);
-    setStudents(resultStudents?.data);
-  }, [search]);
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setLoading(true);
+    setError("");
+    setStudents([]);
+    try {
+      const result = await getAccounts("student", {
+        search,
+        page,
+        pageSize,
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted) {
+        setStudents(result.items);
+        setTotal(result.total);
+      }
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setTotal(0);
+        setError(
+          cause instanceof Error ? cause.message : "Could not fetch accounts.",
+        );
+      }
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  }, [search, page]);
+
+  const refreshStudents = () => {
+    setSearch("");
+    setPage(1);
+    setRevision((value) => value + 1);
+  };
 
   useEffect(() => {
-    const handleScroll = (currentScrollY: number) => { 
-
+    const handleScroll = (currentScrollY: number) => {
       if (currentScrollY < 0.1) setExpand(true);
       else if (currentScrollY > prevScrollYRef.current) setExpand(false);
       else if (currentScrollY < prevScrollYRef.current) setExpand(true);
@@ -54,128 +86,129 @@ const Page = () => {
         scrollYProgress.onChange(handleScroll);
       }
     };
- 
+
     scrollListener();
- 
+
     const resizeListener = () => {
       scrollListener();
     };
     window.addEventListener("resize", resizeListener);
 
     return () => {
-      window.removeEventListener("resize", resizeListener); 
+      window.removeEventListener("resize", resizeListener);
       scrollYProgress.clearListeners();
     };
   }, [scrollYProgress]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleDeleteAllStudents = async () => {
-    setLoading(true);
-    await deleteAllStudents();
-    setOpenPopUpConfirmation(false);
-    fetchData();
-    setLoading(false);
-  };
+    void fetchData();
+    return () => requestRef.current?.abort();
+  }, [fetchData, revision]);
 
   return (
-    <motion.div className="relative min-h-screen flex flex-col pt-28 2xl:px-16 bg-gray-50 pb-10">
-      <div
-        className={`bg-gray-50 fixed top-0 ${
-          expand ? "h-[10rem] sm:h-[12.25rem]" : "h-[7rem]"
-        } w-full left-0 z-10`}
-      ></div>
+    <motion.div className="relative min-h-screen flex flex-col pt-20 sm:pt-28 2xl:px-16 pb-10 bg-gray-50">
       <div
         className={`sticky ${
-          expand ? "top-28" : "top-7"
-        } z-10 w-full flex justify-between items-center gap-3 sm:gap-5 px-5 sm:px-9 h-[4.5rem] sm:h-[5.25rem] transition-all ease-in-out duration-300 bg-gray-50 pb-7`}
+          expand ? "top-20 sm:top-28" : "top-7"
+        } z-10 w-full flex flex-wrap lg:flex-nowrap justify-between items-center gap-3 md:gap-5 px-5 sm:px-9 h-full lg:h-[5.25rem] transition-all ease-in-out duration-300 bg-gray-50 pb-7`}
       >
         <div className="relative w-full flex justify-start items-center h-full">
           <CiSearch
-            className="absolute ml-3 w-7 h-7 pr-2 border-r"
+            className="absolute ml-3 w-5 h-5 sm:w-7 sm:h-7 pr-2 border-r"
             fill="#6B7280"
           />
           <input
             type="text"
             placeholder="Search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            maxLength={150}
+            aria-label="Search students"
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className={`border ${
               expand ? "w-full" : "w-[35.5rem]"
-            } h-full p-3 px-12 rounded-md text-sm sm:text-base`}
+            } h-full p-2 sm:p-3 px-12 sm:px-12 rounded-md text-sm sm:text-base`}
           />
         </div>
-        <div className="relative min-w-fit flex justify-end items-center h-full bg-white border rounded-md px-2 gap-2">
+        <div className="relative min-w-fit flex justify-end items-center h-full bg-white border rounded-md py-2 px-2 gap-2">
           <button
-            className="w-full whitespace-nowrap cursor-pointer py-1 sm:py-2 px-2 sm:px-4 relative text-primary-binus rounded-sm text-sm sm:text-base"
-            onClick={() => setOpenImportExcel(true)}
+            className="w-full whitespace-nowrap cursor-pointer text-xs sm:text-base py-1 px-2 md:py-2 md:px-3 relative text-primary-binus rounded-sm"
+            onClick={() => setOpenImportCsv(true)}
           >
-            Import Excel
+            Import CSV
           </button>
         </div>
       </div>
 
-      <div className="mx-5 sm:mx-9 text-end mb-2 text-sm sm:text-base">
-        <span
-          onClick={() => setOpenPopUpConfirmation(true)}
-          className="text-red-500 cursor-pointer"
-        >
-          Delete All Students
-        </span>
-      </div>
+      {error && (
+        <p role="alert" className="mx-5 sm:mx-9 mb-3 text-red-600">
+          {error}{" "}
+          <button className="underline" onClick={fetchData}>
+            Retry
+          </button>
+        </p>
+      )}
       <div className="w-auto bg-white shadow-md rounded-md mx-5 sm:mx-9">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="text-start">No.</TableHead>
-              <TableHead className="text-center">Nim</TableHead>
+              <TableHead className="text-center">Student ID</TableHead>
               <TableHead className="text-center">Name</TableHead>
-              <TableHead className="text-center">Course Code</TableHead>
-              <TableHead className="text-center">Class</TableHead>
-              <TableHead className="text-center">Semester Id</TableHead>
+              <TableHead className="text-center">Binusian ID</TableHead>
+              <TableHead className="text-center">Email</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {students?.map((student: any, index: number) => (
-              <TableRow key={student?.student_id}>
+            {students.map((student, index) => (
+              <TableRow key={student?.email}>
                 <TableCell className="text-start font-medium">
-                  {index + 1}.
+                  {(page - 1) * pageSize + index + 1}.
                 </TableCell>
                 <TableCell className="text-center">
-                  {student?.student_id}
+                  {student.student_id}
                 </TableCell>
+                <TableCell className="text-center">{student.name}</TableCell>
                 <TableCell className="text-center">
-                  {student?.student_name}
+                  {student.binusian_id}
                 </TableCell>
-                <TableCell className="text-center">
-                  {student?.course_code}
-                </TableCell>
-                <TableCell className="text-center">{student?.class}</TableCell>
-                <TableCell className="text-center">
-                  {student?.semester_id}
-                </TableCell>
+                <TableCell className="text-center">{student.email}</TableCell>
               </TableRow>
             ))}
           </TableBody>
-        </Table> 
-        {students?.length < 1 && (
+        </Table>
+        {!loading && !error && students.length === 0 && (
           <div className="w-full text-center py-5 text-gray-500">
             No Data . . .
           </div>
         )}
       </div>
-      {openImportExcel && (
-        <ImportExcel
-          setOpenImportExcel={setOpenImportExcel}
-          fetchData={fetchData}
-        />
-      )}
-      {openPopUpConfirmation && (
-        <PopUpConfirmation
-          setOpenPopUpConfirmation={setOpenPopUpConfirmation}
-          handleDeleteAllStudents={handleDeleteAllStudents}
+      <div className="mx-5 sm:mx-9 flex justify-between items-center gap-4 py-4">
+        <button
+          className="disabled:opacity-40"
+          disabled={loading || page <= 1}
+          onClick={() => setPage((value) => value - 1)}
+        >
+          Previous students page
+        </button>
+        <span>
+          {total} students · Page {page} of{" "}
+          {Math.max(1, Math.ceil(total / pageSize))}
+        </span>
+        <button
+          className="disabled:opacity-40"
+          disabled={loading || page * pageSize >= total}
+          onClick={() => setPage((value) => value + 1)}
+        >
+          Next students page
+        </button>
+      </div>
+      {openImportCsv && (
+        <ImportCsv
+          setOpenImportCsv={setOpenImportCsv}
+          fetchData={refreshStudents}
         />
       )}
       {loading && <Loading />}

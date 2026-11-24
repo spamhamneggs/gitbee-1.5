@@ -82,7 +82,6 @@ describe("API route table", () => {
       "PATCH /user/admin/update-role",
       "POST /user/admin/upload-staff-csv",
       "POST /user/admin/upload-student-csv",
-      "POST /user/admin/upload-student-excel",
       "POST /user/admin/upload-transaction-excel",
     ].sort());
   });
@@ -93,7 +92,7 @@ describe("API route table", () => {
       "GET /reviewed-project/all", "GET /outstanding-project/all", "GET /status/all",
       "GET /technology/data", "POST /major/insert", "GET /group/lecturer/class-list",
       "GET /group/lecturer/class-group", "GET /deadline/check",
-      "POST /user/admin/upload-user-excel",
+      "POST /user/admin/upload-user-excel", "POST /user/admin/upload-student-excel",
     ]) {
       assert.ok(!routeTable.includes(removed), `${removed} is still routed`);
     }

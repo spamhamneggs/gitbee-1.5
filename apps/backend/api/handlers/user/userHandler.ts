@@ -233,17 +233,6 @@ export default class UserHandler {
         }
     }
 
-    static async importStudentEnrolmentsExcel(req: Request, res: Response) {
-        try {
-            if (!req.file) {
-                return sendErrorResponse(res, "No file uploaded.");
-            }
-            sendSuccessResponse(res, await ClassRosterService.importStudentEnrolmentsFromExcel(req.file.buffer));
-        } catch (error) {
-            sendServiceError(res, error, "Failed to process the Excel file.");
-        }
-    }
-
     static async deleteAllStudentEnrolments(_req: Request, res: Response) {
         try {
             sendSuccessResponse(res, await ClassRosterService.deleteAllStudentEnrolments());
