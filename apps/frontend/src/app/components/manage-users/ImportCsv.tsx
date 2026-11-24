@@ -127,6 +127,13 @@ function ImportCsv(props: ImportCsvProps) {
               aria-checked={type === option}
               onClick={() => {
                 setType(option);
+                // A staff CSV and a student CSV have incompatible required
+                // columns, so a file chosen for one type can never be valid
+                // for the other. Drop the selection (and the native picker's
+                // value) instead of letting a stale file be re-uploaded to the
+                // wrong endpoint.
+                setSelectedFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
                 resetReport();
                 setError(null);
               }}

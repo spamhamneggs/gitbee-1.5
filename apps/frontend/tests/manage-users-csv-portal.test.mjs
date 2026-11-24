@@ -177,6 +177,24 @@ test("the portal routes the picker and drops through the tested selector", () =>
   );
 });
 
+test("switching the account type drops the selected file", () => {
+  // The Staff and Students schemas require different columns, so a file picked
+  // for one type can never be valid for the other. Switching tabs must clear
+  // the selection and the native picker, otherwise the stale file gets posted
+  // to the wrong endpoint and fails with "Missing required CSV columns".
+  const tabSwitch = importCsv.slice(importCsv.indexOf("setType(option)"));
+  assert.match(
+    tabSwitch,
+    /setSelectedFile\(null\)/,
+    "the selection is cleared when the type changes"
+  );
+  assert.match(
+    tabSwitch,
+    /fileInputRef\.current\.value = ""/,
+    "the native picker is cleared so it can't re-emit the old file"
+  );
+});
+
 test("portal messages are announced to assistive tech", () => {
   assert.match(importCsv, /role="alert"/, "the validation error is exposed as an alert");
 });
