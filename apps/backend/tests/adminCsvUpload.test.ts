@@ -158,6 +158,24 @@ describe("Admin CSV uploads", () => {
     assert.equal(fakeStore.users[0]?.name, "Ada");
   });
 
+  it("accepts a semicolon-delimited CSV with quoted fields and surrounding spaces", async () => {
+    const semicolonHeaders = "nim ; name ; email ; binusian_id ; major_code ; password";
+    const quotedRow = ` "2501959296" ; "Ada" ; "ada@example.com" ; "B123" ; "COMP" ; "secret" `;
+    const csv = `${semicolonHeaders}\n${quotedRow}\n`;
+    const response = await request(app)
+      .post(studentCsvPath)
+      .attach("file", Buffer.from(csv), {
+        filename: "users.csv",
+        contentType: "text/csv",
+      })
+      .set("Cookie", authCookie);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.data.createdCount, 1);
+    assert.equal(fakeStore.users[0]?.student_id, "2501959296");
+    assert.equal(fakeStore.users[0]?.name, "Ada");
+  });
+
   it("accepts a staff CSV upload", async () => {
     const response = await request(app)
       .post(staffCsvPath)
@@ -887,5 +905,42 @@ describe("Admin CSV uploads", () => {
 
     assert.equal(response.status, 400);
     assert.notEqual(response.status, 413);
+  });
+
+  it("requires admin authentication to upload the student roster Excel", async () => {
+    const noAuthResponse = await request(app)
+      .post("/api/user/admin/upload-student-excel")
+      .attach("file", Buffer.from("not-an-excel"), {
+        filename: "roster.xlsx",
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+    assert.equal(noAuthResponse.status, 401);
+  });
+
+  it("forbids non-admins from uploading the student roster Excel", async () => {
+    // resolveCurrentSession looks up the token's email; return a lecturer so
+    // the session resolves but currentAdminMiddleware denies the request.
+    userDelegate.findUnique = async () => ({
+      id: 2,
+      email: "lecturer@example.com",
+      role: "Lecturer",
+      user_type: "Staff",
+      student_id: null,
+      lecturer_code: "lecturer-user",
+      credential_version: 0,
+    });
+
+    const response = await request(app)
+      .post("/api/user/admin/upload-student-excel")
+      .attach("file", Buffer.from("not-an-excel"), {
+        filename: "roster.xlsx",
+        contentType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      })
+      .set("Cookie", `${process.env.COOKIE_NAME}=${lecturerToken}`);
+
+    assert.equal(response.status, 403);
   });
 });

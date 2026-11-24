@@ -35,7 +35,7 @@ userRoutes.patch("/admin/remove-transaction-excel", UserHandler.deleteAllClassTr
 
 // Student enrolments (class rosters)
 userRoutes.get("/admin/get-student", UserHandler.listStudentEnrolments);
-userRoutes.post("/admin/upload-student-excel", uploadExcel, UserHandler.importStudentEnrolmentsExcel);
+userRoutes.post("/admin/upload-student-excel", currentAdminMiddleware, uploadExcel, UserHandler.importStudentEnrolmentsExcel);
 userRoutes.patch("/admin/remove-student-excel", UserHandler.deleteAllStudentEnrolments);
 
 export default userRoutes;

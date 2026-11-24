@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import ImportCsv from "@/app/components/manage-student/ImportCsv";
+import ImportRosterExcel from "@/app/components/manage-student/ImportRosterExcel";
 import { getAccounts, type Account } from "@/lib/accountApi";
 import Loading from "@/app/components/Loading";
 
@@ -26,7 +27,10 @@ const Page = () => {
   const [revision, setRevision] = useState(0);
   const requestRef = useRef<AbortController | null>(null);
   const pageSize = 20;
+  const importCsvRef = useRef<HTMLButtonElement>(null);
+  const importRosterRef = useRef<HTMLButtonElement>(null);
   const [openImportCsv, setOpenImportCsv] = useState(false);
+  const [openImportRoster, setOpenImportRoster] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -134,6 +138,14 @@ const Page = () => {
         </div>
         <div className="relative min-w-fit flex justify-end items-center h-full bg-white border rounded-md py-2 px-2 gap-2">
           <button
+            ref={importRosterRef}
+            className="w-full whitespace-nowrap cursor-pointer text-xs sm:text-base py-1 px-2 md:py-2 md:px-3 relative text-primary-binus rounded-sm"
+            onClick={() => setOpenImportRoster(true)}
+          >
+            Import Lab Roster
+          </button>
+          <button
+            ref={importCsvRef}
             className="w-full whitespace-nowrap cursor-pointer text-xs sm:text-base py-1 px-2 md:py-2 md:px-3 relative text-primary-binus rounded-sm"
             onClick={() => setOpenImportCsv(true)}
           >
@@ -209,6 +221,14 @@ const Page = () => {
         <ImportCsv
           setOpenImportCsv={setOpenImportCsv}
           fetchData={refreshStudents}
+          restoreFocusRef={importCsvRef}
+        />
+      )}
+      {openImportRoster && (
+        <ImportRosterExcel
+          setOpen={setOpenImportRoster}
+          fetchData={refreshStudents}
+          restoreFocusRef={importRosterRef}
         />
       )}
       {loading && <Loading />}

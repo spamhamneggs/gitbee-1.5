@@ -38,6 +38,8 @@ interface CsvImporterProps {
   uploadFn: (file: File, type: string) => Promise<CsvImportResult>;
   onClose: () => void;
   onImported: (type: string) => void;
+  /** The button that opened the dialog, so focus returns to it on close. */
+  restoreFocusRef?: { current: HTMLElement | null } | undefined;
 }
 
 // The report lists skipped duplicates as well as rejected rows, in file order,
@@ -52,6 +54,7 @@ function CsvImporter({
   uploadFn,
   onClose,
   onImported,
+  restoreFocusRef,
 }: CsvImporterProps) {
   const optionKeys = Object.keys(options);
   const [type, setType] = useState(defaultOption);
@@ -117,7 +120,15 @@ function CsvImporter({
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-[34rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-[34rem] max-h-[90vh] overflow-y-auto"
+        onCloseAutoFocus={(event) => {
+          if (restoreFocusRef?.current) {
+            event.preventDefault();
+            restoreFocusRef.current.focus();
+          }
+        }}
+      >
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <DialogDescription className="sr-only">
           Upload a CSV file of accounts.

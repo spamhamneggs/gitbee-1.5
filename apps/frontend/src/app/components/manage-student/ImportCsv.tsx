@@ -11,6 +11,7 @@ import CsvImporter, {
 interface ImportCsvProps {
   setOpenImportCsv: (value: boolean) => void;
   fetchData: () => void;
+  restoreFocusRef?: { current: HTMLElement | null } | undefined;
 }
 
 const studentOptions: Record<string, CsvTypeOption> = {
@@ -35,6 +36,7 @@ function ImportCsv(props: ImportCsvProps) {
       uploadFn={uploadFn}
       onClose={() => props.setOpenImportCsv(false)}
       onImported={() => props.fetchData()}
+      restoreFocusRef={props.restoreFocusRef}
     />
   );
 }

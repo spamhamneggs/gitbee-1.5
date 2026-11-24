@@ -86,15 +86,37 @@ const isCsvContent = (buffer: Buffer): boolean => {
         if (character === "\r" && content[index + 1] === "\n") {
           index += 1;
         }
+      } else if (character === " " || character === "\t") {
+        // The parser trims whitespace around fields, so allow it between a
+        // closing quote and the delimiter (e.g. `; "value" ;`).
+        continue;
       } else {
         return false;
       }
       continue;
     }
 
-    if (state === "fieldStart" && character === '"') {
-      state = "quoted";
-    } else if (character === '"') {
+    if (state === "fieldStart") {
+      if (character === " " || character === "\t") {
+        // Leading whitespace before a field is trimmed by the parser.
+        continue;
+      }
+      if (character === '"') {
+        state = "quoted";
+      } else if (character === "," || character === ";") {
+        // Empty field (e.g. `a,,b`); stay in fieldStart.
+      } else if (character === "\r" || character === "\n") {
+        if (character === "\r" && content[index + 1] === "\n") {
+          index += 1;
+        }
+      } else {
+        state = "unquoted";
+      }
+      continue;
+    }
+
+    // state === "unquoted"
+    if (character === '"') {
       return false;
     } else if (character === "," || character === ";") {
       state = "fieldStart";
@@ -103,8 +125,6 @@ const isCsvContent = (buffer: Buffer): boolean => {
       if (character === "\r" && content[index + 1] === "\n") {
         index += 1;
       }
-    } else {
-      state = "unquoted";
     }
   }
 
