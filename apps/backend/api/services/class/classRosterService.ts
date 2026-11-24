@@ -121,6 +121,46 @@ export default class ClassRosterService {
         });
     }
 
+    /** Columns: NIM, name, term code, course code, class. Only lab classes (class starting with "L") are kept. */
+    static async importStudentEnrolmentsFromExcel(buffer: Buffer) {
+        const schema = z.object({
+            semester_id: z.string(),
+            student_id: z.string(),
+            student_name: z.string(),
+            course_code: z.string(),
+            class: z.string(),
+        });
+
+        const rows = readFirstSheetRows(buffer);
+        const semester = await findSemesterByTermCode(firstDataRow(rows)[2]);
+
+        const validatedTransactions = rows
+            .map((row) => ({
+                semester_id: semester.SemesterID,
+                student_id:
+                    typeof row[0] === "string" || typeof row[0] === "number"
+                        ? String(row[0])
+                        : row[0],
+                student_name: row[1],
+                course_code: row[3],
+                class: row[4],
+            }))
+            .flatMap((row) => {
+                const parsed = schema.safeParse(row);
+                return parsed.success ? [parsed.data] : [];
+            })
+            .filter((row) => row.class.startsWith("L"));
+
+        if (validatedTransactions.length === 0) {
+            throw new ServiceError("No valid rows found in the file.");
+        }
+
+        return prisma.studentListTransaction.createMany({
+            data: validatedTransactions,
+            skipDuplicates: true,
+        });
+    }
+
     static deleteAllStudentEnrolments() {
         return prisma.studentListTransaction.deleteMany({});
     }

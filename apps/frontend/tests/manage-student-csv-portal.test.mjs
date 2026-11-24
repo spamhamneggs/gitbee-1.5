@@ -6,13 +6,14 @@ import ts from "typescript";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 const importCsv = await read("../src/app/components/manage-student/ImportCsv.tsx");
+const shared = await read("../src/app/components/csv-import/CsvImporter.tsx");
 const actions = await read("../src/app/(pages)/(admin)/manage-student/actions.tsx");
 const page = await read("../src/app/(pages)/(admin)/manage-student/page.tsx");
 
 // The selection rules live in a plain module so the picker/drop behaviour can
 // be driven directly, without a DOM.
 const selectionSource = await read(
-  "../src/app/components/manage-student/csvSelection.ts"
+  "../src/app/components/csv-import/csvSelection.ts"
 );
 const { outputText } = ts.transpileModule(selectionSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext },
@@ -24,15 +25,15 @@ const { isCsvFile, pickCsvFile, dropCsvFiles } = await import(
 const file = (name, type = "") => ({ name, type });
 
 test("the student CSV portal links drag & drop to the tested CSV importer", () => {
-  assert.match(importCsv, /onDrop=\{handleDrop\}/, "drop handler is wired");
-  assert.match(importCsv, /onDragOver=/, "drop zone accepts drag");
-  assert.match(importCsv, /onDragEnter=/, "drop zone highlights on drag");
+  assert.match(shared, /onDrop=\{handleDrop\}/, "drop handler is wired");
+  assert.match(shared, /onDragOver=/, "drop zone accepts drag");
+  assert.match(shared, /onDragEnter=/, "drop zone highlights on drag");
   assert.match(importCsv, /uploadStudentsCsv/, "reuses the CSV upload action");
-  assert.match(importCsv, /accept="\.csv,text\/csv"/, "file picker still restricts to CSV");
+  assert.match(shared, /accept="\.csv,text\/csv"/, "file picker still restricts to CSV");
 });
 
 test("files dropped onto the portal are validated before upload", () => {
-  assert.match(importCsv, /dropCsvFiles/, "the drop route validates the dropped file");
+  assert.match(shared, /dropCsvFiles/, "the drop route validates the dropped file");
   assert.match(selectionSource, /isCsvFile/, "checks the file is a CSV");
   assert.match(selectionSource, /Please choose a CSV file/, "shows a reason for a rejected file");
 });
@@ -139,7 +140,7 @@ test("a rejected selection keeps the import report", () => {
 });
 
 test("the portal resets the report only for a selected file", () => {
-  const apply = importCsv.slice(importCsv.indexOf("const applySelection"));
+  const apply = shared.slice(shared.indexOf("const applySelection"));
   assert.match(
     apply,
     /if \(outcome\.kind === "selected"\) resetReport\(\)/,
@@ -153,7 +154,7 @@ test("the portal resets the report only for a selected file", () => {
 });
 
 test("a failed upload keeps the last import report", () => {
-  const upload = importCsv.slice(importCsv.indexOf("const handleUpload"));
+  const upload = shared.slice(shared.indexOf("const handleUpload"));
   assert.match(
     upload,
     /if \(result\.success\) \{[\s\S]*?setReport\(result\.data\)[\s\S]*?\} else \{[\s\S]*?setError\(result\.message\)/,
@@ -168,24 +169,24 @@ test("a failed upload keeps the last import report", () => {
 
 test("the portal routes the picker and drops through the tested selector", () => {
   assert.match(
-    importCsv,
+    shared,
     /dropCsvFiles\(selectedFile, event\.dataTransfer\.files\)/,
     "the drop handler routes its files through the tested selector"
   );
   assert.match(
-    importCsv,
+    shared,
     /pickCsvFile\(input\.files/,
     "the picker routes its file through the tested selector"
   );
-  assert.match(importCsv, /input\.value = ""/, "the native input is cleared after reading it");
+  assert.match(shared, /input\.value = ""/, "the native input is cleared after reading it");
   assert.match(
-    importCsv,
-    /uploadStudentsCsv\(selectedFile\)/,
+    shared,
+    /uploadFn\(selectedFile, type\)/,
     "Import sends the React-state selection"
   );
 });
 
 test("portal messages are announced to assistive tech", () => {
-  assert.match(importCsv, /role="alert"/, "the validation error is exposed as an alert");
+  assert.match(shared, /role="alert"/, "the validation error is exposed as an alert");
   assert.match(page, /role="alert"/, "a failed student fetch is exposed as an alert");
 });

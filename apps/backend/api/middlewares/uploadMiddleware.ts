@@ -79,7 +79,7 @@ const isCsvContent = (buffer: Buffer): boolean => {
     }
 
     if (state === "quoteClosed") {
-      if (character === ",") {
+      if (character === "," || character === ";") {
         state = "fieldStart";
       } else if (character === "\r" || character === "\n") {
         state = "fieldStart";
@@ -96,7 +96,7 @@ const isCsvContent = (buffer: Buffer): boolean => {
       state = "quoted";
     } else if (character === '"') {
       return false;
-    } else if (character === ",") {
+    } else if (character === "," || character === ";") {
       state = "fieldStart";
     } else if (character === "\r" || character === "\n") {
       state = "fieldStart";
