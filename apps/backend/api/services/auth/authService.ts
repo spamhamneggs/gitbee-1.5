@@ -128,19 +128,19 @@ export default class AuthService {
      * gives them, and the NIM or lecturer code their session is keyed on.
      */
     static async resolveSsoAccount(email: string) {
+        // A failed lookup (not configured, unreachable, timed out, or no such
+        // account) has no data, which leaves the email as the only match key.
         const atlantis = await AtlantisService.getAtlantisData(email);
-        if (atlantis instanceof Error) {
-            throw new ServiceError("Failed to fetch Binusian data", 401);
-        }
-
         const atlantisAccount = atlantis.data as AtlantisAccountData | null;
         const username = atlantisAccount?.BinusianID ?? "";
         const lecturer_code = atlantisAccount?.KodeDosen ?? "";
+        // A NIM of only spaces counts as no NIM; padding is not part of a NIM.
+        const atlantisNim = atlantisAccount?.NIM?.trim() ?? "";
 
         const userLookupConditions = [
             { email: email },
             ...(lecturer_code ? [{ lecturer_code }] : []),
-            ...(atlantisAccount?.NIM ? [{ student_id: atlantisAccount.NIM }] : []),
+            ...(atlantisNim ? [{ student_id: atlantisNim }] : []),
             ...(atlantisAccount?.BinusianID ? [{ binusian_id: atlantisAccount.BinusianID }] : []),
         ];
 
@@ -166,9 +166,20 @@ export default class AuthService {
         }
         const isStaff = !roles.includes("Student");
         // Unprovisioned students still use the NIM from Atlantis.
-        const nim = user ? getLocalNim(user) : atlantisAccount?.NIM ?? "";
+        const nim = user ? getLocalNim(user) : atlantisNim;
         if (user && !isStaff && !nim) {
             throw new ServiceError("Student account is missing its student_id (NIM). Please contact an administrator.", 401);
+        }
+        // Without a GitBee account the NIM can only come from Atlantis. Refuse
+        // rather than start a session keyed on "", which matches no class,
+        // group or project (see the v1.5 migration's impact-notes.md).
+        if (!user && !nim) {
+            // Atlantis answered: it has no NIM for this person, or no such
+            // account. Asking again won't change that.
+            if (atlantis.status === true || atlantis.notFound) {
+                throw new ServiceError("There is no GitBee account for this Microsoft account. Please ask an administrator to add you.", 403);
+            }
+            throw new ServiceError("Couldn't look up your account with BINUS's identity service. Please try again in a few minutes. If it keeps happening, ask an administrator to add your account.", 503);
         }
 
         return { user, isStaff, roles, nim, username };

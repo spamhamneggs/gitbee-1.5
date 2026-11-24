@@ -2,25 +2,57 @@ import { z } from "zod";
 import { prisma } from "../../prisma/client.js";
 import { readFirstSheetRows, semesterNameFromTermCode } from "../../utils/excel/excelSheet.js";
 import { ServiceError } from "../../utils/response/response.js";
-import SemesterService from "../semester/semesterService.js";
+import SemesterService, { type SemesterResult } from "../semester/semesterService.js";
 
 interface BluejackSemester {
     Description: string;
     SemesterID: string;
 }
 
-/** The Bluejack semester whose description matches the term code, or a 400. */
+const MAX_REASON_LENGTH = 200;
+
+/**
+ * A 503 for a semester list that couldn't be loaded. `errors` is the raw
+ * response body, which can be a proxy's whole HTML error page, so Bluejack's
+ * reason is added only when it's a short, one-line JSON `message`.
+ */
+function bluejackUnavailable(lookup: SemesterResult) {
+    const body = lookup.errors;
+    const message = typeof body === "object" && body !== null ? (body as { message?: unknown }).message : undefined;
+    const reason = typeof message === "string" ? message.trim() : "";
+    const showReason = reason !== "" && reason.length <= MAX_REASON_LENGTH && !/[\r\n]/.test(reason);
+    return new ServiceError(
+        `Couldn't load the semester list from Bluejack${showReason ? ` (${reason})` : ""}. Please try again in a few minutes.`,
+        503,
+    );
+}
+
+/**
+ * The Bluejack semester whose description matches the term code. A term that
+ * isn't in Bluejack's list is a 400; a list that couldn't be loaded is a 503,
+ * since the file may well be fine.
+ */
 async function findSemesterByTermCode(raw: unknown) {
     const semesterName = semesterNameFromTermCode(raw);
-    const semesterData = await SemesterService.getAllSemesterData();
-    const semesters: unknown = semesterData.data;
-    const semester = Array.isArray(semesters)
-        ? semesters.find((candidate: BluejackSemester) => candidate.Description === semesterName)
-        : undefined;
-    if (!semester) {
+    if (!semesterName) {
         throw new ServiceError("Invalid semester information.");
     }
-    return semester as BluejackSemester;
+    const findIn = (lookup: SemesterResult) => lookup.usable && Array.isArray(lookup.data)
+        ? (lookup.data as BluejackSemester[]).find((candidate) => candidate.Description === semesterName)
+        : undefined;
+    let lookup = await SemesterService.getAllSemesterData();
+    let semester = findIn(lookup);
+    // The semester list is cached for an hour, so a semester Bluejack added
+    // since then gets one fresh look before the file is rejected. A list that
+    // was just fetched for this import is already fresh.
+    if (!semester && lookup.fromCache) {
+        lookup = await SemesterService.getAllSemesterData({ fresh: true });
+        semester = findIn(lookup);
+    }
+    if (!semester) {
+        throw lookup.usable ? new ServiceError("Invalid semester information.") : bluejackUnavailable(lookup);
+    }
+    return semester;
 }
 
 function firstDataRow(rows: unknown[][]) {
