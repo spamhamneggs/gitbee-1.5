@@ -158,6 +158,25 @@ describe("Admin CSV uploads", () => {
     assert.equal(fakeStore.users[0]?.name, "Ada");
   });
 
+  it("accepts a semicolon-delimited CSV with quoted fields", async () => {
+    const semicolonHeaders = "nim;name;email;binusian_id;major_code;password";
+    const quotedRow =
+      '"2501959297";"Grace";"grace@example.com";"B456";"COMP";"secret"';
+    const csv = `${semicolonHeaders}\n${quotedRow}\n`;
+    const response = await request(app)
+      .post(studentCsvPath)
+      .attach("file", Buffer.from(csv), {
+        filename: "users.csv",
+        contentType: "text/csv",
+      })
+      .set("Cookie", authCookie);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.data.createdCount, 1);
+    assert.equal(fakeStore.users[0]?.student_id, "2501959297");
+    assert.equal(fakeStore.users[0]?.name, "Grace");
+  });
+
   it("accepts a semicolon-delimited CSV with quoted fields and surrounding spaces", async () => {
     const semicolonHeaders = "nim ; name ; email ; binusian_id ; major_code ; password";
     const quotedRow = ` "2501959296" ; "Ada" ; "ada@example.com" ; "B123" ; "COMP" ; "secret" `;
