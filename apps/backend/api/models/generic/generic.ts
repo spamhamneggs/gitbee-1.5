@@ -7,8 +7,8 @@ export const atlantisSchema = z.object({
       isPrefEmail: z.string(),
     })
     .array(),
-  // Omitted for people with no NIM (staff); that's an answer, not a bad response.
-  NIM: z.string().optional(),
+  // Missing or null for people with no NIM (staff); that's an answer, not a bad response.
+  NIM: z.string().nullish(),
   Name: z.string(),
   BinusianID: z.string(),
   KodeDosen: z.string(),

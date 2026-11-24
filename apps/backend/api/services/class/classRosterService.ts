@@ -2,31 +2,49 @@ import { z } from "zod";
 import { prisma } from "../../prisma/client.js";
 import { readFirstSheetRows, semesterNameFromTermCode } from "../../utils/excel/excelSheet.js";
 import { ServiceError } from "../../utils/response/response.js";
-import SemesterService from "../semester/semesterService.js";
+import SemesterService, { type SemesterResult } from "../semester/semesterService.js";
 
 interface BluejackSemester {
     Description: string;
     SemesterID: string;
 }
 
-/** The Bluejack semester whose description matches the term code, or a 400. */
+/** A 503 with Bluejack's reason, for a semester list that couldn't be loaded. */
+function bluejackUnavailable(lookup: SemesterResult) {
+    const errors = lookup.errors as { message?: unknown } | string | undefined;
+    const reason = typeof errors === "string" ? errors : typeof errors?.message === "string" ? errors.message : "";
+    return new ServiceError(
+        `Couldn't load the semester list from Bluejack${reason ? ` (${reason})` : ""}. Please try again in a few minutes.`,
+        503,
+    );
+}
+
+/**
+ * The Bluejack semester whose description matches the term code. A term that
+ * isn't in Bluejack's list is a 400; a list that couldn't be loaded is a 503,
+ * since the file may well be fine.
+ */
 async function findSemesterByTermCode(raw: unknown) {
     const semesterName = semesterNameFromTermCode(raw);
-    const findIn = (semesters: unknown) => Array.isArray(semesters)
-        ? semesters.find((candidate: BluejackSemester) => candidate.Description === semesterName)
+    if (!semesterName) {
+        throw new ServiceError("Invalid semester information.");
+    }
+    const findIn = (lookup: SemesterResult) => lookup.usable && Array.isArray(lookup.data)
+        ? (lookup.data as BluejackSemester[]).find((candidate) => candidate.Description === semesterName)
         : undefined;
-    const listed = await SemesterService.getAllSemesterData();
-    let semester = findIn(listed.data);
+    let lookup = await SemesterService.getAllSemesterData();
+    let semester = findIn(lookup);
     // The semester list is cached for an hour, so a semester Bluejack added
     // since then gets one fresh look before the file is rejected. A list that
     // was just fetched for this import is already fresh.
-    if (!semester && semesterName && listed.fromCache) {
-        semester = findIn((await SemesterService.getAllSemesterData({ fresh: true })).data);
+    if (!semester && lookup.fromCache) {
+        lookup = await SemesterService.getAllSemesterData({ fresh: true });
+        semester = findIn(lookup);
     }
     if (!semester) {
-        throw new ServiceError("Invalid semester information.");
+        throw lookup.usable ? new ServiceError("Invalid semester information.") : bluejackUnavailable(lookup);
     }
-    return semester as BluejackSemester;
+    return semester;
 }
 
 function firstDataRow(rows: unknown[][]) {

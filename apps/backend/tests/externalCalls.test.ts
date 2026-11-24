@@ -1,9 +1,9 @@
 // Bluejack (semesters) and Atlantis (Microsoft sign-in) through the shared
 // client, against a local stand-in server: semester lookups are cached
-// (AR-14) and kept while a refresh runs, failures and unusable answers aren't
-// cached, a passing failure is retried within the call, both Excel upload
-// endpoints pick up a newly added semester, and sign-in tells a missing
-// Atlantis account apart from an outage.
+// (AR-14) and kept while a refresh runs or fails, failures and unusable
+// answers aren't cached, a passing failure is retried within the call, both
+// Excel upload endpoints pick up a newly added semester and report an outage
+// as one, and sign-in tells a missing Atlantis account apart from an outage.
 import assert from "node:assert/strict";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
@@ -56,10 +56,20 @@ const upstream = http.createServer((req, res) => {
     if (url.pathname === ACTIVE) return reply(200, activeSemester);
     if (url.pathname === "/atlantis") {
         const input = url.searchParams.get("input") ?? "";
-        // Staff: Atlantis answers with an empty NIM, or with none at all.
+        // Staff: Atlantis answers with an empty NIM, a null one, or none at all.
         if (input === "eka@binus.edu") return reply(200, atlantisAccount(input, { NIM: "" }));
+        if (input === "null.nim@binus.edu") return reply(200, atlantisAccount(input, { NIM: null }));
         if (input === "no.nim@binus.edu") return reply(200, atlantisAccount(input));
         if (input === "down@binus.edu") return reply(503, { message: "Atlantis is down" });
+        // 404s that don't come from Atlantis itself: a proxy's page, or nothing at all.
+        if (input === "proxy.404@binus.edu") {
+            res.writeHead(404, { "Content-Type": "text/html" });
+            return res.end("<html><body>404 Not Found</body></html>");
+        }
+        if (input === "empty.404@binus.edu") {
+            res.writeHead(404);
+            return res.end();
+        }
     }
     return reply(404, { message: "not found" });
 });
@@ -181,6 +191,31 @@ describe("semester lookups", () => {
         assert.equal(hits[ACTIVE], 2);
     });
 
+    it("keep using an hour-old answer while Bluejack fails or sends something unusable", async (t) => {
+        t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+        await request(app).get("/api/semester/all");
+        await request(app).get("/api/semester/current");
+        t.mock.timers.tick(SEMESTER_CACHE_TTL_MS + 1);
+
+        failNext = 4; // both lookups and their retries get a 503
+        const all = await request(app).get("/api/semester/all");
+        const current = await request(app).get("/api/semester/current");
+        assert.equal(all.status, 200);
+        assert.deepEqual(all.body.data, initialSemesters);
+        assert.equal(current.status, 200);
+        assert.deepEqual(current.body.data, activeSemester);
+
+        rawAnswer = { status: 200, body: "<html>Please sign in to the proxy</html>", type: "text/html" };
+        assert.deepEqual((await request(app).get("/api/semester/all")).body.data, initialSemesters);
+
+        // Once Bluejack answers properly again, its answer replaces the old one.
+        rawAnswer = null;
+        semesters = [...initialSemesters, addedSemester];
+        assert.deepEqual((await request(app).get("/api/semester/all")).body.data, semesters);
+        assert.deepEqual((await request(app).get("/api/semester/all")).body.data, semesters);
+        assert.equal(hits[LIST], 5, "fill, 503 and retry, the proxy page, the recovery; then cached");
+    });
+
     it("pass odd answers on as before, without caching them", async () => {
         for (const answer of [
             { status: 200, body: "<html>Please sign in to the proxy</html>", type: "text/html" },
@@ -262,7 +297,9 @@ describe("semester lookups", () => {
 
         assert.equal(during.status, 200);
         assert.deepEqual(during.body.data, initialSemesters);
-        assert.match(String(failed?.message), /Invalid semester information/);
+        // The term might be in Bluejack's list; the import couldn't check, so it doesn't blame the file.
+        assert.equal((failed as { status?: number } | null)?.status, 503);
+        assert.match(String(failed?.message), /^Couldn't load the semester list from Bluejack \(Bluejack is down\)\./);
         assert.equal(afterwards.status, 200);
         assert.deepEqual(afterwards.body.data, initialSemesters);
         assert.equal(hits[LIST], 3, "one call to fill the cache, then the refresh and its retry");
@@ -271,9 +308,28 @@ describe("semester lookups", () => {
     it("keep the cached list when a refresh gets an unusable answer", async () => {
         await SemesterService.getAllSemesterData();
         rawAnswer = { status: 200, body: '[{"SemesterID":null,"Description":"Even Semester 2026/2027"}]' };
-        await SemesterService.getAllSemesterData({ fresh: true });
+        const fresh = await SemesterService.getAllSemesterData({ fresh: true });
 
+        assert.equal(fresh.usable, false, "a fresh lookup reports what Bluejack sent");
         assert.deepEqual((await SemesterService.getAllSemesterData()).data, initialSemesters);
+    });
+
+    it("report a Bluejack outage, not a bad file, when an import can't load a usable list", async () => {
+        const unavailable = (detail: RegExp) => (error: { status?: number; message: string }) =>
+            error.status === 503 && detail.test(error.message);
+
+        failNext = 2; // nothing cached, and Bluejack is down
+        await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(classSheet(2610)),
+            unavailable(/^Couldn't load the semester list from Bluejack \(Bluejack is down\)\. Please try again/));
+        rawAnswer = { status: 200, body: "<html>Please sign in to the proxy</html>", type: "text/html" };
+        await assert.rejects(ClassRosterService.importStudentEnrolmentsFromExcel(studentSheet(2610)),
+            unavailable(/^Couldn't load the semester list from Bluejack\. Please try again/));
+
+        // A term code that can't be read is the file's fault either way, and needs no lookup.
+        hits = {};
+        await assert.rejects(ClassRosterService.importClassTransactionsFromExcel(classSheet(1999)),
+            (error: { status?: number; message: string }) => error.status === 400 && /Invalid semester information/.test(error.message));
+        assert.equal(hits[LIST], undefined);
     });
 
     it("let an Excel import use a semester Bluejack added after the list was cached", async (t) => {
@@ -337,6 +393,16 @@ describe("Excel upload endpoints", () => {
             assert.deepEqual(inserted[model].map((rows) => rows[0]?.semester_id), ["SEM-2610", "SEM-2620"]);
             assert.equal(hits[LIST], 2);
         });
+
+        it(`POST /api/user/admin/${endpoint} answers 503 when Bluejack is down`, async (t) => {
+            const inserted = captureInserts(t);
+            failNext = 2;
+            const response = await request(app).post(`/api/user/admin/${endpoint}`).attach("file", sheet(2610), "rows.xlsx");
+
+            assert.equal(response.status, 503);
+            assert.match(response.body.errors, /^Couldn't load the semester list from Bluejack \(Bluejack is down\)\./);
+            assert.deepEqual(inserted[model], []);
+        });
     }
 });
 
@@ -358,11 +424,22 @@ describe("Atlantis lookup for Microsoft sign-in", () => {
         assert.equal(hits["/atlantis"], 1, "a 404 isn't retried");
     });
 
-    it("accepts an answer with no NIM", async () => {
-        const result = await AtlantisService.getAtlantisData("no.nim@binus.edu");
+    it("doesn't take a 404 from something in front of Atlantis for a miss", async () => {
+        for (const email of ["proxy.404@binus.edu", "empty.404@binus.edu"]) {
+            const result = await AtlantisService.getAtlantisData(email);
 
-        assert.equal(result.status, true);
-        assert.equal((result.data as { NIM?: string }).NIM, undefined);
+            assert.equal(result.status, false, email);
+            assert.equal(result.notFound, false, email);
+        }
+    });
+
+    it("accepts an answer with a missing or null NIM", async () => {
+        for (const [email, nim] of [["no.nim@binus.edu", undefined], ["null.nim@binus.edu", null]] as const) {
+            const result = await AtlantisService.getAtlantisData(email);
+
+            assert.equal(result.status, true, email);
+            assert.equal((result.data as { NIM?: string | null }).NIM, nim, email);
+        }
     });
 
     it("reports an outage as a failure, not a miss", async () => {
@@ -391,10 +468,13 @@ describe("Atlantis lookup for Microsoft sign-in", () => {
         t.after(() => { prisma.user.findFirst = original; });
 
         for (const [email, status] of [
-            ["nobody@binus.edu", 403], // Atlantis: 404
+            ["nobody@binus.edu", 403], // Atlantis: its own 404
             ["no.nim@binus.edu", 403], // Atlantis: an account without a NIM
+            ["null.nim@binus.edu", 403], // Atlantis: an account with a null NIM
             ["eka@binus.edu", 403], // Atlantis: an account with an empty NIM
             ["down@binus.edu", 503], // Atlantis: 503 twice
+            ["proxy.404@binus.edu", 503], // a proxy's 404 page
+            ["empty.404@binus.edu", 503], // a 404 with no body
         ] as const) {
             await assert.rejects(
                 AuthService.resolveSsoAccount(email),

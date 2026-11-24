@@ -9,8 +9,12 @@ import { externalApi } from "../../utils/http/externalApi.js";
  */
 export const SEMESTER_CACHE_TTL_MS = 60 * 60 * 1000;
 
-/** A semester answer, and whether it came from the cache instead of a Bluejack call made for it. */
-export type SemesterResult = APIResponse & { fromCache: boolean };
+/**
+ * A semester answer. `fromCache`: it came from the cache rather than a Bluejack
+ * call made for it. `usable`: it has the fields callers read, as opposed to a
+ * failure or an odd answer passed on as is.
+ */
+export type SemesterResult = APIResponse & { fromCache: boolean; usable: boolean };
 
 interface CacheEntry {
     expiresAt: number;
@@ -21,7 +25,7 @@ interface CacheEntry {
 // an odd answer such as a proxy's HTML page or an empty list, is passed on
 // once (as before caching) and the next request asks Bluejack again. A cached
 // answer stays in place while a refresh runs, and only a usable answer
-// replaces it.
+// replaces it. After the hour it is still used whenever a refresh fails.
 const cache = new Map<string, CacheEntry>();
 // At most one Bluejack call per URL at a time; everyone who needs it shares it.
 const inFlight = new Map<string, Promise<APIResponse>>();
@@ -81,13 +85,26 @@ async function getSemesters(path: string, isUsable: (data: unknown) => boolean, 
     const url = `${process.env.BLUEJACK_API}${path}`;
     const cached = cache.get(url);
     if (!fresh && cached && cached.expiresAt > Date.now()) {
-        return { ...cached.response, fromCache: true };
+        return { ...cached.response, fromCache: true, usable: true };
     }
-    return { ...(await refresh(url, isUsable)), fromCache: false };
+    const result = await refresh(url, isUsable);
+    if (result.status === true && isUsable(result.data)) {
+        return { ...result, fromCache: false, usable: true };
+    }
+    // Bluejack failed or sent something unusable. An hour-old list still beats
+    // an error, except for a fresh lookup, whose caller needs to know.
+    const stale = cache.get(url);
+    if (!fresh && stale) {
+        return { ...stale.response, fromCache: true, usable: true };
+    }
+    return { ...result, fromCache: false, usable: false };
 }
 
 export default class SemesterService {
-    /** Every semester. `fresh` skips the cache (and refreshes it if Bluejack's answer is usable). */
+    /**
+     * Every semester. `fresh` skips the cache (and refreshes it if Bluejack's
+     * answer is usable), and returns Bluejack's failure rather than the cached list.
+     */
     static getAllSemesterData(options: { fresh?: boolean } = {}): Promise<SemesterResult> {
         return getSemesters("Semester/GetSemestersWithActiveDate", isSemesterList, options.fresh);
     }
