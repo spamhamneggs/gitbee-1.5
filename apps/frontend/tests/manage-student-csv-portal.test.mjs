@@ -6,9 +6,14 @@ import ts from "typescript";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 const importCsv = await read("../src/app/components/manage-student/ImportCsv.tsx");
+const roster = await read(
+  "../src/app/components/manage-student/ImportRosterExcel.tsx"
+);
 const shared = await read("../src/app/components/csv-import/CsvImporter.tsx");
 const actions = await read("../src/app/(pages)/(admin)/manage-student/actions.tsx");
 const page = await read("../src/app/(pages)/(admin)/manage-student/page.tsx");
+// The third dialog opener lives on the Manage Users page; it shares CsvImporter.
+const usersPage = await read("../src/app/(pages)/(admin)/manage-users/page.tsx");
 
 // The selection rules live in a plain module so the picker/drop behaviour can
 // be driven directly, without a DOM.
@@ -38,12 +43,18 @@ test("files dropped onto the portal are validated before upload", () => {
   assert.match(selectionSource, /Please choose a CSV file/, "shows a reason for a rejected file");
 });
 
-test("the page no longer posts to the legacy Excel endpoint (AR-11)", () => {
-  assert.doesNotMatch(actions, /upload-student-excel/, "action no longer calls the Excel endpoint");
-  assert.doesNotMatch(actions, /uploadExcelStudents/, "Excel upload action is gone");
-  assert.doesNotMatch(page, /ImportExcel/, "the Excel importer is no longer rendered");
-  assert.doesNotMatch(page, /Import Excel/, "the Excel import button is removed");
-  assert.match(actions, /upload-student-csv/, "the portal posts to the tested CSV importer");
+test("accounts import through CSV while the roster keeps its Excel endpoint", () => {
+  assert.doesNotMatch(actions, /upload-student-excel/, "the account action no longer calls the Excel endpoint");
+  assert.doesNotMatch(actions, /uploadExcelStudents/, "the Excel account-import action is gone");
+  assert.match(actions, /upload-student-csv/, "the portal posts accounts to the tested CSV importer");
+  // The roster workbook is a separate import. Assert its dialog is actually
+  // present and still posts to the restored endpoint, instead of only relying
+  // on a regex that happens to miss the component name.
+  assert.match(page, /ImportRosterExcel/, "the roster importer is rendered");
+  assert.match(page, /Import Lab Roster/, "the roster importer has its own labelled button");
+  assert.match(roster, /upload-student-excel/, "the roster dialog posts to the roster endpoint");
+  assert.match(roster, /Header Student\.xlsx/, "the roster dialog links its template");
+  assert.match(roster, /\.csv/, "the roster picker also accepts CSV");
 });
 
 test("the page reads student accounts through the paged account route", () => {
@@ -189,4 +200,20 @@ test("the portal routes the picker and drops through the tested selector", () =>
 test("portal messages are announced to assistive tech", () => {
   assert.match(shared, /role="alert"/, "the validation error is exposed as an alert");
   assert.match(page, /role="alert"/, "a failed student fetch is exposed as an alert");
+});
+
+test("every dialog opener returns focus to its trigger button", () => {
+  // Both dialogs intercept Radix's default focus restore and send focus back to
+  // the button that opened them, so keyboard users don't land back on the page.
+  for (const dialog of [shared, roster]) {
+    assert.match(dialog, /restoreFocusRef/, "the dialog accepts the opener's ref");
+    assert.match(dialog, /onCloseAutoFocus/, "the dialog overrides Radix's focus restore");
+  }
+  // All three openers pass their trigger's ref in: Manage Users CSV, Manage
+  // Students CSV, and Manage Students roster.
+  assert.match(usersPage, /restoreFocusRef=\{importCsvRef\}/, "the Manage Users CSV opener restores focus");
+  assert.match(page, /restoreFocusRef=\{importCsvRef\}/, "the student CSV opener restores focus");
+  assert.match(page, /restoreFocusRef=\{importRosterRef\}/, "the roster opener restores focus");
+  assert.match(page, /ref=\{importCsvRef\}/, "the student CSV button holds a ref");
+  assert.match(page, /ref=\{importRosterRef\}/, "the roster button holds a ref");
 });

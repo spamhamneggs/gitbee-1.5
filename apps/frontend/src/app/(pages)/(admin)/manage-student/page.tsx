@@ -227,7 +227,6 @@ const Page = () => {
       {openImportRoster && (
         <ImportRosterExcel
           setOpen={setOpenImportRoster}
-          fetchData={refreshStudents}
           restoreFocusRef={importRosterRef}
         />
       )}

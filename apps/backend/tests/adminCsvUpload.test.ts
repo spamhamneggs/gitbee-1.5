@@ -962,4 +962,21 @@ describe("Admin CSV uploads", () => {
 
     assert.equal(response.status, 403);
   });
+
+  it("requires admin authentication to read the student roster", async () => {
+    // The roster lists student IDs and names, so it must not be public.
+    const response = await request(app).get("/api/user/admin/get-student");
+
+    assert.equal(response.status, 401);
+  });
+
+  it("requires admin authentication to clear the student roster", async () => {
+    // This route calls deleteMany({}), so an unauthenticated request must not
+    // reach the handler and wipe every enrolment.
+    const response = await request(app).patch(
+      "/api/user/admin/remove-student-excel"
+    );
+
+    assert.equal(response.status, 401);
+  });
 });

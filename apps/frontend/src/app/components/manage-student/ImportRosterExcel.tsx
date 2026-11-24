@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { useRef, useState } from "react";
+import { LuDownload } from "react-icons/lu";
 import {
   Dialog,
   DialogContent,
@@ -8,18 +10,13 @@ import {
 
 interface ImportRosterExcelProps {
   setOpen: (value: boolean) => void;
-  fetchData: () => void;
   restoreFocusRef?: { current: HTMLElement | null } | undefined;
 }
 
 // The roster upload writes class enrolments (studentListTransaction), not user
 // accounts. It uses the restored POST /user/admin/upload-student-excel endpoint
 // so admins can load a new term's lab roster without leaving this page.
-function ImportRosterExcel({
-  setOpen,
-  fetchData,
-  restoreFocusRef,
-}: ImportRosterExcelProps) {
+function ImportRosterExcel({ setOpen, restoreFocusRef }: ImportRosterExcelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -47,12 +44,15 @@ function ImportRosterExcel({
       );
       const result = await response.json();
       if (response.ok && result.status) {
+        // createMany skips rows that already exist, so a re-upload reports 0.
+        // That is not a failure, so word it as already up to date. The account
+        // list is not reloaded: this import only writes class enrolments.
+        const count = result.data?.count ?? 0;
         setSuccess(
-          `Imported ${result.data?.count ?? 0} student enrolment${
-            result.data?.count === 1 ? "" : "s"
-          }.`
+          count === 0
+            ? "Roster is already up to date — no new enrolments added."
+            : `Imported ${count} student enrolment${count === 1 ? "" : "s"}.`
         );
-        fetchData();
       } else {
         setError(
           typeof result.errors === "string"
@@ -82,20 +82,36 @@ function ImportRosterExcel({
           Import student lab roster from Excel
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Upload an Excel file of student class enrolments for the current term.
+          Upload an Excel or CSV file of student class enrolments for the
+          current term.
         </DialogDescription>
-        <h2 className="text-xl font-medium">Import student lab roster (Excel)</h2>
+        <div className="flex justify-between items-center gap-4">
+          <h2 className="text-xl font-medium">
+            Import student lab roster (Excel or CSV)
+          </h2>
+          <Link
+            href="/excel/Header Student.xlsx"
+            download
+            className="text-primary-orange flex justify-center items-center gap-1 whitespace-nowrap"
+          >
+            <LuDownload className="text-primary-orange stroke-primary-orange" />
+            Template
+          </Link>
+        </div>
         <p className="text-sm text-gray-600">
-          Upload the class roster export from BINUS. This loads each student's
-          course enrolments (used for My Courses and project group eligibility).
-          It does not create or modify login accounts.
+          Upload the class roster export from BINUS. Columns are read by
+          position (NIM, name, term code, course code, class) and only lab
+          classes (class starting with &quot;L&quot;) are kept, so start from the
+          template. This loads each student&apos;s course enrolments (used for My
+          Courses and project group eligibility). It does not create or modify
+          login accounts.
         </p>
         <div className="flex flex-col rounded-md border-2 border-dashed p-4 border-gray-300">
           <label
             className="block mb-2 text-sm font-medium text-gray-900"
             htmlFor="roster_file_input"
           >
-            Excel file — choose a .xlsx file
+            Excel or CSV file — choose a .xlsx or .csv file
           </label>
           <input
             className="block w-full text-sm text-gray-900 border border-gray-300 cursor-pointer bg-gray-50"
@@ -103,11 +119,12 @@ function ImportRosterExcel({
             ref={fileInputRef}
             disabled={uploading}
             type="file"
-            accept=".xlsx"
+            accept=".xlsx, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/csv"
             onChange={(event) => {
               const file = event.target.files?.[0] ?? null;
-              if (file && !file.name.toLowerCase().endsWith(".xlsx")) {
-                setError("Please choose an .xlsx Excel file.");
+              const name = file?.name.toLowerCase() ?? "";
+              if (file && !name.endsWith(".xlsx") && !name.endsWith(".csv")) {
+                setError("Please choose an .xlsx or .csv file.");
                 setSelectedFile(null);
                 event.target.value = "";
                 return;

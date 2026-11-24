@@ -33,9 +33,11 @@ userRoutes.get("/admin/get-transaction", UserHandler.listClassTransactions);
 userRoutes.post("/admin/upload-transaction-excel", uploadExcel, UserHandler.importClassTransactionsExcel);
 userRoutes.patch("/admin/remove-transaction-excel", UserHandler.deleteAllClassTransactions);
 
-// Student enrolments (class rosters)
-userRoutes.get("/admin/get-student", UserHandler.listStudentEnrolments);
+// Student enrolments (class rosters). These rows drive My Courses and project
+// group eligibility, and the removal route wipes every enrolment, so all three
+// require an admin.
+userRoutes.get("/admin/get-student", currentAdminMiddleware, UserHandler.listStudentEnrolments);
 userRoutes.post("/admin/upload-student-excel", currentAdminMiddleware, uploadExcel, UserHandler.importStudentEnrolmentsExcel);
-userRoutes.patch("/admin/remove-student-excel", UserHandler.deleteAllStudentEnrolments);
+userRoutes.patch("/admin/remove-student-excel", currentAdminMiddleware, UserHandler.deleteAllStudentEnrolments);
 
 export default userRoutes;
