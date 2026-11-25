@@ -24,6 +24,7 @@ export const createToken = (
     activeRole?: string,
     userId?: number,
     credentialVersion = 0,
+    unprovisionedStudent = false,
     ) => {
     const expire = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7);
     const token = jwt.sign({
@@ -37,6 +38,7 @@ export const createToken = (
         activeRole: activeRole,
         authMethod: "sso",
         ...(userId !== undefined ? { userId, credentialVersion } : {}),
+        ...(unprovisionedStudent ? { unprovisionedStudent: true } : {}),
         microsoftToken: microsoftToken
     }, secret);
     return {
@@ -129,6 +131,61 @@ export const verifyToken = (token: string) : {
             data: error
         }
     }
+}
+
+export interface AuthClaims extends jwt.JwtPayload {
+    email: string;
+    role: string[];
+    userId?: number;
+    nim?: string;
+    authMethod?: "sso" | "local";
+    unprovisionedStudent?: boolean;
+}
+
+export const normalizeRoles = (value: unknown): string[] | null => {
+    const values = Array.isArray(value) ? value : [value];
+    const normalized: string[] = [];
+    for (const value of values) {
+        if (typeof value !== "string") return null;
+        const roles = value.split(",");
+        const trimmedRoles = roles.map((role) => role.trim());
+        if (trimmedRoles.some((role) =>
+            role === "" || role === "__proto__" || role === "constructor" || role === "prototype"
+        )) return null;
+        normalized.push(...trimmedRoles);
+    }
+    return normalized.length > 0 ? [...new Set(normalized)] : null;
+}
+
+export const getVerifiedAuthClaims = (req: Request): AuthClaims | null => {
+    const cookieName = process.env.COOKIE_NAME ?? "gitbee_token";
+    const cookieToken = req.cookies?.[cookieName];
+    const bearerToken = req.get("authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1];
+    const token = typeof cookieToken === "string" && cookieToken.length > 0
+        ? cookieToken
+        : bearerToken;
+    if (!token) return null;
+
+    const verified = verifyToken(token);
+    if (!verified.status || typeof verified.data !== "object" || verified.data === null || Array.isArray(verified.data)) {
+        return null;
+    }
+
+    const payload = verified.data as jwt.JwtPayload;
+    const email = typeof payload.email === "string" ? payload.email.trim() : "";
+    const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const userId = payload.userId;
+    const hasValidUserId = typeof userId === "number" && Number.isSafeInteger(userId) && userId > 0;
+    const hasValidNim = typeof payload.nim === "string" && payload.nim.trim() !== "";
+    if (!hasValidEmail || (userId !== undefined && !hasValidUserId) || (!hasValidUserId && !hasValidNim)) {
+        return null;
+    }
+
+    const roleClaim = payload.role ?? payload.roles;
+    const role = normalizeRoles(roleClaim);
+    if (!role) return null;
+
+    return { ...payload, email, role, ...(hasValidUserId ? { userId } : {}) };
 }
 
 export const rejectSession = (req: Request, res: Response) => {

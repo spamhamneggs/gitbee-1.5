@@ -1,4 +1,6 @@
 import express from "express";
+import { AuthMiddleware } from "../../../middlewares/authMiddleware.js";
+import { RoleMiddleware } from "../../../middlewares/roleMiddleware.js";
 import { currentAdminMiddleware } from "../../../middlewares/currentAdminMiddleware.js";
 import { sampleFile } from "../../../utils/demo/sampleFiles.js";
 import {
@@ -18,7 +20,7 @@ import {
 } from "../../../utils/response/response.js";
 
 const router = express.Router();
-router.use(currentAdminMiddleware);
+router.use(AuthMiddleware(), RoleMiddleware("Admin"), currentAdminMiddleware);
 router.use((_req, res, next) => {
   res.set("Cache-Control", "no-store");
   next();
